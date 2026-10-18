@@ -88,6 +88,7 @@ export function inputPhrase(inp: Input): string {
         wait: 'wait',
         rope: `rope up with ${inp.with ? memberOf(inp.with).name : 'someone'}`,
         pack: 'hand you the pack',
+        ahead: 'go on ahead',
       };
       return inp.force === 'insist'
         ? `${verb} ${who} ${what[inp.act]}`
@@ -107,6 +108,8 @@ export function inputPhrase(inp: Input): string {
           : 'stopped';
     case 'fix':
       return 'fixed the rope';
+    case 'scout':
+      return 'went to look at the way up';
     case 'share':
       return `gave ${memberOf(inp.to).name} your food`;
   }

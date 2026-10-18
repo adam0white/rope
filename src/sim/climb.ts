@@ -92,6 +92,8 @@ export interface MemberState {
   homeAt: number | null;
   turnedAt: number | null;
   injuries: { at: number; severity: number; leg: string; caught: boolean }[];
+  /** Sent ahead: at the next place they reach going up, they call down what the way above looks like. */
+  ahead?: boolean;
 }
 
 export interface LeaderState {
@@ -99,6 +101,8 @@ export interface LeaderState {
   path: string[];
   move: Move | null;
   fixing: { leg: string; until: number } | null;
+  /** Gone a little way up a leg to look at it, and back. */
+  scouting?: { leg: string; until: number } | null;
   carrying: string[];
   rations: number;
   /** Route chosen at the fork: the leg id up from the fork. */
@@ -107,7 +111,7 @@ export interface LeaderState {
 }
 
 export type Force = 'ask' | 'urge' | 'insist';
-export type Act = 'climb' | 'descend' | 'rest' | 'eat' | 'wait' | 'rope' | 'pack';
+export type Act = 'climb' | 'descend' | 'rest' | 'eat' | 'wait' | 'rope' | 'pack' | 'ahead';
 export type FactId = 'storm' | 'gully-quiet' | 'gully-loose' | 'ridge-solid' | 'descent-tiring';
 
 export type Input =
@@ -116,6 +120,7 @@ export type Input =
   | { t: 'tell'; at: number; fact: FactId }
   | { t: 'lead'; at: number; dir: 'up' | 'down' | 'stop'; via?: string }
   | { t: 'fix'; at: number }
+  | { t: 'scout'; at: number; via?: string }
   | { t: 'share'; at: number; to: string };
 
 /** An input before it is stamped with its minute. */
@@ -595,6 +600,10 @@ function suggestionFor(s: ClimbState, mem: MemberState, inp: Extract<Input, { t:
       return { ...base, affordanceId: `rope:${inp.with ?? ''}`, appeal: 'safety' };
     case 'pack':
       return { ...base, affordanceId: 'pack', appeal: 'rest' };
+    case 'ahead': {
+      const lg = nextLegUp(s, mem, inp.via ?? s.leader.route);
+      return lg ? { ...base, affordanceId: `up:${lg.id}` } : { ...base, action: 'climb' };
+    }
     default:
       return { ...base, action: inp.act };
   }
@@ -614,6 +623,7 @@ function applyInput(s: ClimbState, idx: number): void {
         const mem = memberState(s, id);
         if (mem.homeAt !== null || !canHear(s, id)) continue;
         heard += 1;
+        if (inp.act === 'ahead') mem.ahead = true;
         const p = personOf(s, id);
         const sug = suggestionFor(s, mem, inp);
         const offers = offersFor(s, id);
@@ -690,6 +700,22 @@ function applyInput(s: ClimbState, idx: number): void {
     case 'lead':
       leaderGo(s, m, inp.dir, inp.via);
       return;
+    case 'scout': {
+      const L = s.leader;
+      if (L.move || !L.pos.place) {
+        s.unheard.push(idx);
+        return;
+      }
+      const ups = legsUp(m, L.pos.place);
+      const lg = ups.find((x) => x.id === (inp.via ?? L.route)) ?? ups[0];
+      if (!lg) {
+        s.unheard.push(idx);
+        return;
+      }
+      L.scouting = { leg: lg.id, until: s.minute + Math.max(10, Math.round(lg.minutes * 0.4)) };
+      s.journal.push({ at: s.minute, text: `You went a little way up ${lg.name} to look.` });
+      return;
+    }
     case 'fix': {
       const L = s.leader;
       if (L.move || !L.pos.place) {
@@ -863,6 +889,30 @@ function learn(s: ClimbState): void {
   }
 }
 
+/** What a leg looks like now, from the world itself (sun on loose rock, wind on exposure, footing). */
+export function legReport(s: ClimbState, lg: Leg): string {
+  const sun = sunAt(s.weather, s.minute);
+  const wind = windAt(s.seed, s.weather, s.minute);
+  const bits: string[] = [];
+  if (lg.rockfall * sun > 0.3) bits.push('stones were coming down');
+  if (lg.exposure * wind > 0.4) bits.push('the wind was hard across it');
+  if (lg.footing > 0.015) bits.push('the footing was bad');
+  return bits.length ? `${lg.name} — ${bits.join(', ')}` : `${lg.name} looked sound`;
+}
+
+/** Seeing a leg up close makes its route facts known (for telling the others). */
+function learnLeg(s: ClimbState, lg: Leg): void {
+  const add = (f: FactId) => {
+    if (!s.known.includes(f)) s.known.push(f);
+  };
+  if (lg.id === 'ridge') add('ridge-solid');
+  if (lg.id === 'gully') {
+    const f: FactId = lg.rockfall * sunAt(s.weather, s.minute) > 0.3 ? 'gully-loose' : 'gully-quiet';
+    s.known = s.known.filter((x) => x !== (f === 'gully-loose' ? 'gully-quiet' : 'gully-loose'));
+    add(f);
+  }
+}
+
 // ---------------------------------------------------------------- the minute step
 
 export function clock(minute: number): string {
@@ -902,6 +952,7 @@ function leaderGo(s: ClimbState, m: Mountain, dir: 'up' | 'down' | 'stop', via?:
   if (L.move) L.pos = movePos(L.move, s.minute);
   L.move = null;
   L.fixing = null;
+  L.scouting = null;
   if (dir === 'stop') return;
   const pos = L.pos;
   let lg: Leg | undefined;
@@ -945,6 +996,12 @@ function leaderGo(s: ClimbState, m: Mountain, dir: 'up' | 'down' | 'stop', via?:
 
 function stepLeader(s: ClimbState, m: Mountain): void {
   const L = s.leader;
+  if (L.scouting && s.minute >= L.scouting.until) {
+    const lg = legOf(m, L.scouting.leg);
+    s.journal.push({ at: s.minute, text: `You came back from ${lg.name}: ${legReport(s, lg)}.` });
+    learnLeg(s, lg);
+    L.scouting = null;
+  }
   if (L.fixing && s.minute >= L.fixing.until) {
     s.fixed.push(L.fixing.leg);
     s.journal.push({ at: s.minute, text: `The rope on ${legOf(m, L.fixing.leg).name} was fixed.` });
@@ -1153,6 +1210,18 @@ function complete(
       if (mv.dir === 'up') {
         mem.pos = at(lg.to);
         mem.path.push(lg.id);
+        if (mem.ahead) {
+          mem.ahead = false;
+          const next = lg.to === m.summit ? null : nextLegUp(s, mem);
+          if (next) {
+            s.journal.push({
+              at: s.minute,
+              who: mem.id,
+              text: `${memberOf(mem.id).name} called down from ${placeOf(m, lg.to).name}: ${legReport(s, next)}.`,
+            });
+            learnLeg(s, next);
+          }
+        }
         if (placeOf(m, lg.to).alt > placeOf(m, mem.high).alt) mem.high = lg.to;
         beat(s, lg.to === m.summit ? 'summit' : lg.to);
         if (lg.to === m.summit && mem.summitAt === null) {

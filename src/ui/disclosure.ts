@@ -71,7 +71,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       id: 'tell',
       unlock: 'tell',
       lit: 'tell',
-      text: 'You can see things they cannot. **Tell** them: what they know changes what they want.',
+      text: 'You can see things they cannot. **Scout** a way up, or send someone to **go ahead** and call down; then **tell** them: what they know changes what they want.',
     };
   if (!has(d, 'promise') && mod >= 10 * 60 + 30)
     return {

@@ -48,7 +48,7 @@ interface Save {
   over: boolean;
 }
 
-type Panel = 'main' | 'force' | 'partner' | 'tell' | 'promise' | 'route';
+type Panel = 'main' | 'force' | 'partner' | 'tell' | 'promise' | 'route' | 'scout';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] => {
   const el = document.createElement(tag);
@@ -302,6 +302,7 @@ export class Game {
         wait: 'wait here',
         rope: `rope up with ${inp.with ? memberOf(inp.with).name : ''}`,
         pack: 'give me your pack',
+        ahead: 'go on ahead and call down what you see',
       };
       const tone = inp.force === 'ask' ? '?' : inp.force === 'urge' ? '.' : '. Now.';
       words = `${who}, ${what[inp.act] ?? inp.act}${tone}`;
@@ -309,6 +310,7 @@ export class Game {
     else if (inp.t === 'promise') words = `We turn back at ${inp.hour}:00. Wherever we are.`;
     else if (inp.t === 'share') words = 'Here, have some of mine.';
     else if (inp.t === 'fix') words = 'Wait, I’ll fix a rope.';
+    else if (inp.t === 'scout') words = 'Wait here. I’ll go and look.';
     if (words) this.bubble('leader', words, 'mine');
     if (this.climb.unheard.includes(this.climb.inputs.length - 1))
       this.bubble('leader', `${words} …nobody near enough to hear.`, 'mine');
@@ -473,6 +475,7 @@ export class Game {
       L.path.length,
       L.move !== null,
       L.fixing,
+      L.scouting,
       L.rations,
       c.members.map((x) => [
         x.homeAt !== null,
@@ -529,6 +532,7 @@ export class Game {
     else if (this.panel === 'tell') sh.append(this.peopleVerbs(), this.tellRow());
     else if (this.panel === 'promise') sh.append(this.peopleVerbs(), this.promiseRow());
     else if (this.panel === 'route') sh.append(this.peopleVerbs(), this.routeRow());
+    else if (this.panel === 'scout') sh.append(this.peopleVerbs(), this.routeRow(true));
   }
 
   private verbBtn(
@@ -572,6 +576,7 @@ export class Game {
       this.verbBtn('eat', 'eat', 'eat', ok, choose('eat')),
       this.verbBtn('wait', 'wait', 'wait', ok, choose('wait')),
     );
+    if (has(this.disc, 'tell')) g.append(this.verbBtn('ahead', 'go ahead', 'up', ok && one, choose('ahead')));
     if (has(this.disc, 'rope'))
       g.append(
         this.verbBtn(
@@ -631,6 +636,23 @@ export class Game {
         this.send({ t: 'lead', dir: 'stop' }),
       ),
     );
+    if (has(this.disc, 'tell')) {
+      const ups = m && L.pos.place && !L.move ? legsUp(m, L.pos.place) : [];
+      g.append(
+        this.verbBtn(
+          'scout',
+          L.scouting ? 'looking…' : 'scout',
+          'tell',
+          ups.length > 0 && !L.scouting,
+          () => {
+            if (ups.length > 1) {
+              this.panel = 'scout';
+              this.renderSheet();
+            } else this.send({ t: 'scout' });
+          },
+        ),
+      );
+    }
     if (has(this.disc, 'tell'))
       g.append(
         this.verbBtn('tell', 'tell', 'tell', c.known.length > 0, () => {
@@ -665,7 +687,7 @@ export class Game {
       const b = h('button', 'force', `${label}<small>${sub}</small>`) as HTMLButtonElement;
       b.disabled = !enabled;
       b.onclick = () => {
-        const act = v as 'climb' | 'descend' | 'rest' | 'eat' | 'wait' | 'rope' | 'pack';
+        const act = v as 'climb' | 'descend' | 'rest' | 'eat' | 'wait' | 'rope' | 'pack' | 'ahead';
         this.send({
           t: 'say',
           to: this.target,
@@ -708,15 +730,19 @@ export class Game {
     return g;
   }
 
-  private routeRow(): HTMLElement {
+  private routeRow(scout = false): HTMLElement {
     const c = this.climb;
     const m = MOUNTAINS[c.mountain];
     const g = h('div', 'verbs');
     if (!m || !c.leader.pos.place) return g;
     for (const lg of legsUp(m, c.leader.pos.place))
       g.append(
-        this.verbBtn(`route:${lg.id}`, `by ${lg.name.replace(/^the /, '')}`, 'up', true, () =>
-          this.send({ t: 'lead', dir: 'up', via: lg.id }),
+        this.verbBtn(
+          `route:${lg.id}`,
+          `${scout ? 'look at' : 'by'} ${lg.name.replace(/^the /, '')}`,
+          scout ? 'tell' : 'up',
+          true,
+          () => this.send(scout ? { t: 'scout', via: lg.id } : { t: 'lead', dir: 'up', via: lg.id }),
         ),
       );
     return g;
