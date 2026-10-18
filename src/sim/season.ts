@@ -4,11 +4,20 @@
  * stepped through the same HF decide/begin/finish loop. SCOPE: the valley is offers only, no places or events; a
  * season ends after the last mountain or when the party can no longer climb. Not modelled: jobs, families, travel.
  */
-import { type Affordance, begin, decide, finish, type Person, tick } from '@adam0white/human-framework';
+import {
+  type Affordance,
+  begin,
+  decide,
+  finish,
+  type Person,
+  readPerson,
+  tick,
+  voiceOf,
+} from '@adam0white/human-framework';
 import { type ClimbState, snapshot, startClimb } from './climb.ts';
 import { type Branch, type Facts, factsOf } from './debrief.ts';
 import { SEASON } from './mountain.ts';
-import { createParty, MEMBERS } from './party.ts';
+import { createParty, LEADER, MEMBERS } from './party.ts';
 
 export interface ClimbSummary {
   climbNo: number;
@@ -73,9 +82,50 @@ export function nextClimb(season: SeasonState, played: ClimbState, branch: Branc
   valley(people, played.minute, day * 1440 + next.startMinuteOfDay);
   season.climbNo = played.climbNo + 1;
   const climb = startClimb(season.seed, day, people, next.id, season.climbNo);
+  aftermath(climb, season.history.at(-1)?.facts ?? {});
   season.start = snapshot(climb);
   season.people = [];
   return climb;
+}
+
+/**
+ * The next climb opens on what the last one left: who spent the night out and was brought down, who is still hurt
+ * (read from the HF body), and who has stopped trusting you (read from HF voice trust). Words, never numbers.
+ */
+function aftermath(climb: ClimbState, facts: Facts): void {
+  const at = climb.minute;
+  const add = (text: string, who?: string) =>
+    climb.journal.splice(1, 0, { at, text, story: true, ...(who ? { who } : {}) });
+  const lines: [string, string | undefined][] = [];
+  const out = MEMBERS.filter((m) => facts[m.id] && !facts[m.id]?.home);
+  if (out.length)
+    lines.push([
+      `After the last climb, ${out
+        .map((m) => m.name)
+        .join(', ')
+        .replace(
+          /, ([^,]*)$/,
+          ' and $1',
+        )} spent the night out. The hut warden's party brought ${out.length > 1 ? 'them' : out[0]?.they === 'she' ? 'her' : 'him'} down at first light.`,
+      undefined,
+    ]);
+  for (const p of climb.people) {
+    const m = MEMBERS.find((x) => x.id === p.id);
+    if (!m) continue;
+    const cap = readPerson(p).body.capacity;
+    const f = facts[m.id];
+    if (f && f.hurt > 0.15)
+      lines.push([
+        cap < 0.7
+          ? `${m.name} was still hurt from ${f.hurtWhere ?? 'the last climb'}, and came anyway.`
+          : `${m.name}'s knock from ${f.hurtWhere ?? 'the last climb'} had mostly mended.`,
+        m.id,
+      ]);
+    const trust = voiceOf(p, LEADER)?.trust ?? 0.5;
+    if (trust < 0.35) lines.push([`${m.name} hardly looked at you over breakfast.`, m.id]);
+    else if (trust > 0.75) lines.push([`${m.name} saved you the good mug.`, m.id]);
+  }
+  for (const [t, w] of lines.reverse()) add(t, w);
 }
 
 const VALLEY: Affordance[] = [
@@ -198,6 +248,8 @@ export interface PlaytestExport {
   engine: string;
   seed: number;
   climbNo: number;
+  /** Day of the season, 1-based (the simulation's own day counter starts at FIRST_DAY). */
+  seasonDay: number;
   mountain: string;
   start: string;
   inputs: ClimbState['inputs'];
@@ -211,6 +263,7 @@ export function exportClimb(start: string, s: ClimbState, engine: string): Playt
     engine,
     seed: s.seed,
     climbNo: s.climbNo,
+    seasonDay: s.day - FIRST_DAY + 1,
     mountain: s.mountain,
     start,
     inputs: s.inputs,

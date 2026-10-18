@@ -374,7 +374,8 @@ a {
 }
 .page h1 {
   font-weight: 600;
-  font-size: 34px;
+  font-size: clamp(26px, 8vw, 34px);
+  overflow-wrap: anywhere;
   margin: 18px 0 4px;
   letter-spacing: -0.01em;
 }
@@ -483,7 +484,9 @@ a {
 .close {
   position: sticky;
   top: 0;
-  float: right;
+  z-index: 3;
+  display: block;
+  margin-left: auto;
   border: 1.5px solid var(--ink);
   background: var(--paper);
   border-radius: 9px;

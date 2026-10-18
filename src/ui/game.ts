@@ -127,6 +127,7 @@ export class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.save();
     });
+    window.addEventListener('pagehide', () => this.save());
     requestAnimationFrame(() => this.frame());
     this.titlePage();
   }
@@ -224,7 +225,7 @@ export class Game {
         this.renderTop();
         if (this.panel === 'main' && this.verb === null) this.renderSheet(true);
       }
-      if (now - this.lastSave > 20000) {
+      if (now - this.lastSave > 4000) {
         this.lastSave = now;
         this.save();
       }
@@ -827,7 +828,10 @@ export class Game {
       <p class="caption">Plays offline once loaded. Install it from your browser’s menu.</p>
       ${this.footer()}`,
       (el) => {
-        el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () => this.newGame());
+        el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () => {
+          if (!cont || confirm('Begin a new season? The season in your notebook will be lost.'))
+            this.newGame();
+        });
         el.querySelector<HTMLElement>('[data-a="continue"]')?.addEventListener('click', () => {
           if (sv) this.resume(sv);
         });
@@ -868,7 +872,12 @@ export class Game {
     );
   }
 
+  private exportedAt = 0;
+
   private exportRun(): void {
+    // One download per tap burst.
+    if (performance.now() - this.exportedAt < 3000) return;
+    this.exportedAt = performance.now();
     const data = exportClimb(this.start, this.climb, FRAMEWORK_VERSION);
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const a = document.createElement('a');
