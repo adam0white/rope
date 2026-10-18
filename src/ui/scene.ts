@@ -1,4 +1,5 @@
 /**
+import 'pixi.js/unsafe-eval';
  * The scene: a side profile of the mountain in ink, the party drawn from their HF state (look.ts), the weather as
  * hatching and streaks. PixiJS draws; nothing here changes the simulation.
  */
