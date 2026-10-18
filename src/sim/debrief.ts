@@ -25,7 +25,8 @@ export type Facts = Record<string, PersonFacts>;
 export function factsOf(s: ClimbState): Facts {
   const m = MOUNTAINS[s.mountain];
   if (!m) throw new Error('no mountain');
-  const dusk = s.day * 1440 + m.duskMinuteOfDay;
+  // Down before dark: sunset plus the 45 minutes of usable twilight.
+  const dusk = s.day * 1440 + m.duskMinuteOfDay + 45;
   const out: Facts = {};
   for (const mem of s.members) {
     const worst = mem.injuries.reduce((a, b) => (b.severity > a.severity ? b : a), {
@@ -66,7 +67,7 @@ export interface Branch {
   input: number;
   who: string;
   score: number;
-  /** "Had you not insisted at the col (10:40), Tamar would have turned back there." */
+  /** "If you hadn't insisted at the col (10:40), Tamar would have turned back there." */
   sentence: string;
   /** What actually happened to them, in the same words. */
   actual: string;
@@ -102,7 +103,7 @@ export function inputPhrase(inp: Input): string {
           ? 'chose that way up'
           : 'led on'
         : inp.dir === 'down'
-          ? 'turned back yourself'
+          ? 'turned back'
           : 'stopped';
     case 'fix':
       return 'fixed the rope';
@@ -171,7 +172,7 @@ export function branchFor(startJson: string, played: ClimbState, i: number): Bra
       score,
       actual,
       alternative,
-      sentence: `Had you not ${inputPhrase(inp)} at ${where} (${clock(inp.at)}), ${x.name} would have ${perfect(alternative)}. As it was, ${x.they} ${actual}.`,
+      sentence: `If you hadn't ${inputPhrase(inp)} at ${where} (${clock(inp.at)}), ${x.name} would have ${perfect(alternative)}. Instead, ${x.they} ${actual}.`,
     };
   }
   return best;

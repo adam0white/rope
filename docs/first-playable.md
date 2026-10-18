@@ -21,7 +21,7 @@
 - Journal page, playtest export (seed, start, input log, final state), save/resume in localStorage (start + inputs), PWA manifest and service worker (offline after first load).
 
 ## What is not (yet)
-- Not deployed. `wrangler.jsonc` and the custom domain come in step 4.
+- Deployed at https://rope.adamwhite.work.
 - No "send ahead" verb and no scouting a crossing as a distinct action (the leader walking ahead and waiting is the nearest thing).
 - Workers AI camp voice: not built (by plan, only after the core is fun). Spend $0.00.
 - Not playtested by a person. Tuning is from 12-seed scripted runs only (docs/findings.md).

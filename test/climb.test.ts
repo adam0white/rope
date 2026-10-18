@@ -110,6 +110,6 @@ describe('the debrief', () => {
     playScripted(a, { turnAt: 11 * 60 });
     const b = debrief(start, a, 12);
     expect(b).not.toBeNull();
-    expect(b?.sentence).toMatch(/^Had you not /);
+    expect(b?.sentence).toMatch(/^If you hadn't /);
   });
 });

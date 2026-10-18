@@ -175,7 +175,7 @@ export interface ClimbState {
   inputWhere: Record<number, string>;
 }
 
-export const EARSHOT = 260;
+export const EARSHOT = 400;
 export const FORCE: Record<Force, number> = { ask: 0.35, urge: 0.7, insist: 0.9 };
 
 const mountainOf = (s: ClimbState): Mountain => {
@@ -262,6 +262,7 @@ export function startClimb(
     beatsDone: [],
   };
   if (climbNo === 1) for (const x of MEMBERS) s.journal.push({ at: start, text: x.first, who: x.id });
+  aims(s, m);
   beat(s, 'start');
   return s;
 }
@@ -323,7 +324,7 @@ export function distance(s: ClimbState, a: Pos, b: Pos): number {
 }
 
 export function earshot(s: ClimbState): number {
-  return EARSHOT * (1 - 0.5 * windAt(s.seed, s.weather, s.minute));
+  return EARSHOT * (1 - 0.35 * windAt(s.seed, s.weather, s.minute));
 }
 
 export const canHear = (s: ClimbState, id: string): boolean =>
@@ -341,7 +342,7 @@ const minuteOfDay = (s: ClimbState): number => s.minute - s.day * 1440;
 /** How late and how wild it is, 0..1: what makes going down feel safe. */
 function danger(s: ClimbState, alt: number): number {
   const mod = minuteOfDay(s);
-  const late = Math.max(0, Math.min(1, (mod - 13 * 60) / (5 * 60)));
+  const late = Math.max(0, Math.min(1, (mod - 12 * 60) / (5 * 60)));
   const wind = windAt(s.seed, s.weather, s.minute);
   return Math.min(1, 0.5 * late + 0.6 * wind * Math.min(1, (alt - 1400) / 1200));
 }
@@ -412,6 +413,13 @@ function downOffer(s: ClimbState, p: Person, mem: MemberState, lg: Leg, fromT: n
       safety: 0.05 + 0.45 * d,
       competence: 0.02,
       belonging: s.leader.move?.dir === 'down' || s.leader.turnedAt !== null ? 0.1 : -0.03,
+      // Pride: for someone who cares what others think of her nerve, being the first to turn costs face.
+      ...(mem.id === 'wren' &&
+      mem.turnedAt === null &&
+      !s.members.some((x) => x.turnedAt !== null || x.summitAt !== null) &&
+      s.leader.turnedAt === null
+        ? { esteem: -0.3 }
+        : {}),
     },
     tags: ['outdoors'],
     requires: { moving: 0.15 },
@@ -1048,6 +1056,43 @@ function wantHome(s: ClimbState, p: Person, legsLeft: number): void {
   );
 }
 
+/**
+ * What each person brings to the day besides the top, as HF goals and promises, so that a sensible plan still
+ * collides with someone: Nell promised her mother she would be down before dark; Bilal carries Ezra's tin and means
+ * to leave it on the top. (Oskar's hunger for the top and Wren's pride live in their summit goal and her down offer.)
+ */
+function aims(s: ClimbState, m: Mountain): void {
+  const dusk = s.day * 1440 + m.duskMinuteOfDay;
+  const nell = personOf(s, 'nell');
+  promiseCommitment(nell, {
+    kind: 'promise',
+    toId: 'nell-mother',
+    actions: ['descend'],
+    from: dusk - 300,
+    until: dusk,
+    importance: 0.75,
+    label: 'down before dark, as I told Mum',
+  });
+  s.journal.push({
+    at: s.minute,
+    who: 'nell',
+    text: 'Nell had promised her mother a call from the hut before dark.',
+  });
+  const bilal = personOf(s, 'bilal');
+  if (!bilal.agenda.goals.some((g) => g.label === 'leave the tin on the top' && g.status === 'active'))
+    adoptGoal(
+      bilal,
+      {
+        label: 'leave the tin on the top',
+        serves: ['tradition', 'benevolence'],
+        advancedBy: [{ action: 'summit', amount: 1 }],
+        importance: 0.85,
+        temporal: { halfLifeMinutes: 600 },
+      },
+      s.minute,
+    );
+}
+
 /** Say a story beat once. */
 function beat(s: ClimbState, when: string): void {
   if (s.beatsDone.includes(when)) return;
@@ -1055,20 +1100,6 @@ function beat(s: ClimbState, when: string): void {
   if (!b) return;
   s.beatsDone.push(when);
   s.journal.push({ at: s.minute, text: b.text, ...(b.who ? { who: b.who } : {}), story: true });
-  if (b.who && b.memory) {
-    const p = personOf(s, b.who);
-    perceive(p, [
-      {
-        at: s.minute,
-        channel: 'saw',
-        kind: 'memory',
-        salience: 0.8,
-        valence: -0.4,
-        summary: b.memory.summary,
-        threat: { severity: b.memory.severity, chance: b.memory.chance, sourceId: b.memory.sourceId },
-      },
-    ]);
-  }
 }
 
 function here(m: Mountain, mem: MemberState): string {
@@ -1350,6 +1381,13 @@ function checkPromise(s: ClimbState): void {
 /** Unprompted words are the journal's, not the people's: only the dusk prayer, quietly. */
 function quietLines(s: ClimbState, m: Mountain): void {
   const mod = minuteOfDay(s);
+  // The light going is a fact everyone on the hill can see: four hours before dark, getting down becomes a goal.
+  if (mod === m.duskMinuteOfDay - 240) {
+    s.journal.push({ at: s.minute, text: 'The light began to go long and yellow on the snow.' });
+    for (const mem of s.members)
+      if (mem.homeAt === null && mem.path.length + (mem.pos.leg ? 1 : 0) > 0)
+        wantHome(s, personOf(s, mem.id), mem.path.length + (mem.pos.leg ? 1 : 0));
+  }
   if (mod !== 19 * 60 + 5) return;
   const bilal = s.members.find((x) => x.id === 'bilal');
   if (!bilal) return;

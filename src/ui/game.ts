@@ -3,7 +3,7 @@
  * pages (title, journal, debrief, season). All play goes through `queueInput` + `step`, so the save is the start
  * state and the input log, and the export replays exactly.
  */
-import { FRAMEWORK_VERSION } from '@adam0white/human-framework';
+import { FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
 import {
   type ClimbState,
   canHear,
@@ -329,11 +329,25 @@ export class Game {
 
   // ------------------------------------------------------------ bubbles and notes
 
+  private trustSeen = new Map<string, number>();
+
   private showLine(l: Line): void {
     if (!l.says) return;
     const cls =
-      l.verdict === 'assented' || l.verdict === 'complied' ? 'yes' : l.verdict === 'heard' ? '' : 'no';
-    this.bubble(l.who, l.says, cls);
+      l.verdict === 'assented'
+        ? 'yes'
+        : l.verdict === 'complied'
+          ? 'grudging'
+          : l.verdict === 'heard'
+            ? ''
+            : 'no';
+    // Pressure shows, never as a number: when HF lowers their trust in you, they look away as they answer.
+    const p = this.climb.people.find((x) => x.id === l.who);
+    const trust = p ? (voiceOf(p, 'leader')?.trust ?? 0.5) : 0.5;
+    const was = this.trustSeen.get(l.who) ?? trust;
+    this.trustSeen.set(l.who, trust);
+    const turned = trust < was - 0.01 ? ` (${memberOf(l.who).they} looks away)` : '';
+    this.bubble(l.who, l.says + turned, cls);
     if (l.verdict !== 'assented' && l.verdict !== 'heard') this.slow();
   }
 

@@ -59,8 +59,6 @@ export interface Beat {
   when: string;
   text: string;
   who?: string;
-  /** What the moment brings back to `who`: an old harm tied to a place, perceived as a threat from it. */
-  memory?: { sourceId: string; severity: number; chance: number; summary: string };
 }
 
 export const DESCENT_FACTOR = 0.7;
@@ -97,12 +95,6 @@ export const HOLLIN: Mountain = {
       when: 'col',
       who: 'tamar',
       text: 'At the col Tamar looked at the gully for a long time and said nothing.',
-      memory: {
-        sourceId: 'gully',
-        severity: 0.7,
-        chance: 0.5,
-        summary: 'the gully, where it went wrong for Ezra',
-      },
     },
     {
       when: 'summit',
@@ -143,7 +135,21 @@ function l(
   fixable: boolean,
   effort: number,
 ): Leg {
-  return { id, from, to, name, kind, minutes, exposure, rockfall, footing, fixable, effort };
+  return {
+    id,
+    from,
+    to,
+    name,
+    kind,
+    minutes: Math.round(
+      minutes * 1.3,
+    ) /* big mountains (2026-10-18 tuning): the top comes as the weather turns */,
+    exposure,
+    rockfall,
+    footing,
+    fixable,
+    effort,
+  };
 }
 
 /** The day's weather for a seed and day. */
@@ -156,8 +162,8 @@ export interface Weather {
 
 export function weatherFor(seed: number, day: number): Weather {
   return {
-    stormAt: Math.round(12 * 60 + 210 * hashUnit(seed, DRAW.storm, day, 0)),
-    stormStrength: 0.45 + 0.5 * hashUnit(seed, DRAW.storm, day, 1),
+    stormAt: Math.round(11 * 60 + 180 * hashUnit(seed, DRAW.storm, day, 0)),
+    stormStrength: 0.6 + 0.4 * hashUnit(seed, DRAW.storm, day, 1),
   };
 }
 
