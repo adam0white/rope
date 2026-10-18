@@ -277,10 +277,10 @@ export const KESTREL: Mountain = {
   ],
   legs: [
     l('lake', 'hut', 'lake', 'the tarn path', 'path', 55, 0.15, 0, 0.004, false, 0.45),
-    l('glacier', 'lake', 'glacier', 'the moraine and the ice', 'snow', 100, 0.4, 0.1, 0.012, false, 0.6),
-    l('schrund', 'glacier', 'schrund', 'the upper glacier', 'snow', 85, 0.5, 0.05, 0.016, false, 0.7),
-    l('wall', 'schrund', 'shoulder', 'the ice wall', 'snow', 70, 0.6, 0.35, 0.03, true, 0.85),
-    l('summit-ridge', 'shoulder', 'summit', 'the summit ridge', 'ridge', 75, 1, 0.05, 0.02, true, 0.75),
+    l('glacier', 'lake', 'glacier', 'the moraine and the ice', 'snow', 85, 0.4, 0.1, 0.008, false, 0.6),
+    l('schrund', 'glacier', 'schrund', 'the upper glacier', 'snow', 70, 0.5, 0.05, 0.012, false, 0.7),
+    l('wall', 'schrund', 'shoulder', 'the ice wall', 'snow', 60, 0.6, 0.35, 0.022, true, 0.85),
+    l('summit-ridge', 'shoulder', 'summit', 'the summit ridge', 'ridge', 60, 1, 0.05, 0.016, true, 0.75),
   ],
 };
 

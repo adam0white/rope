@@ -19,3 +19,10 @@
 - The fork splits the party on its own: Oskar and Wren often take the gully while others wait at the col. Kept: it is HF choice and a real leader problem.
 - Injuries: 12–16 of 60 person-days. They come from exposure, wind and afternoon sun on real legs, so they read as earned; left as is.
 - Debrief sentences now read "If you hadn't … at … (time), X would have …. Instead, she …".
+
+## Retune of The Tooth and Kestrel (2026-10-18)
+12 scripted fresh parties per mountain, attentive leader, asking.
+- The Tooth, as is: first top about 13:08; 46–51 of 60 down by dark; 10–13 hurt. Left alone: the right step up from Hollin.
+- Kestrel before: first top 15:06, 7–10 of 60 on top, 16–38 down, 20–23 hurt, injuries spread across the morning glacier as well as the afternoon wall. Too punishing, and the morning falls read as arbitrary.
+- Kestrel after (legs shortened, lower-glacier and wall footing eased): turning at 12:00, first top 13:16, 28 on top, 32 down, 20 hurt, now mostly on the ice wall and the summit ridge after 11:00, when sun and wind are on them. Kept hard on purpose as the finale; roping and fixed ropes (unused by the script) are the answer to it.
+- Nell now refuses from her own HF promise (reason `commitment:c1`), and the person quotes the HF commitment's label: "… I promised: down before dark, as I told Mum."
