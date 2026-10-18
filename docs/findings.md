@@ -29,3 +29,105 @@
 
 ## Camp voice: 1B against 8B (2026-10-18)
 Three fixed records (seeds 1, 4, 7 on Hollin, turning at 11:00, 13:00, 15:00), same prompt. Llama 3.2 1B wrote "Hollin: said." five times, spoke as the mountain, and invented a person ("Ezra"). Llama 3.1 8B (fp8-fast) spoke only as the party and drew on real records (the gully against the ridge, Nell's call to her mother), though it still embroiders blame ("I told you the moraine was loose"). Kept 8B. The label says the talk is a model's and changes nothing.
+
+## HF 2.5.0, forecast and voices (2026-10-18)
+- Upgraded to HF 2.5.0. Every climb offer declares `followedBy` the way back to the hut (all legs climbed plus this one, at descent pace). In a 12-seed probe on Kestrel, `forecast:body` never became the top reason for a refusal; it shifts utilities. Hollin, script asking, 12 seeds, after all of today's changes: turning at 11:00, 62 of 228 answers disagree, 0 on top, 60 down by dark; at 12:00, 33 of 171, 24 on top, 40 down; at 13:00, 4 of 144, 24 on top, 42 down. Disagreement at 12:00 holds (30 of 149 before). Separated by switching each off (HF 2.6.0, fatigue store on): the 11:00 drop to 0 summits is entirely the forecast; without it 22 summit after the leader turned and only 26 are down by dark; the ask-for-company rule changes nothing there. When a person refuses or defers a climb for a need, goal or promise, they add HF's own forecast line ("I can do it, but I'll be too thirsty for the descent.").
+- HF's deferral template repeated across people ("After I climb the snow to the col, then I will." 22 times in 24 runs). src/sim/voice.ts now phrases HF's answer per person, keeping the act, verdict and reason; the variant is hashed from seed, person and minute so replay is exact.
+- Carry-over control (test/season.test.ts, three climbs): HF voice trust carries exactly into the next climb; climb 2 opened on "Oskar, Nell and Wren spent the night out…" and "Wren was still hurt from the gully, and came anyway."
+- Lone descents: 12 seeds, script turning at 15:00, 32 asks for company, 22 went alone after 45 minutes unanswered (the script never answers).
+- Kestrel with a careful scripted leader (test/careful.test.ts: two rope pairs asked at the hut, a rope fixed on every fixable leg, turning at 12:00, 12 seeds): 24 on top, 36 down by dark, 7 hurt, against 21 / 39 / 17 for the plain script. Fixing was impossible before: the leader auto-walked through every place, so the walk-on now stops below an unfixed fixable leg. Roping was broken: the rope offer existed only once the request was pending, after HF had already answered "isn't on offer" (fixed; the request now goes to both people). Roped partners now weigh going where the other goes (belonging ±0.3); one rope in 12 still came off.
+
+## HF 2.6.0 fatigue store (2026-10-18)
+- Opted in (`enable.fatigueStore`). Mean end-of-day depletion about 0.26–0.32. With Kestrel's old leg efforts, summits at a 12:00 turn fell from 21 to 4 of 60; leg efforts eased by 0.1 (glacier 0.5, upper glacier 0.6, wall 0.75, ridge 0.65): 22 on top, 34 down by dark, 13 hurt, 51 of 213 answers disagree. Hollin at 12:00: 20 on top, 36 down, 22 of 151 disagree.
+- Escort, 12 seeds, sending the first person in earshot when Nell asks: 4 of 4 sent pairs went down roped together, no repeat asks, both home. In 8 of 12 seeds nobody was in the leader's earshot when she asked, so she went alone after 45 minutes; the player would have to walk back to answer.
+- Rope pairs split in all 12 careful runs, about 08:00 on the glacier: one partner stops to rest and HF keeps them resting even when a tug on the rope makes them decide again. The journal now says so ("Tamar stayed where she was; Nell untied and went on.").
+- Controls re-seeded after the fatigue store: the col controls use seed 2 (seed 1 now has everyone agree to turn); the plain-day control expects 3 of 5 down by dark, the rate on every seed 1–12 at a 13:00 turn.
+
+## Resume after the end of the day (2026-10-18)
+
+Fable reported that resuming after a climb ended showed a dead map with no read-back. I could not reproduce this on the build deployed on 2026-10-18. A finished save loaded in the browser opens the stamp, then the read-back with "On to The Tooth". `test/resume.test.ts` checks that a save taken mid-ending replays to the same finished climb. The cause of Fable's dead map is unknown. One suspect is the older build it played (its footer said HF 2.5.0), but that is not confirmed.
+
+## Out-of-earshot asking (2026-10-18)
+
+When a member asks for company and nobody is in earshot, the player now sees a faint bar ("X is calling from below, too far to make out"). When the caller is below, the bar offers "go back to her/him". This is the answer to the out-of-earshot asking problem. The game does not move the request into earshot or speak for anyone.
+
+## Fable fixes, items 3 to 6 (2026-10-18)
+
+- **Leading.** "Lead on" now keeps to the pace of the last member still climbing. The leader waits when that member falls past 0.6 of earshot. Before, the leader waited only once nobody at all was near. There is a new "stay with them" order, and "walk to <name>" when someone is picked (`lead` input `dir: 'with'`). Both walk along the legs toward that person, or toward the middle of the party. Control: `test/follow.test.ts`.
+- **Far events.** A fall, slip, untie or summit by someone out of earshot appears as a margin note starting "Far off:". The camera frames the leader and everyone still out, and the leader always stays in frame. There is no zoom, so a widely spread party can still run off-screen.
+- **Early warnings and voices.** HF's verdicts are unchanged. A yes now carries HF's body forecast when it warns ("but", "though"), so the warning comes while turning is still cheap. Generic yeses get per-person voices; a yes that carries a reason keeps HF's words. "We all turn" now also urges everyone down (bubbles and a journal line). Turning in earshot answers a pending request for company, so the bar closes.
+- **Layout and save.** With a prompt open, the you row sits above the prompt. Bubbles avoid the margin note, and the note is opaque over the weather ink. Rope-up asks for ask, urge or insist after the second pick. The save no longer stores the climb start twice: about 25 KB instead of about 51 KB on climb 1.
+
+## Outcomes under the party-pace rule (2026-10-18)
+
+Measured with the script asking, a 12:00 turn, 12 seeds per peak, HF 2.6.0 with the fatigue store on. The counts are people summed over 12 seeds, out of 60. "Before" is the same build with the old wait rule put back.
+
+| Peak | Party pace (now) | Old wait rule |
+|---|---|---|
+| Hollin | 7 on top, 46 down by dark, 12 hurt, 32 of 173 answers disagree | 20 on top, 36 down, 14 hurt, 0 of 129 |
+| Tooth | 23 on top, 35 down, 14 hurt, 0 of 129 | 1 on top, 57 down, 12 hurt, 11 of 222 |
+| Kestrel | 22 on top, 37 down, 15 hurt, 0 of 147 | 19 on top, 37 down, 12 hurt, 38 of 203 |
+
+The pace rule moves outcomes a lot. Waiting for the last climber keeps Hollin's party lower at noon, so fewer reach the top and more are down by dark. On Tooth and Kestrel, answers that disagree drop to none. My guess is that the waits act as rests, so nobody is asked on while worn out. I have not checked that. The "0 of 129" for both Hollin-old and Tooth-new looks like a coincidence; I have not explained it. Kestrel losing its disagreement is a design problem: the hardest peak should produce some noes. Recommendation: check this in the next playtest before retuning. If it holds, the leader's waits could count as standing, not resting, or Kestrel's efforts could go back up.
+
+## Root cause of the zero noes, and pacing (2026-10-18, later)
+
+- **The "waits act as rests" guess was wrong.** At the 12:00 turn, mean fatigue and altitude match under both pace rules: Kestrel 0.63 old against 0.64 new, Tooth 0.65 against 0.66, Hollin 0.71 against 0.72. I built no cold-standing rule.
+- **Cause.** Waiting for the very last climber made the leader the sweeper. On Kestrel seed 1 the leader was still at the lake at 12:00, 2.4 km and 800 m below Tamar. The turn reached only the back of the party, and the script repeats the call only to people in earshot. Nobody who cannot hear the call can say no to it. Oskar, Wren and Tamar went on, unasked. The old run's 38 Kestrel deferrals were mostly the same holdouts deferring the same call every 15 minutes, because the old leader happened to be beside them. Summits barely changed (19 old, 22 new), so the friction was still there; the answer count missed it.
+- **Fixes.**
+  - The leader leads from the middle: it waits when half or more of those still climbing are out of easy earshot behind.
+  - Walking up to fetch someone does not undo a turn.
+  - The party-pace wait does not apply while following someone.
+  - The test script now walks up to holdouts out of earshot and asks them in person.
+  - A story beat about one person waits for that person: on Kestrel, Bilal's tin opened on the top while Bilal was down on the moraine.
+- **I reverted two knobs that moved nothing:** Nell's promise window tied to the descent time, and a belonging cost for climbing out of the leader's earshot. Choices people make on their own produce no answer lines, so the answer count could not show the second one either way.
+- **New friction count.** "Summited after the turn" counts people who reached the top after the leader turned.
+
+| Peak (12 seeds, 12:00 turn, script fetches holdouts) | On top | Down by dark | Hurt | Answers that disagree | Summited after the turn |
+|---|---|---|---|---|---|
+| Hollin | 4 | 52 | 15 | 37 of 202 | 4 |
+| Tooth | 1 | 56 | 14 | 20 of 228 | 1 |
+| Kestrel | 20 | 40 | 13 | 23 of 198 | 20 |
+
+Without the fetch, the disagreeing answers are 21, 20 and 12. Kestrel has the most friction overall: 43 disagreements plus people going on, against 41 on Hollin and 21 on Tooth. It does not yet have the most disagreeing answers; Hollin's come from its tight day and Nell's promise. This target is not fully met.
+
+- **Pacing.** The clock was already on target: normal runs at 0.8 game minutes per real second, 48 per real minute, and fast is three times that. In the browser at normal speed I measured 8 game minutes per 10 real seconds. `test/pacing.test.ts` models a scripted climb, counting slowdowns: Hollin 21.7, Tooth 18.8 and Kestrel 24.0 real minutes. Notes and story lines now slow the clock for 2.5 s instead of 7 s (`src/ui/pace.ts`). The earlier "27 game minutes in 40 s on fast" was the start of climb 1, slowed by intro story lines and notes. A hidden browser pane may also have throttled it; that is not confirmed.
+
+## First-time playtest fixes (2026-10-18, evening)
+
+- **A skipped leg on the way down.** A leg turned back on halfway was popped off the path as if it had been climbed. The next descent then skipped a whole leg: on Kestrel seed 1, Wren went from the ice wall to the glacier, dropping 413 m in 15 minutes. That made the dots disagree with the journal. Fixed: only a completed leg comes off the path, for members and the leader. Regression test: `test/positions.test.ts`, no one moves more than 40 m a minute, on 3 peaks with 12 seeds each.
+- **Slow descents.** A spent person also crawled down, up to 2.9 times slower, because the climbing pace curve was used for the descent too. Going down now uses a softer curve, at worst about 1.7 times slower. Oskar's Kestrel descent from the top went from 8.5 hours to 7.3.
+- **The first hour.**
+  - Some mornings Wren leaves without breakfast. Her starting satiety is seeded from 0.3 to 0.75, and the journal says so when it is low. HF then defers her first "climb on" in 3 of 12 Hollin seeds ("Not till I eat something.").
+  - Each peak has six approach lines, one every half hour after the introductions.
+  - After 20 quiet game minutes the margin suggests fast-forward.
+- **Readable state.**
+  - Posture is exaggerated: stride, lean and hunch respond more strongly.
+  - Cold hatching starts at a lower cold.
+  - Each chip carries one handwritten mood word, such as "tired", "spent", "scared", "cold", "hurting", "low" or "keen", chosen from HF's state. No numbers are shown.
+- **Layout.**
+  - The margin note is a fixed strip between the top bar and the map, so it no longer covers the map or bubbles, and the map never jumps when a note arrives.
+  - The sheet takes 46% of the height.
+  - Once a row has six or more verbs, verbs sit five to a row.
+  - With everything unlocked, every verb is above the fold at 360×780, before and after picking someone.
+- **The console error on load** is Cloudflare Web Analytics' injected beacon, `static.cloudflareinsights.com/beacon.min.js`, failing with net::ERR_FAILED in the test browser. The CSP allows it, and the server answers 200 with `access-control-allow-origin: *`. So the browser side (blocking or sandbox) is the likely cause; I have not confirmed this. The game's own code logs no errors. To remove the error, turn off automatic Web Analytics injection for rope.adamwhite.work.
+
+### Re-measured after the path and descent fixes (2026-10-18, late)
+
+| Peak (12 seeds, 12:00 turn, script fetches holdouts) | On top | Down by dark | Hurt | Answers that disagree | Summited after the turn |
+|---|---|---|---|---|---|
+| Hollin | 6 | 51 | 14 | 55 of 222 | 6 |
+| Tooth | 1 | 59 | 12 | 22 of 233 | 1 |
+| Kestrel | 18 | 42 | 16 | 19 of 191 | 18 |
+
+Generated by `npm run measure` (`scripts/measure.ts`, which states each definition). "Hurt" counts anyone with an injury of severity 0.15 or more. The harness behind the earlier tables was not saved, so those earlier numbers may not compare exactly. Hollin's disagreeing answers rose from 37 to 55; Wren's skipped breakfast accounts for some of that, but I have not separated the causes. Tooth brings nearly everyone down by dark. Kestrel still has fewer disagreeing answers than Hollin.
+
+**Browser pass (360×780, then 780×360, one Hollin climb on fast, then the start of the Tooth):**
+- Bubbles faded after 17 game minutes.
+- On a new climb the speed was back to normal, and the "Everyone down" stamp was cleared.
+- The end-of-day summary read "on the snow slope below the col".
+- At dawn the mood words were "keen" for Nell and Bilal and blank for the rest; nobody read "cold".
+- By 08:20 every chip read "tired" or "spent", so the word told the player nothing. Fixed: "tired" now needs fatigue above about 0.57, and "spent" above 0.8.
+- Not seen: queued company prompts. Nobody asked for company during this climb, so the queue is still unverified in the browser.
+- Landscape: the docked note and the map sit correctly. At 360 tall the sheet still scrolls to reach the last verb row, even with verbs now compact (five to a row, 40 px). The name labels at the hut overlap the "the hut" label. Neither is fixed.
+- The only console error locally was `/api/camp` returning 404, which is expected: the Vite dev server runs without the Worker.
