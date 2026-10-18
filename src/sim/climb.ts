@@ -21,6 +21,7 @@ import {
   type Percept,
   type Person,
   perceive,
+  predict,
   promise as promiseCommitment,
   type ReceivedConsequence,
   readPerson,
@@ -522,6 +523,41 @@ function journalFor(who: string, r: SuggestionResolution): string {
   }
 }
 
+/**
+ * A person's answer to news (a told fact, a promise, a gift): how they now stand toward the act it bears on, read
+ * from HF with `predict` (no state change, no randomness), in their own words. The reaction is not a suggestion
+ * and books nothing.
+ */
+function reaction(
+  s: ClimbState,
+  id: string,
+  input: number,
+  act: 'climb' | 'descend' | 'eat',
+  reason: string,
+): void {
+  const mem = memberState(s, id);
+  const p = personOf(s, id);
+  const sug: Suggestion =
+    act === 'climb'
+      ? (() => {
+          const lg = nextLegUp(s, mem);
+          return lg
+            ? { voiceId: LEADER, affordanceId: `up:${lg.id}`, strength: 0.35 }
+            : { voiceId: LEADER, action: 'climb', strength: 0.35 };
+        })()
+      : { voiceId: LEADER, action: act, strength: 0.35 };
+  const r = predict(p, offersFor(s, id), sug);
+  s.lines.push({
+    at: s.minute,
+    who: id,
+    input,
+    verdict: 'heard',
+    ...(r.kind ? { kind: r.kind } : {}),
+    reason: `${reason}:${r.verdict}`,
+    says: r.says,
+  });
+}
+
 function suggestionFor(s: ClimbState, mem: MemberState, inp: Extract<Input, { t: 'say' }>): Suggestion {
   const base = {
     voiceId: LEADER,
@@ -605,7 +641,7 @@ function applyInput(s: ClimbState, idx: number): void {
           importance: 0.55,
           label,
         });
-        s.lines.push({ at: s.minute, who: id, input: idx, verdict: 'heard', reason: 'promise', says: '' });
+        reaction(s, id, idx, 'climb', 'promise');
       }
       s.promise = { at: s.minute, hour: inp.hour, hearers, status: 'open' };
       s.journal.push({
@@ -626,64 +662,15 @@ function applyInput(s: ClimbState, idx: number): void {
       }
       for (const id of hearers) {
         perceive(personOf(s, id), [factPercept(s, inp.fact, id)]);
-        s.lines.push({
-          at: s.minute,
-          who: id,
-          input: idx,
-          verdict: 'heard',
-          reason: `told:${inp.fact}`,
-          says: '',
-        });
+        reaction(s, id, idx, FACTS[inp.fact].bears, `told:${inp.fact}`);
       }
       s.told[inp.fact] = [...(s.told[inp.fact] ?? []), ...hearers];
       s.journal.push({ at: s.minute, text: `You told them: ${FACTS[inp.fact].words}` });
       return;
     }
-    case 'lead': {
-      const L = s.leader;
-      if (L.move) L.pos = movePos(L.move, s.minute);
-      L.move = null;
-      L.fixing = null;
-      if (inp.dir === 'stop') return;
-      const pos = L.pos;
-      let lg: Leg | undefined;
-      let fromT: number;
-      if (inp.dir === 'up') {
-        if (pos.leg) lg = legOf(m, pos.leg);
-        else {
-          const ups = legsUp(m, pos.place ?? '');
-          lg = ups.find((x) => x.id === (inp.via ?? L.route)) ?? ups[0];
-          if (lg && ups.length > 1) {
-            if (L.route !== lg.id) s.journal.push({ at: s.minute, text: `You chose ${lg.name}.` });
-            L.route = lg.id;
-          }
-        }
-        if (!lg) return;
-        fromT = pos.leg ? pos.t : 0;
-        const mins = lg.minutes * (1 - fromT) * (1 + 0.12 * L.carrying.length) * 0.95;
-        L.move = { leg: lg.id, dir: 'up', fromT, toT: 1, start: s.minute, end: s.minute + Math.max(2, mins) };
-      } else {
-        if (pos.leg) lg = legOf(m, pos.leg);
-        else {
-          const back = L.path[L.path.length - 1];
-          if (back) lg = legOf(m, back);
-        }
-        if (!lg) return;
-        fromT = pos.leg ? pos.t : 1;
-        if (L.turnedAt === null && L.path.length > 0) L.turnedAt = s.minute;
-        const mins = lg.minutes * DESCENT_FACTOR * fromT * (1 + 0.12 * L.carrying.length) * 0.95;
-        L.move = {
-          leg: lg.id,
-          dir: 'down',
-          fromT,
-          toT: 0,
-          start: s.minute,
-          end: s.minute + Math.max(2, mins),
-        };
-      }
-      if (pos.place) L.pos = { place: null, leg: lg.id, t: fromT };
+    case 'lead':
+      leaderGo(s, m, inp.dir, inp.via);
       return;
-    }
     case 'fix': {
       const L = s.leader;
       if (L.move || !L.pos.place) {
@@ -720,7 +707,7 @@ function applyInput(s: ClimbState, idx: number): void {
           summary: 'the leader gave me food',
         },
       ]);
-      s.lines.push({ at: s.minute, who: inp.to, input: idx, verdict: 'heard', reason: 'gift', says: '' });
+      reaction(s, inp.to, idx, 'eat', 'gift');
       s.journal.push({ at: s.minute, text: `You gave ${memberOf(inp.to).name} some of your food.` });
       return;
     }
@@ -729,18 +716,32 @@ function applyInput(s: ClimbState, idx: number): void {
 
 // ---------------------------------------------------------------- facts the leader can tell
 
-export const FACTS: Record<FactId, { words: string; short: string }> = {
-  storm: { short: 'weather turning', words: 'cloud is building in the west; it will blow this afternoon.' },
+export const FACTS: Record<FactId, { words: string; short: string; bears: 'climb' | 'descend' }> = {
+  storm: {
+    short: 'weather turning',
+    bears: 'descend',
+    words: 'cloud is building in the west; it will blow this afternoon.',
+  },
   'gully-quiet': {
     short: 'gully quiet',
+    bears: 'climb',
     words: 'the gully is in shade and quiet; from its top the summit is half an hour.',
   },
-  'gully-loose': { short: 'gully loose', words: 'the sun is on the gully; stones are coming down.' },
+  'gully-loose': {
+    short: 'gully loose',
+    bears: 'descend',
+    words: 'the sun is on the gully; stones are coming down.',
+  },
   'ridge-solid': {
     short: 'ridge solid',
+    bears: 'climb',
     words: 'the ridge is long but the rock is good; from the tower it is under an hour.',
   },
-  'descent-tiring': { short: 'save strength', words: 'the way down is long. Keep something back for it.' },
+  'descent-tiring': {
+    short: 'save strength',
+    bears: 'descend',
+    words: 'the way down is long. Keep something back for it.',
+  },
 };
 
 function consequence(
@@ -876,6 +877,53 @@ export function step(s: ClimbState): void {
   }
 }
 
+/** Start the leader walking (or stop). Shared by the 'lead' input and the leader's own walking on. */
+function leaderGo(s: ClimbState, m: Mountain, dir: 'up' | 'down' | 'stop', via?: string): void {
+  const L = s.leader;
+  if (L.move) L.pos = movePos(L.move, s.minute);
+  L.move = null;
+  L.fixing = null;
+  if (dir === 'stop') return;
+  const pos = L.pos;
+  let lg: Leg | undefined;
+  let fromT: number;
+  if (dir === 'up') {
+    if (pos.leg) lg = legOf(m, pos.leg);
+    else {
+      const ups = legsUp(m, pos.place ?? '');
+      lg = ups.find((x) => x.id === (via ?? L.route)) ?? ups[0];
+      if (lg && ups.length > 1) {
+        if (L.route !== lg.id) s.journal.push({ at: s.minute, text: `You chose ${lg.name}.` });
+        L.route = lg.id;
+      }
+    }
+    if (!lg) return;
+    fromT = pos.leg ? pos.t : 0;
+    const mins = lg.minutes * (1 - fromT) * (1 + 0.12 * L.carrying.length) * 0.95;
+    L.move = { leg: lg.id, dir: 'up', fromT, toT: 1, start: s.minute, end: s.minute + Math.max(2, mins) };
+  } else {
+    if (pos.leg) lg = legOf(m, pos.leg);
+    else {
+      const back = L.path[L.path.length - 1];
+      if (back) lg = legOf(m, back);
+    }
+    if (!lg) return;
+    fromT = pos.leg ? pos.t : 1;
+    if (L.turnedAt === null && L.path.length > 0) L.turnedAt = s.minute;
+    const mins = lg.minutes * DESCENT_FACTOR * fromT * (1 + 0.12 * L.carrying.length) * 0.95;
+    L.move = {
+      leg: lg.id,
+      dir: 'down',
+      fromT,
+      toT: 0,
+      start: s.minute,
+      end: s.minute + Math.max(2, mins),
+    };
+  }
+  if (pos.place) L.pos = { place: null, leg: lg.id, t: fromT };
+  return;
+}
+
 function stepLeader(s: ClimbState, m: Mountain): void {
   const L = s.leader;
   if (L.fixing && s.minute >= L.fixing.until) {
@@ -887,7 +935,8 @@ function stepLeader(s: ClimbState, m: Mountain): void {
   L.pos = movePos(L.move, s.minute);
   if (s.minute >= L.move.end) {
     const lg = legOf(m, L.move.leg);
-    if (L.move.dir === 'up') {
+    const dir = L.move.dir;
+    if (dir === 'up') {
       L.pos = at(lg.to);
       L.path.push(lg.id);
     } else {
@@ -895,6 +944,12 @@ function stepLeader(s: ClimbState, m: Mountain): void {
       L.path.pop();
     }
     L.move = null;
+    // Walk on until the fork, the top or the hut: the player stops you, or chooses the way at a fork.
+    const here = L.pos.place ?? '';
+    // Going up, you wait at a place when nobody behind is in earshot any more: you do not walk away from them.
+    const company = s.members.some((x) => x.homeAt === null && canHear(s, x.id));
+    if (dir === 'up' && here !== m.summit && legsUp(m, here).length === 1 && company) leaderGo(s, m, 'up');
+    else if (dir === 'down' && L.path.length > 0) leaderGo(s, m, 'down');
   }
 }
 

@@ -1,0 +1,509 @@
+/* Field Notebook tokens (human-framework docs/design-language.md). Only --rope is loud. */
+:root {
+  --paper: #f3ecdd;
+  --paper-2: #e9dfcb;
+  --ink: #23201b;
+  --ink-soft: #6e665a;
+  --rope: #c2412d;
+  --moss: #4f6b3a;
+  --sky: #3d5a73;
+  --text: "Literata", Georgia, serif;
+  --hand: "Caveat", "Bradley Hand", cursive;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1e1b16;
+    --paper-2: #29251e;
+    --ink: #e8dfcc;
+    --ink-soft: #9a9080;
+    --rope: #e2614a;
+    --moss: #8daa6e;
+    --sky: #7fa2c0;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1e1b16;
+  --paper-2: #29251e;
+  --ink: #e8dfcc;
+  --ink-soft: #9a9080;
+  --rope: #e2614a;
+  --moss: #8daa6e;
+  --sky: #7fa2c0;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+}
+body {
+  font-family: var(--text);
+  font-size: 17px;
+  line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+#app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+button {
+  font: inherit;
+  color: inherit;
+}
+a {
+  color: inherit;
+}
+
+/* Top line: the shared mark, the place and the hour, speed. */
+.top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(6px + var(--safe-t)) 12px 4px;
+  font-size: 14px;
+  min-height: 36px;
+}
+.mark {
+  text-decoration: none;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.mark:hover {
+  color: var(--ink);
+}
+.where {
+  flex: 1;
+  text-align: center;
+  font-family: var(--hand);
+  font-size: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.speed {
+  display: flex;
+  gap: 2px;
+}
+.speed button {
+  border: 1.5px solid transparent;
+  background: none;
+  border-radius: 6px;
+  padding: 2px 6px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  min-width: 32px;
+  min-height: 30px;
+}
+.speed button[aria-pressed="true"] {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.speed button.slowed {
+  border-style: dashed;
+}
+
+/* The scene. */
+.scene {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.scene canvas {
+  position: absolute;
+  inset: 0;
+  /* Pixi writes inline pixel sizes; the box, not the canvas, decides. */
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  touch-action: none;
+}
+.bubbles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  max-width: 190px;
+  padding: 3px 9px 4px;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 10px 12px 9px 11px;
+  font-family: var(--hand);
+  font-size: 19px;
+  line-height: 1.05;
+  color: var(--ink);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  white-space: normal;
+}
+.bubble.on {
+  opacity: 1;
+}
+.bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 10px;
+  height: 10px;
+  background: var(--paper);
+  border-right: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  transform: translateX(-50%) rotate(45deg);
+}
+.bubble .who {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin-right: 4px;
+}
+.bubble.no {
+  border-style: dashed;
+}
+.bubble.yes .who::before {
+  content: "✓ ";
+  color: var(--moss);
+}
+
+/* A margin note: the tutorial and moments that need you. */
+.note {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 8px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--rope);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  font-size: 15px;
+  line-height: 1.35;
+}
+.note .hand {
+  font-family: var(--hand);
+  font-size: 20px;
+}
+.note button {
+  float: right;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* The sheet: thumbs live here. */
+.sheet {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  border-top: 1.5px solid var(--ink);
+  background: var(--paper-2);
+  padding: 8px 10px calc(10px + var(--safe-b));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.row::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 12px 10px 13px 9px;
+  background: var(--paper);
+  padding: 3px 9px 2px;
+  min-width: 56px;
+  min-height: 48px;
+  cursor: pointer;
+  font-family: var(--hand);
+  font-size: 19px;
+  line-height: 1;
+}
+.chip svg {
+  width: 22px;
+  height: 22px;
+}
+.chip[aria-pressed="true"] {
+  border-color: var(--rope);
+  color: var(--rope);
+  border-width: 2px;
+}
+.chip.far {
+  opacity: 0.45;
+  border-style: dashed;
+}
+.chip small {
+  font-family: var(--text);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.verbs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.verb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1.5px solid var(--ink);
+  border-radius: 9px 11px 10px 12px;
+  background: var(--paper);
+  min-height: 52px;
+  padding: 4px 2px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.1;
+  text-align: center;
+}
+.verb svg {
+  width: 22px;
+  height: 22px;
+}
+.verb:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.verb.lit {
+  border-color: var(--rope);
+  box-shadow: inset 0 0 0 1px var(--rope);
+}
+.verb.mine {
+  border-style: dotted;
+}
+.forces {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.force {
+  border: 1.5px solid var(--rope);
+  color: var(--rope);
+  background: var(--paper);
+  border-radius: 10px;
+  min-height: 48px;
+  font-family: var(--hand);
+  font-size: 22px;
+  cursor: pointer;
+}
+.force:disabled {
+  opacity: 0.3;
+}
+.force small {
+  display: block;
+  font-family: var(--text);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.label {
+  font-size: 12px;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+  display: flex;
+  justify-content: space-between;
+}
+.label button {
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+/* Pages: title, journal, debrief. */
+.page {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--paper);
+  padding: calc(16px + var(--safe-t)) 16px calc(24px + var(--safe-b));
+  z-index: 5;
+  animation: turn 0.5s ease;
+}
+@keyframes turn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page .inner {
+  max-width: 60ch;
+  margin: 0 auto;
+}
+.page h1 {
+  font-weight: 600;
+  font-size: 34px;
+  margin: 18px 0 4px;
+  letter-spacing: -0.01em;
+}
+.page h2 {
+  font-weight: 600;
+  font-size: 21px;
+  margin: 22px 0 6px;
+}
+.page .sub {
+  font-family: var(--hand);
+  font-size: 23px;
+  color: var(--ink-soft);
+  margin: 0 0 18px;
+}
+.page p {
+  margin: 0 0 10px;
+}
+.page .hand {
+  font-family: var(--hand);
+  font-size: 21px;
+  line-height: 1.15;
+}
+.page .entry {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 6px;
+  font-size: 15.5px;
+}
+.page .entry time {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  padding-top: 2px;
+}
+.page .entry.story {
+  font-style: italic;
+}
+.btn {
+  display: inline-block;
+  border: 1.5px solid var(--ink);
+  background: var(--paper-2);
+  border-radius: 10px 12px 9px 11px;
+  padding: 10px 18px;
+  min-height: 48px;
+  cursor: pointer;
+  margin: 6px 8px 6px 0;
+  font-size: 16px;
+  text-decoration: none;
+}
+.btn.go {
+  border-color: var(--rope);
+  color: var(--rope);
+  border-width: 2px;
+}
+.branch {
+  border-left: 2px solid var(--rope);
+  padding: 4px 0 4px 12px;
+  margin: 10px 0 6px;
+}
+.caption {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.footer {
+  margin-top: 32px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--ink-soft);
+  padding-top: 10px;
+}
+.footer a {
+  margin-right: 12px;
+}
+.peaks {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  margin: 6px 0 12px;
+}
+.outcome {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 0 0 8px;
+}
+.outcome b {
+  font-family: var(--hand);
+  font-size: 22px;
+  font-weight: 700;
+  min-width: 58px;
+}
+.drawer-btn {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  border: 1.5px solid var(--ink-soft);
+  background: var(--paper);
+  border-radius: 9px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  z-index: 2;
+}
+.close {
+  position: sticky;
+  top: 0;
+  float: right;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  border-radius: 9px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.stamp {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, -50%) rotate(-4deg);
+  pointer-events: none;
+  font-family: var(--hand);
+  font-size: 40px;
+  color: var(--rope);
+  border: 2.5px solid var(--rope);
+  padding: 2px 16px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--paper) 70%, transparent);
+}
+.stamp.on {
+  opacity: 0.92;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page {
+    animation: none;
+  }
+  .bubble,
+  .stamp {
+    transition: none;
+  }
+}
