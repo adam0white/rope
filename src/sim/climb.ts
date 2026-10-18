@@ -31,15 +31,16 @@ import {
   voiceOf,
 } from '@adam0white/human-framework';
 import {
+  type Beat,
   coldAt,
   DESCENT_FACTOR,
-  HOLLIN,
   type Leg,
   legIndex,
   leg as legOf,
   legsUp,
   type Mountain,
   place as placeOf,
+  SEASON,
   slipChance,
   sunAt,
   type Weather,
@@ -49,7 +50,7 @@ import {
 import { createParty, LEADER, MEMBERS, memberOf } from './party.ts';
 import { DRAW, hashUnit } from './rng.ts';
 
-export const MOUNTAINS: Record<string, Mountain> = { hollin: HOLLIN };
+export const MOUNTAINS: Record<string, Mountain> = Object.fromEntries(SEASON.map((x) => [x.id, x]));
 
 /** Where someone is: at a place, or on a leg at `t` (0 at its lower end, 1 at its upper end). */
 export interface Pos {
@@ -140,6 +141,8 @@ export interface JournalEntry {
   at: number;
   text: string;
   who?: string;
+  /** A line of the season's story. */
+  story?: boolean;
 }
 
 export interface ClimbState {
@@ -163,6 +166,10 @@ export interface ClimbState {
   over: boolean;
   /** Inputs that could not apply (out of earshot, nothing to do), for the log. */
   unheard: number[];
+  /** Which climb of the season this is, 1-based. */
+  climbNo: number;
+  /** Story beats already said. */
+  beatsDone: string[];
   /** Where the leader stood when each input applied (place or leg name), for the debrief. */
   inputWhere: Record<number, string>;
 }
@@ -191,7 +198,13 @@ export const memberState = (s: ClimbState, id: string): MemberState => {
 const at = (placeId: string): Pos => ({ place: placeId, leg: null, t: 0 });
 
 /** Start a climb for a party (fresh, or carried over from the last climb). */
-export function startClimb(seed: number, day: number, people?: Person[], mountainId = 'hollin'): ClimbState {
+export function startClimb(
+  seed: number,
+  day: number,
+  people?: Person[],
+  mountainId = 'hollin',
+  climbNo = 1,
+): ClimbState {
   const m = MOUNTAINS[mountainId];
   if (!m) throw new Error(`no mountain ${mountainId}`);
   const start = day * 1440 + m.startMinuteOfDay;
@@ -244,8 +257,11 @@ export function startClimb(seed: number, day: number, people?: Person[], mountai
     over: false,
     unheard: [],
     inputWhere: {},
+    climbNo,
+    beatsDone: [],
   };
-  for (const x of MEMBERS) s.journal.push({ at: start, text: x.first, who: x.id });
+  if (climbNo === 1) for (const x of MEMBERS) s.journal.push({ at: start, text: x.first, who: x.id });
+  beat(s, 'start');
   return s;
 }
 
@@ -967,6 +983,15 @@ function wantHome(s: ClimbState, p: Person, legsLeft: number): void {
   );
 }
 
+/** Say a story beat once. */
+function beat(s: ClimbState, when: string): void {
+  if (s.beatsDone.includes(when)) return;
+  const b: Beat | undefined = mountainOf(s).beats.find((x) => x.when === when);
+  if (!b) return;
+  s.beatsDone.push(when);
+  s.journal.push({ at: s.minute, text: b.text, ...(b.who ? { who: b.who } : {}), story: true });
+}
+
 function here(m: Mountain, mem: MemberState): string {
   if (mem.pos.place) return placeOf(m, mem.pos.place).name;
   return legOf(m, mem.pos.leg ?? '').name;
@@ -1001,6 +1026,7 @@ function complete(
         mem.pos = at(lg.to);
         mem.path.push(lg.id);
         if (placeOf(m, lg.to).alt > placeOf(m, mem.high).alt) mem.high = lg.to;
+        beat(s, lg.to === m.summit ? 'summit' : lg.to);
         if (lg.to === m.summit && mem.summitAt === null) {
           mem.summitAt = s.minute;
           wantHome(s, p, mem.path.length);

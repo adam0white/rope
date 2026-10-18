@@ -50,6 +50,15 @@ export interface Mountain {
   startMinuteOfDay: number;
   /** Minute of day it is dark. */
   duskMinuteOfDay: number;
+  /** Journal lines that carry the season's story, said once: at the start, on reaching a place, at the top. */
+  beats: Beat[];
+}
+
+/** A line of the story, implied rather than told. `when` is 'start', 'summit' or a place id. */
+export interface Beat {
+  when: string;
+  text: string;
+  who?: string;
 }
 
 export const DESCENT_FACTOR = 0.7;
@@ -80,6 +89,19 @@ export const HOLLIN: Mountain = {
   summit: 'summit',
   startMinuteOfDay: 5 * 60,
   duskMinuteOfDay: 19 * 60 + 30,
+  beats: [
+    { when: 'start', text: 'Ezra’s map was still pinned up in the hut, his pencil line going up the gully.' },
+    {
+      when: 'col',
+      who: 'tamar',
+      text: 'At the col Tamar looked at the gully for a long time and said nothing.',
+    },
+    {
+      when: 'summit',
+      who: 'bilal',
+      text: 'On the top Bilal took a small tin from his pack, turned it over, and put it back.',
+    },
+  ],
   places: [
     { id: 'hut', name: 'the hut', alt: 1400, x: 0 },
     { id: 'meadow', name: 'the meadow', alt: 1720, x: 1300 },
@@ -168,3 +190,84 @@ export function slipChance(seed: number, w: Weather, lg: Leg, minute: number): n
     lg.footing + lg.exposure * windAt(seed, w, minute) * 0.09 + lg.rockfall * sunAt(w, minute) * 0.1;
   return perHour / 60;
 }
+
+/** The second climb: The Tooth. Steeper and earlier; the notch splits a snow couloir from the east arête. */
+export const TOOTH: Mountain = {
+  id: 'tooth',
+  name: 'The Tooth',
+  hut: 'hut',
+  summit: 'summit',
+  startMinuteOfDay: 4 * 60 + 30,
+  duskMinuteOfDay: 19 * 60 + 15,
+  beats: [
+    { when: 'start', text: 'Nobody sat in the chair by the stove. It had been Ezra’s.' },
+    { when: 'notch', who: 'wren', text: 'Wren said Ezra had always said the arête was the honest way up.' },
+    {
+      when: 'summit',
+      who: 'oskar',
+      text: 'Oskar was quiet on the top for once. He built a small cairn and did not say who it was for.',
+    },
+  ],
+  places: [
+    { id: 'hut', name: 'the hut', alt: 1250, x: 0 },
+    { id: 'wood', name: 'the larch wood', alt: 1560, x: 1100 },
+    { id: 'screes', name: 'the screes', alt: 1950, x: 2100 },
+    { id: 'notch', name: 'the notch', alt: 2300, x: 2900 },
+    { id: 'shelf', name: 'the snow shelf', alt: 2520, x: 3150 },
+    { id: 'gendarme', name: 'the gendarme', alt: 2480, x: 3400 },
+    { id: 'summit', name: 'the summit', alt: 2660, x: 3600 },
+  ],
+  legs: [
+    l('wood', 'hut', 'wood', 'the wood path', 'path', 60, 0.05, 0, 0.004, false, 0.45),
+    l('screes', 'wood', 'screes', 'the screes', 'scree', 85, 0.3, 0.25, 0.014, false, 0.65),
+    l('notch', 'screes', 'notch', 'the notch gully', 'gully', 75, 0.2, 0.7, 0.014, true, 0.7),
+    l('couloir', 'notch', 'shelf', 'the north couloir', 'snow', 55, 0.3, 0.3, 0.02, true, 0.75),
+    l('headwall', 'shelf', 'summit', 'the headwall', 'snow', 40, 0.6, 0.2, 0.03, true, 0.8),
+    l('arete', 'notch', 'gendarme', 'the east arête', 'ridge', 75, 1, 0.05, 0.02, true, 0.7),
+    l('crest', 'gendarme', 'summit', 'the crest', 'ridge', 40, 1, 0.05, 0.025, false, 0.7),
+  ],
+};
+
+/** The last climb: Kestrel Pike, the one Ezra turned back on. Long, high, one way up. */
+export const KESTREL: Mountain = {
+  id: 'kestrel',
+  name: 'Kestrel Pike',
+  hut: 'hut',
+  summit: 'summit',
+  startMinuteOfDay: 4 * 60,
+  duskMinuteOfDay: 19 * 60,
+  beats: [
+    {
+      when: 'start',
+      text: 'In the hut book, two summers back: “Turned at the shoulder. Wind. Next year. E.”',
+    },
+    {
+      when: 'shoulder',
+      who: 'tamar',
+      text: 'At the shoulder Tamar touched the rock where the book said he had turned.',
+    },
+    {
+      when: 'summit',
+      who: 'bilal',
+      text: 'Bilal opened the tin at last. Tea, the cheap kind Ezra liked. They made it on the top, in his mug, and passed it round.',
+    },
+  ],
+  places: [
+    { id: 'hut', name: 'the hut', alt: 1650, x: 0 },
+    { id: 'lake', name: 'the tarn', alt: 1900, x: 1000 },
+    { id: 'glacier', name: 'the glacier', alt: 2350, x: 2200 },
+    { id: 'schrund', name: 'the bergschrund', alt: 2700, x: 3100 },
+    { id: 'shoulder', name: 'the shoulder', alt: 3020, x: 3700 },
+    { id: 'summit', name: 'the summit', alt: 3290, x: 4300 },
+  ],
+  legs: [
+    l('lake', 'hut', 'lake', 'the tarn path', 'path', 55, 0.15, 0, 0.004, false, 0.45),
+    l('glacier', 'lake', 'glacier', 'the moraine and the ice', 'snow', 100, 0.4, 0.1, 0.012, false, 0.6),
+    l('schrund', 'glacier', 'schrund', 'the upper glacier', 'snow', 85, 0.5, 0.05, 0.016, false, 0.7),
+    l('wall', 'schrund', 'shoulder', 'the ice wall', 'snow', 70, 0.6, 0.35, 0.03, true, 0.85),
+    l('summit-ridge', 'shoulder', 'summit', 'the summit ridge', 'ridge', 75, 1, 0.05, 0.02, true, 0.75),
+  ],
+};
+
+/** The season, in order. */
+export const SEASON: Mountain[] = [HOLLIN, TOOTH, KESTREL];
