@@ -116,6 +116,13 @@ export type Input =
   | { t: 'fix'; at: number }
   | { t: 'share'; at: number; to: string };
 
+/** An input before it is stamped with its minute. */
+export type NewInput = Input extends infer I
+  ? I extends Input
+    ? Omit<I, 'at'> & { at?: number }
+    : never
+  : never;
+
 export type Verdict = SuggestionResolution['verdict'];
 
 /** A person-voiced answer, or a heard line in response to the player. */
@@ -156,11 +163,12 @@ export interface ClimbState {
   over: boolean;
   /** Inputs that could not apply (out of earshot, nothing to do), for the log. */
   unheard: number[];
+  /** Where the leader stood when each input applied (place or leg name), for the debrief. */
+  inputWhere: Record<number, string>;
 }
 
 export const EARSHOT = 260;
 export const FORCE: Record<Force, number> = { ask: 0.35, urge: 0.7, insist: 0.9 };
-const HUT_FOOD = 99;
 
 const mountainOf = (s: ClimbState): Mountain => {
   const m = MOUNTAINS[s.mountain];
@@ -235,6 +243,7 @@ export function startClimb(seed: number, day: number, people?: Person[], mountai
     journal: [{ at: start, text: 'We left the hut in the dark, five of them and you.' }],
     over: false,
     unheard: [],
+    inputWhere: {},
   };
   for (const x of MEMBERS) s.journal.push({ at: start, text: x.first, who: x.id });
   return s;
@@ -462,7 +471,7 @@ export function offersFor(s: ClimbState, id: string): Affordance[] {
 // ---------------------------------------------------------------- inputs
 
 /** Record an input for the next minute and return its index. The UI and replays both go through this. */
-export function queueInput(s: ClimbState, input: Omit<Input, 'at'> & { at?: number }): number {
+export function queueInput(s: ClimbState, input: NewInput): number {
   const full = { ...input, at: input.at ?? s.minute + 1 } as Input;
   s.inputs.push(full);
   return s.inputs.length - 1;
@@ -524,6 +533,8 @@ function applyInput(s: ClimbState, idx: number): void {
   const inp = s.inputs[idx];
   if (!inp) return;
   const m = mountainOf(s);
+  const L = s.leader.pos;
+  s.inputWhere[idx] = L.place ? placeOf(m, L.place).name : legOf(m, L.leg ?? '').name;
   switch (inp.t) {
     case 'say': {
       const targets = inp.to === 'all' ? s.members.map((x) => x.id) : [inp.to];
@@ -728,8 +739,14 @@ function consequence(
   return {
     id,
     revision: s.minute,
-    trigger: { action: 'climb', placeId: trigger },
-    successor: { action: actionUp(m, succ), placeId: succ.id, duration: succ.minutes, effort: succ.effort },
+    trigger: { action: 'climb', placeId: trigger, targetId: legOf(m, trigger).to },
+    successor: {
+      action: actionUp(m, succ),
+      placeId: succ.id,
+      targetId: succ.to,
+      duration: succ.minutes,
+      effort: succ.effort,
+    },
     availableFrom: s.minute,
     availableUntil: s.day * 1440 + 18 * 60,
     expiresAt: s.day * 1440 + 20 * 60,
@@ -920,7 +937,7 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
       s.journal.push({
         at: s.minute,
         who: mem.id,
-        text: `${memberOf(mem.id).name} turned for home from ${here(s, m, mem)}.`,
+        text: `${memberOf(mem.id).name} turned for home from ${here(m, mem)}.`,
       });
     }
     mem.move = { leg: lg.id, dir: up ? 'up' : 'down', fromT, toT: up ? 1 : 0, start: s.minute, end };
@@ -950,7 +967,7 @@ function wantHome(s: ClimbState, p: Person, legsLeft: number): void {
   );
 }
 
-function here(s: ClimbState, m: Mountain, mem: MemberState): string {
+function here(m: Mountain, mem: MemberState): string {
   if (mem.pos.place) return placeOf(m, mem.pos.place).name;
   return legOf(m, mem.pos.leg ?? '').name;
 }
@@ -1194,7 +1211,7 @@ function sky(s: ClimbState, m: Mountain): void {
 
 function checkPromise(s: ClimbState): void {
   const pr = s.promise;
-  if (!pr || pr.status !== 'open') return;
+  if (pr?.status !== 'open') return;
   const deadline = s.day * 1440 + pr.hour * 60 + 30;
   const kept = s.leader.turnedAt !== null && s.leader.turnedAt <= deadline;
   if (!kept && s.minute < deadline) return;
