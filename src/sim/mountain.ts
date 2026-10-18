@@ -196,7 +196,8 @@ export function coldAt(seed: number, w: Weather, minute: number, alt: number): n
 export function slipChance(seed: number, w: Weather, lg: Leg, minute: number): number {
   const perHour =
     lg.footing + lg.exposure * windAt(seed, w, minute) * 0.09 + lg.rockfall * sunAt(w, minute) * 0.1;
-  return perHour / 60;
+  // 0.6: tuned 2026-10-18 from 18 of 60 people hurt across 12 scripted Hollin days (docs/findings.md).
+  return (0.6 * perHour) / 60;
 }
 
 /** The second climb: The Tooth. Steeper and earlier; the notch splits a snow couloir from the east arête. */

@@ -932,6 +932,16 @@ function stepLeader(s: ClimbState, m: Mountain): void {
     L.fixing = null;
   }
   if (!L.move) return;
+  // Going up, you keep to the party's pace: when the nearest of them behind drops out of earshot, you wait.
+  if (L.move.dir === 'up') {
+    const here = posXY(s, L.pos).alt;
+    const behind = s.members.filter((x) => x.homeAt === null && posXY(s, x.pos).alt < here - 5);
+    const near = s.members.some((x) => x.homeAt === null && distance(s, x.pos, L.pos) <= earshot(s) * 0.8);
+    if (behind.length > 0 && !near) {
+      L.move.start += 1;
+      L.move.end += 1;
+    }
+  }
   L.pos = movePos(L.move, s.minute);
   if (s.minute >= L.move.end) {
     const lg = legOf(m, L.move.leg);
