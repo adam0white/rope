@@ -1,0 +1,46 @@
+import { expect, it } from 'vitest';
+import { canHear, queueInput, startClimb, step } from '../src/sim/climb.ts';
+import { playScripted } from './script.ts';
+
+it('nobody goes down alone unasked: a lone turn becomes a request the player answers', () => {
+  let asked = 0;
+  let alone = 0;
+  for (let seed = 1; seed <= 12; seed++) {
+    const s = playScripted(startClimb(seed, 3), { turnAt: 15 * 60 });
+    asked += s.lines.filter((l) => l.reason === 'asks:company').length;
+    alone += s.journal.filter((j) => j.text.includes('went down alone')).length;
+    // No lone descent ever starts without the ask before it.
+    for (const j of s.journal.filter((x) => x.text.includes('went down alone')))
+      expect(s.lines.some((l) => l.who === j.who && l.reason === 'asks:company' && l.at <= j.at - 45)).toBe(
+        true,
+      );
+  }
+  console.log({ asked, alone });
+  expect(asked).toBeGreaterThan(0);
+});
+
+it('sending someone with the asker pairs them on the rope going down', () => {
+  for (let seed = 1; seed <= 12; seed++) {
+    const s = startClimb(seed, 3);
+    queueInput(s, { t: 'lead', dir: 'up' });
+    let asker: string | undefined;
+    for (let i = 0; i < 700 && !s.over && !asker; i++) {
+      step(s);
+      asker = s.members.find((x) => x.asks)?.id;
+      if (s.leader.move === null && !asker) queueInput(s, { t: 'lead', dir: 'up' });
+    }
+    if (!asker) continue;
+    const mate = s.members.find((x) => x.id !== asker && x.homeAt === null && canHear(s, x.id));
+    if (!mate) continue;
+    queueInput(s, { t: 'say', to: mate.id, act: 'escort', force: 'insist', with: asker });
+    for (let i = 0; i < 30; i++) step(s);
+    const went = s.journal.some(
+      (j) => j.text.includes('roped together') || j.text.includes(`went down with`),
+    );
+    if (went) {
+      expect(s.journal.some((j) => j.text.includes('went down alone') && j.who === asker)).toBe(false);
+      return;
+    }
+  }
+  throw new Error('no seed paired an escort');
+});

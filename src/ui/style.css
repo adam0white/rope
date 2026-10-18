@@ -529,3 +529,16 @@ a {
   border-left: 3px solid var(--rope);
   font-style: italic;
 }
+.ask-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 6px 0;
+  padding: 6px 8px;
+  border: 1.5px dashed var(--rope);
+  border-radius: 9px;
+}
+.ask-bar span {
+  flex: 1 0 100%;
+}

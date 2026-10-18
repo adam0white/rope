@@ -5,7 +5,7 @@ it('control: hours of waiting send no word for the player', () => {
   const s = startClimb(1, 3);
   for (let i = 0; i < 600 && !s.over; i++) step(s);
   expect(s.inputs).toHaveLength(0);
-  expect(s.lines).toHaveLength(0);
+  expect(s.lines.filter((l) => l.input >= 0)).toHaveLength(0);
   expect(s.journal.filter((j) => /^You (told|asked|urged|insisted|said)/.test(j.text))).toHaveLength(0);
 });
 

@@ -94,6 +94,12 @@ export interface MemberState {
   injuries: { at: number; severity: number; leg: string; caught: boolean }[];
   /** Sent ahead: at the next place they reach going up, they call down what the way above looks like. */
   ahead?: boolean;
+  /** Chose to go down with nobody going down beside them: they ask the leader who will come, and wait. */
+  asks?: { at: number } | null;
+  /** Nobody answered the ask in time: they go down alone. */
+  alone?: boolean;
+  /** Sent to go down with this person. */
+  escortFor?: string | null;
 }
 
 export interface LeaderState {
@@ -111,7 +117,7 @@ export interface LeaderState {
 }
 
 export type Force = 'ask' | 'urge' | 'insist';
-export type Act = 'climb' | 'descend' | 'rest' | 'eat' | 'wait' | 'rope' | 'pack' | 'ahead';
+export type Act = 'climb' | 'descend' | 'rest' | 'eat' | 'wait' | 'rope' | 'pack' | 'ahead' | 'escort';
 export type FactId = 'storm' | 'gully-quiet' | 'gully-loose' | 'ridge-solid' | 'descent-tiring';
 
 export type Input =
@@ -600,6 +606,7 @@ function suggestionFor(s: ClimbState, mem: MemberState, inp: Extract<Input, { t:
       return lg ? { ...base, affordanceId: `up:${lg.id}` } : { ...base, action: 'climb' };
     }
     case 'descend':
+    case 'escort':
       return { ...base, action: 'descend' };
     case 'rope':
       return { ...base, affordanceId: `rope:${inp.with ?? ''}`, appeal: 'safety' };
@@ -629,6 +636,7 @@ function applyInput(s: ClimbState, idx: number): void {
         if (mem.homeAt !== null || !canHear(s, id)) continue;
         heard += 1;
         if (inp.act === 'ahead') mem.ahead = true;
+        if (inp.act === 'escort') mem.escortFor = inp.with ?? null;
         const p = personOf(s, id);
         const sug = suggestionFor(s, mem, inp);
         const offers = offersFor(s, id);
@@ -1081,9 +1089,60 @@ function stepMember(s: ClimbState, m: Mountain, mem: MemberState): void {
     else reviewed(p);
     return;
   }
+  if (aff.id.startsWith('down:') && needsCompany(s, mem)) {
+    // HF chose to go down; on a mountain nobody leaves the party alone without the leader's answer.
+    askCompany(s, mem);
+    if (!mem.alone) {
+      if (!a) mem.idleUntil = s.minute + 5;
+      else reviewed(p);
+      return;
+    }
+  }
   if (a) complete(s, m, mem, p, 'interrupted');
   if (!begin(p, aff, rec)) return;
   startMove(s, m, mem, aff);
+}
+
+/** Going down from above the hut, first turn, with the leader still going up and nobody turned close by. */
+function needsCompany(s: ClimbState, mem: MemberState): boolean {
+  if (mem.turnedAt !== null || mem.alone || s.leader.turnedAt !== null) return false;
+  if (mem.high === mountainOf(s).hut && mem.pos.place === mountainOf(s).hut) return false;
+  if (mem.escortFor) return false;
+  return !s.members.some(
+    (o) =>
+      o.id !== mem.id &&
+      o.homeAt === null &&
+      (o.turnedAt !== null || o.escortFor === mem.id) &&
+      distance(s, o.pos, mem.pos) < 60,
+  );
+}
+
+const ASK_WAIT = 45;
+
+function askCompany(s: ClimbState, mem: MemberState): void {
+  const name = memberOf(mem.id).name;
+  if (!mem.asks) {
+    mem.asks = { at: s.minute };
+    s.lines.push({
+      at: s.minute,
+      who: mem.id,
+      input: -1,
+      verdict: 'heard',
+      reason: 'asks:company',
+      says: 'I want to go down. Who will come with me?',
+    });
+    s.journal.push({
+      at: s.minute,
+      who: mem.id,
+      text: `${name} wanted to go down, and asked who would come.`,
+    });
+    return;
+  }
+  if (s.minute - mem.asks.at >= ASK_WAIT) {
+    mem.alone = true;
+    mem.asks = null;
+    s.journal.push({ at: s.minute, who: mem.id, text: `Nobody came. ${name} went down alone.` });
+  }
 }
 
 function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance): void {
@@ -1101,6 +1160,20 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
         who: mem.id,
         text: `${memberOf(mem.id).name} changed their mind and went up again.`,
       });
+    }
+    if (!up && mem.escortFor) {
+      const o = memberState(s, mem.escortFor);
+      if (o.asks) o.asks = null;
+      if (mem.ropedTo === null && o.ropedTo === null && distance(s, mem.pos, o.pos) < 60) {
+        mem.ropedTo = o.id;
+        o.ropedTo = mem.id;
+      }
+      s.journal.push({
+        at: s.minute,
+        who: mem.id,
+        text: `${memberOf(mem.id).name} went down with ${memberOf(o.id).name}, roped together.`,
+      });
+      mem.escortFor = null;
     }
     if (!up && mem.turnedAt === null) {
       mem.turnedAt = s.minute;

@@ -92,6 +92,7 @@ export function inputPhrase(inp: Input): string {
         rope: `rope up with ${inp.with ? memberOf(inp.with).name : 'someone'}`,
         pack: 'hand you the pack',
         ahead: 'go on ahead',
+        escort: `go down with ${inp.with ? memberOf(inp.with).name : 'someone'}`,
       };
       return inp.force === 'insist'
         ? `${verb} ${who} ${what[inp.act]}`

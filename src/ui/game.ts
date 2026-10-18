@@ -314,6 +314,7 @@ export class Game {
         rope: `rope up with ${inp.with ? memberOf(inp.with).name : ''}`,
         pack: 'give me your pack',
         ahead: 'go on ahead and call down what you see',
+        escort: `go down with ${inp.with ? memberOf(inp.with).name : 'them'}`,
       };
       const tone = inp.force === 'ask' ? '?' : inp.force === 'urge' ? '.' : '. Now.';
       words = `${who}, ${what[inp.act] ?? inp.act}${tone}`;
@@ -504,6 +505,7 @@ export class Game {
       ]),
       Math.floor((c.minute % 1440) / 60),
       this.lastSent && this.lastSent.until > performance.now() ? this.lastSent.text : '',
+      c.members.map((x) => (x.asks ? x.id : '')),
     ]);
     if (ifChanged && key === this.sheetKey) return;
     this.sheetKey = key;
@@ -546,6 +548,28 @@ export class Game {
     };
     if (this.panel !== 'main') label.append(cancel);
     sh.append(label, chips);
+    // Someone asks who will go down with them: the player's answer, as words to people.
+    const asking = c.members.find((x) => x.asks && x.homeAt === null);
+    if (asking && this.panel === 'main') {
+      const nm = memberOf(asking.id).name;
+      const bar = h(
+        'div',
+        'ask-bar',
+        `<span>${esc(nm)} wants to go down. Who goes with ${memberOf(asking.id).they === 'she' ? 'her' : 'him'}?</span>`,
+      );
+      for (const o of c.members) {
+        if (o.id === asking.id || o.homeAt !== null || !canHear(c, o.id)) continue;
+        const b = h('button', 'force', `send ${esc(memberOf(o.id).name)}`);
+        b.onclick = () => this.send({ t: 'say', to: o.id, act: 'escort', force: 'ask', with: asking.id });
+        bar.append(b);
+      }
+      const w = h('button', 'force', 'ask to wait');
+      w.onclick = () => this.send({ t: 'say', to: asking.id, act: 'wait', force: 'ask' });
+      const all = h('button', 'force', 'we all turn');
+      all.onclick = () => this.send({ t: 'lead', dir: 'down' });
+      bar.append(w, all);
+      sh.append(bar);
+    }
     if (this.lastSent && this.lastSent.until > performance.now() && this.panel === 'main')
       sh.append(h('div', 'sent', esc(this.lastSent.text)));
     if (this.panel === 'main' || this.panel === 'partner') sh.append(this.peopleVerbs(), this.leaderRow());
