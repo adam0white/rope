@@ -52,6 +52,8 @@ export interface Mountain {
   duskMinuteOfDay: number;
   /** Journal lines that carry the season's story, said once: at the start, on reaching a place, at the top. */
   beats: Beat[];
+  /** Small things on the approach, one every half hour of the first hours: the walk-in is never empty. */
+  approach?: string[];
 }
 
 /** A line of the story, implied rather than told. `when` is 'start', 'summit' or a place id. */
@@ -89,6 +91,14 @@ export const HOLLIN: Mountain = {
   summit: 'summit',
   startMinuteOfDay: 5 * 60,
   duskMinuteOfDay: 19 * 60 + 30,
+  approach: [
+    'Cowbells somewhere below, then nothing but boots on the path.',
+    'The sun found the top of the crag before it found any of you.',
+    'Someone had built a little cairn by the path. Oskar added a stone.',
+    'The meadow grass was soaked; everyone’s socks were wet by the stile.',
+    'A marmot whistled from the boulders and was gone.',
+    'The path steepened. Talk thinned to the odd word.',
+  ],
   beats: [
     { when: 'start', text: 'Ezra’s map was still pinned up in the hut, his pencil line going up the gully.' },
     {
@@ -114,7 +124,7 @@ export const HOLLIN: Mountain = {
   legs: [
     l('meadow', 'hut', 'meadow', 'the hut path', 'path', 70, 0.1, 0, 0.004, false, 0.45),
     l('moraine', 'meadow', 'moraine', 'the moraine', 'scree', 75, 0.25, 0.1, 0.01, false, 0.6),
-    l('snow', 'moraine', 'col', 'the snow to the col', 'snow', 85, 0.45, 0.05, 0.012, false, 0.65),
+    l('snow', 'moraine', 'col', 'the snow slope below the col', 'snow', 85, 0.45, 0.05, 0.012, false, 0.65),
     l('ridge', 'col', 'tower', 'the ridge', 'ridge', 80, 1, 0.05, 0.016, true, 0.7),
     l('step', 'tower', 'summit', 'the summit step', 'ridge', 55, 0.9, 0.05, 0.03, true, 0.75),
     l('gully', 'col', 'gully-top', 'the gully', 'gully', 60, 0.2, 1, 0.012, true, 0.7),
@@ -214,6 +224,14 @@ export const TOOTH: Mountain = {
   summit: 'summit',
   startMinuteOfDay: 4 * 60 + 30,
   duskMinuteOfDay: 19 * 60 + 15,
+  approach: [
+    'Larch needles underfoot, soft as a carpet in the dark.',
+    'Through the trees the Tooth showed for a moment, black against grey.',
+    'A stream crossing on wobbling stones. Nobody fell in.',
+    'The wood ended all at once, and the screes began.',
+    'A rock went clattering down somewhere above, far off to the side.',
+    'The screes slid two steps back for every three.',
+  ],
   beats: [
     { when: 'start', text: 'Nobody sat in the chair by the stove. It had been Ezra’s.' },
     { when: 'notch', who: 'wren', text: 'Wren said Ezra had always said the arête was the honest way up.' },
@@ -251,6 +269,14 @@ export const KESTREL: Mountain = {
   summit: 'summit',
   startMinuteOfDay: 4 * 60,
   duskMinuteOfDay: 19 * 60,
+  approach: [
+    'Headtorches bobbing in a line along the tarn.',
+    'The ice on the tarn creaked as the first light touched it.',
+    'Frost on the moraine boulders; every hand went into a pocket.',
+    'The glacier came into view, grey and enormous, and nobody said anything.',
+    'Crampons on, by the edge of the ice, fingers clumsy with cold.',
+    'Far above, the wall caught the sun.',
+  ],
   beats: [
     {
       when: 'start',
@@ -277,10 +303,10 @@ export const KESTREL: Mountain = {
   ],
   legs: [
     l('lake', 'hut', 'lake', 'the tarn path', 'path', 55, 0.15, 0, 0.004, false, 0.45),
-    l('glacier', 'lake', 'glacier', 'the moraine and the ice', 'snow', 85, 0.4, 0.1, 0.008, false, 0.6),
-    l('schrund', 'glacier', 'schrund', 'the upper glacier', 'snow', 70, 0.5, 0.05, 0.012, false, 0.7),
-    l('wall', 'schrund', 'shoulder', 'the ice wall', 'snow', 60, 0.6, 0.35, 0.022, true, 0.85),
-    l('summit-ridge', 'shoulder', 'summit', 'the summit ridge', 'ridge', 60, 1, 0.05, 0.016, true, 0.75),
+    l('glacier', 'lake', 'glacier', 'the moraine and the ice', 'snow', 85, 0.4, 0.1, 0.008, false, 0.5),
+    l('schrund', 'glacier', 'schrund', 'the upper glacier', 'snow', 70, 0.5, 0.05, 0.012, false, 0.6),
+    l('wall', 'schrund', 'shoulder', 'the ice wall', 'snow', 60, 0.6, 0.35, 0.022, true, 0.75),
+    l('summit-ridge', 'shoulder', 'summit', 'the summit ridge', 'ridge', 60, 1, 0.05, 0.016, true, 0.65),
   ],
 };
 

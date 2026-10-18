@@ -5,7 +5,16 @@
  * one simulated alternative. It does not search combinations or claim the alternative is what "would" surely have
  * happened.
  */
-import { type ClimbState, clock, FACTS, type Input, MOUNTAINS, replay } from './climb.ts';
+import {
+  type ClimbState,
+  clock,
+  dayAccount,
+  FACTS,
+  hurtLevel,
+  type Input,
+  MOUNTAINS,
+  replay,
+} from './climb.ts';
 import { place } from './mountain.ts';
 import { MEMBERS, memberOf } from './party.ts';
 
@@ -25,8 +34,7 @@ export type Facts = Record<string, PersonFacts>;
 export function factsOf(s: ClimbState): Facts {
   const m = MOUNTAINS[s.mountain];
   if (!m) throw new Error('no mountain');
-  // Down before dark: sunset plus the 45 minutes of usable twilight.
-  const dusk = s.day * 1440 + m.duskMinuteOfDay + 45;
+  const { dusk } = dayAccount(s);
   const out: Facts = {};
   for (const mem of s.members) {
     const worst = mem.injuries.reduce((a, b) => (b.severity > a.severity ? b : a), {
@@ -46,8 +54,9 @@ export function factsOf(s: ClimbState): Facts {
       hurt: worst.severity,
       hurtWhere: worst.leg ? (m.legs.find((l) => l.id === worst.leg)?.name ?? null) : null,
       turnedAt: mem.turnedAt,
+      // The top outranks a turn: someone who stood on it is never read back as having turned below it.
       turnedWhere:
-        mem.turnedAt !== null && turnedEntry
+        mem.summitAt === null && mem.turnedAt !== null && turnedEntry
           ? (turnedEntry.text.split('turned for home from ')[1]?.replace(/\.$/, '') ?? null)
           : null,
     };
@@ -103,6 +112,8 @@ export function inputPhrase(inp: Input): string {
     case 'tell':
       return `told them ${FACTS[inp.fact].words.replace(/\.$/, '')}`;
     case 'lead':
+      if (inp.dir === 'with')
+        return inp.who && inp.who !== 'party' ? `walked to ${memberOf(inp.who).name}` : 'kept with the party';
       return inp.dir === 'up'
         ? inp.via
           ? 'chose that way up'
@@ -120,17 +131,25 @@ export function inputPhrase(inp: Input): string {
 }
 
 /** An outcome in words, without numbers: "stood on the top and was down by 16:20". */
+/** "at the col" for a place, "on the ridge" for a leg: the names read as places a person stands. */
+export function atOrOn(s: ClimbState, name: string): string {
+  const m = MOUNTAINS[s.mountain];
+  return m?.legs.some((l) => l.name === name) ? `on ${name}` : `at ${name}`;
+}
+
 export function outcomeWords(s: ClimbState, f: PersonFacts): string {
   const m = MOUNTAINS[s.mountain];
   if (!m) return '';
   const parts: string[] = [];
   if (f.summit) parts.push('stood on the top');
-  else if (f.turnedWhere) parts.push(`turned back at ${f.turnedWhere}`);
+  else if (f.turnedWhere) parts.push(`turned back ${atOrOn(s, f.turnedWhere)}`);
   else parts.push(`got no higher than ${place(m, f.high).name}`);
-  if (f.hurt > 0.4) parts.push(`was badly hurt on ${f.hurtWhere ?? 'the hill'}`);
-  else if (f.hurt > 0.15) parts.push(`was hurt on ${f.hurtWhere ?? 'the hill'}`);
-  if (f.home && f.homeAt !== null) parts.push(`was down by ${clock(f.homeAt)}`);
-  else parts.push(`was still on the mountain at dark`);
+  const lv = hurtLevel(f.hurt);
+  if (lv === 'badly') parts.push(`was badly hurt on ${f.hurtWhere ?? 'the hill'}`);
+  else if (lv === 'hurt') parts.push(`was hurt on ${f.hurtWhere ?? 'the hill'}`);
+  if (f.homeAt === null) parts.push('was still on the mountain at dark');
+  else if (f.home) parts.push(`was down by ${clock(f.homeAt)}`);
+  else parts.push(`came down at ${clock(f.homeAt)}, after dark`);
   return parts.join(', ').replace(/, ([^,]*)$/, ' and $1');
 }
 
@@ -179,7 +198,7 @@ export function branchFor(startJson: string, played: ClimbState, i: number): Bra
       score,
       actual,
       alternative,
-      sentence: `If you hadn't ${inputPhrase(inp)} at ${where} (${clock(inp.at)}), ${x.name} would have ${perfect(alternative)}. Instead, ${x.they} ${actual}.`,
+      sentence: `If you hadn't ${inputPhrase(inp)} ${atOrOn(played, where)} (${clock(inp.at)}), ${x.name} would have ${perfect(alternative)}. Instead, ${x.they} ${actual}.`,
     };
   }
   return best;

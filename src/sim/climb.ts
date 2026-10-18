@@ -12,8 +12,10 @@ import {
   adoptVoiceTrust,
   answerNow,
   begin,
+  bodyForecast,
   type DecisionRecord,
   decide,
+  type FollowOn,
   finish,
   interrupt,
   knockDown,
@@ -50,6 +52,7 @@ import {
 } from './mountain.ts';
 import { createParty, LEADER, MEMBERS, memberOf } from './party.ts';
 import { DRAW, hashUnit } from './rng.ts';
+import { voiced } from './voice.ts';
 
 export const MOUNTAINS: Record<string, Mountain> = Object.fromEntries(SEASON.map((x) => [x.id, x]));
 
@@ -114,6 +117,8 @@ export interface LeaderState {
   /** Route chosen at the fork: the leg id up from the fork. */
   route: string | null;
   turnedAt: number | null;
+  /** Walking with someone: 'party' keeps to the middle of those still out, a member id walks to that person. */
+  follow?: string | null;
 }
 
 export type Force = 'ask' | 'urge' | 'insist';
@@ -124,7 +129,7 @@ export type Input =
   | { t: 'say'; at: number; to: string; act: Act; force: Force; via?: string; with?: string }
   | { t: 'promise'; at: number; hour: number }
   | { t: 'tell'; at: number; fact: FactId }
-  | { t: 'lead'; at: number; dir: 'up' | 'down' | 'stop'; via?: string }
+  | { t: 'lead'; at: number; dir: 'up' | 'down' | 'stop' | 'with'; via?: string; who?: string }
   | { t: 'fix'; at: number }
   | { t: 'scout'; at: number; via?: string }
   | { t: 'share'; at: number; to: string };
@@ -272,7 +277,16 @@ export function startClimb(
     climbNo,
     beatsDone: [],
   };
-  if (climbNo === 1) for (const x of MEMBERS) s.journal.push({ at: start, text: x.first, who: x.id });
+  // Climb 1 meets the party a person at a time: two at the hut door, the rest along the first leg (quietLines).
+  if (climbNo === 1)
+    for (const x of MEMBERS.slice(0, 2)) s.journal.push({ at: start, text: x.first, who: x.id });
+  const wren = s.people.find((p) => p.id === 'wren');
+  if (climbNo === 1 && wren && wren.body.satiety < 0.5)
+    s.journal.push({
+      at: start,
+      who: 'wren',
+      text: 'Wren had left without breakfast; she said she wasn’t hungry.',
+    });
   aims(s, m);
   beat(s, 'start');
   return s;
@@ -358,15 +372,17 @@ function danger(s: ClimbState, alt: number): number {
   return Math.min(1, 0.5 * late + 0.6 * wind * Math.min(1, (alt - 1400) / 1200));
 }
 
-function pace(s: ClimbState, p: Person, mem: MemberState, lg: Leg, roped = true): number {
+function pace(s: ClimbState, p: Person, mem: MemberState, lg: Leg, roped = true, down = false): number {
   // A rope team moves at the pace of its slower member.
   if (roped && mem.ropedTo) {
     const o = memberState(s, mem.ropedTo);
-    return Math.max(pace(s, p, mem, lg, false), pace(s, personOf(s, o.id), o, lg, false));
+    return Math.max(pace(s, p, mem, lg, false, down), pace(s, personOf(s, o.id), o, lg, false, down));
   }
   const body = readPerson(p).body;
   const wind = windAt(s.seed, s.weather, s.minute) * lg.exposure;
-  return (1 / (0.35 + 0.65 * body.capacity)) * (1 + 0.4 * wind) * (mem.pack ? 1 : 0.88);
+  // Going down, tiredness slows you less than climbing does: gravity helps (at worst about 1.7x, not 2.9x).
+  const legs = down ? 1 / (0.6 + 0.4 * body.capacity) : 1 / (0.35 + 0.65 * body.capacity);
+  return legs * (1 + 0.4 * wind) * (mem.pack ? 1 : 0.88);
 }
 
 /** The leg a member would take up from here, given the leader's route at the fork. */
@@ -403,19 +419,43 @@ function upOffer(s: ClimbState, p: Person, mem: MemberState, lg: Leg, fromT: num
       competence: 0.12,
       meaning: summit ? 0.35 : 0.08,
       esteem: summit ? 0.2 : 0.03,
-      belonging: ahead ? 0.1 : -0.03,
+      belonging: (ahead ? 0.1 : -0.03) + ropeTug(s, mem, 'up'),
       safety: -0.15 * danger(s, placeOf(m, lg.to).alt) - chance,
     },
     risk: { chance, severity: 0.5, kind: 'fall' },
+    followedBy: [descentAfter(s, mem, lg)],
     tags: ['outdoors', 'risky', 'work'],
     skill: { id: 'climbing', difficulty: 0.3 + lg.effort * 0.5 },
     requires: { moving: 0.3 },
   };
 }
 
+/**
+ * Tied to a partner: going where they go serves belonging, going the other way (or on while they stop) costs it.
+ * HF weighs it like any other appeal; the rope itself decides nothing.
+ */
+function ropeTug(s: ClimbState, mem: MemberState, dir: 'up' | 'down' | 'stay'): number {
+  if (!mem.ropedTo) return 0;
+  const o = memberState(s, mem.ropedTo);
+  const theirs = o.move?.dir ?? 'stay';
+  return theirs === dir ? 0.3 : -0.3;
+}
+
+/** The way back to the hut after climbing `lg`: every leg climbed so far, plus this one, going down. */
+function descentAfter(s: ClimbState, mem: MemberState, lg: Leg): FollowOn {
+  const m = mountainOf(s);
+  const legs = [...mem.path.map((id) => legOf(m, id)), lg];
+  const minutes = legs.reduce((a, l) => a + l.minutes * DESCENT_FACTOR, 0);
+  const effort = legs.reduce((a, l) => a + l.effort, 0) / legs.length;
+  return { label: 'the descent', duration: Math.round(minutes), effort: effort * 0.6 };
+}
+
 function downOffer(s: ClimbState, p: Person, mem: MemberState, lg: Leg, fromT: number): Affordance {
   const m = mountainOf(s);
-  const minutes = Math.max(3, Math.round(lg.minutes * DESCENT_FACTOR * fromT * pace(s, p, mem, lg)));
+  const minutes = Math.max(
+    3,
+    Math.round(lg.minutes * DESCENT_FACTOR * fromT * pace(s, p, mem, lg, true, true)),
+  );
   const d = danger(s, placeOf(m, lg.to).alt);
   return {
     id: `down:${lg.id}`,
@@ -428,7 +468,8 @@ function downOffer(s: ClimbState, p: Person, mem: MemberState, lg: Leg, fromT: n
     advertises: {
       safety: 0.05 + 0.45 * d,
       competence: 0.02,
-      belonging: s.leader.move?.dir === 'down' || s.leader.turnedAt !== null ? 0.1 : -0.03,
+      belonging:
+        (s.leader.move?.dir === 'down' || s.leader.turnedAt !== null ? 0.1 : -0.03) + ropeTug(s, mem, 'down'),
       // Pride: for someone who cares what others think of her nerve, being the first to turn costs face.
       ...(mem.id === 'wren' &&
       mem.turnedAt === null &&
@@ -446,7 +487,7 @@ const small = (id: string, action: string, label: string, duration: number, adv:
   ({ id, action, label, duration, effort: 0.05, advertises: adv, tags: ['rest'] }) satisfies Affordance;
 
 /** What the mountain affords one member right now. */
-export function offersFor(s: ClimbState, id: string): Affordance[] {
+export function offersFor(s: ClimbState, id: string, asking?: string): Affordance[] {
   const m = mountainOf(s);
   const p = personOf(s, id);
   const mem = memberState(s, id);
@@ -464,14 +505,19 @@ export function offersFor(s: ClimbState, id: string): Affordance[] {
   const atHut = pos.place === m.hut;
   // Staying put high on the hill late or in wind is honestly advertised as cold and exposed.
   const exposed = atHut ? 0 : danger(s, where(m, pos).alt);
-  const stay = (a: Affordance): Affordance =>
-    exposed < 0.05
+  const tug = ropeTug(s, mem, 'stay');
+  const stay = (a0: Affordance): Affordance => {
+    const a = tug
+      ? { ...a0, advertises: { ...a0.advertises, belonging: (a0.advertises.belonging ?? 0) + tug } }
+      : a0;
+    return exposed < 0.05
       ? a
       : {
           ...a,
           advertises: { ...a.advertises, safety: (a.advertises.safety ?? 0) - 0.3 * exposed },
           risk: { chance: Math.min(0.5, 0.25 * exposed * (a.duration / 15)), severity: 0.4, kind: 'cold' },
         };
+  };
   out.push(stay(small('rest', 'rest', 'sit and rest', 15, { rest: 0.25 })));
   out.push(stay(small('drink', 'drink', 'drink', 4, { water: 0.35 })));
   out.push(stay(small('relieve', 'relieve', 'step aside', 4, { relief: 0.8 })));
@@ -483,7 +529,7 @@ export function offersFor(s: ClimbState, id: string): Affordance[] {
     }),
   );
   // Rope and pack are the leader's ideas: offered only while the leader is asking for them.
-  const asked = mem.pending?.s.affordanceId ?? '';
+  const asked = asking ?? mem.pending?.s.affordanceId ?? '';
   for (const other of s.members) {
     if (other.id === id || asked !== `rope:${other.id}`) continue;
     if (mem.ropedTo === null && other.ropedTo === null && distance(s, pos, other.pos) < 40) {
@@ -519,6 +565,8 @@ export function queueInput(s: ClimbState, input: NewInput): number {
 }
 
 function line(s: ClimbState, who: string, input: number, r: SuggestionResolution): void {
+  const own = voiced(s.seed, who, s.minute, r.verdict, r.says, r.reason);
+  const says = withForecast(s, who, input, r, withPromise(s, who, { ...r, says: own }));
   s.lines.push({
     at: s.minute,
     who,
@@ -526,9 +574,35 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
     verdict: r.verdict,
     ...(r.kind ? { kind: r.kind } : {}),
     reason: r.reason,
-    says: withPromise(s, who, r),
+    says,
   });
-  if (r.verdict !== 'assented') s.journal.push({ at: s.minute, who, text: journalFor(who, r) });
+  if (r.verdict !== 'assented') s.journal.push({ at: s.minute, who, text: journalFor(who, { ...r, says }) });
+}
+
+/**
+ * A reasoned no to climbing: when HF weighed the person's own forecast of their body through the way down
+ * (`forecast:body`, 2.5.0) or a reason of their own (a need, a goal, a promise), they add HF's first-person forecast line ("I can do it, but I'll be spent for the descent").
+ */
+function withForecast(
+  s: ClimbState,
+  who: string,
+  input: number,
+  r: SuggestionResolution,
+  says: string,
+): string {
+  const yes = r.verdict === 'assented' || r.verdict === 'complied';
+  const inp = s.inputs[input];
+  if (inp?.t !== 'say' || (inp.act !== 'climb' && inp.act !== 'ahead')) return says;
+  const mem = memberState(s, who);
+  const lg = nextLegUp(s, mem, inp.via ?? s.leader.route);
+  if (!lg) return says;
+  const p = personOf(s, who);
+  const fc = bodyForecast(p, upOffer(s, p, mem, lg, mem.pos.leg ? mem.pos.t : 0));
+  if (!fc.line) return says;
+  // A yes with a hard descent ahead says so now, while turning is still cheap: the warning comes early.
+  if (yes) return /\b(but|though|won't|can't)\b/.test(fc.line) ? `${says} ${fc.line}` : says;
+  if (!/^(forecast|need|goal|commitment):/.test(r.reason)) return says;
+  return `${says} ${fc.line}`;
 }
 
 /**
@@ -629,7 +703,13 @@ function applyInput(s: ClimbState, idx: number): void {
   s.inputWhere[idx] = L.place ? placeOf(m, L.place).name : legOf(m, L.leg ?? '').name;
   switch (inp.t) {
     case 'say': {
-      const targets = inp.to === 'all' ? s.members.map((x) => x.id) : [inp.to];
+      // A rope ties two: the request goes to both, each asked to rope up with the other.
+      const targets =
+        inp.to === 'all'
+          ? s.members.map((x) => x.id)
+          : inp.act === 'rope' && inp.with
+            ? [inp.to, inp.with]
+            : [inp.to];
       let heard = 0;
       for (const id of targets) {
         const mem = memberState(s, id);
@@ -638,8 +718,12 @@ function applyInput(s: ClimbState, idx: number): void {
         if (inp.act === 'ahead') mem.ahead = true;
         if (inp.act === 'escort') mem.escortFor = inp.with ?? null;
         const p = personOf(s, id);
-        const sug = suggestionFor(s, mem, inp);
-        const offers = offersFor(s, id);
+        const sug = suggestionFor(
+          s,
+          mem,
+          inp.act === 'rope' && id === inp.with ? { ...inp, with: inp.to } : inp,
+        );
+        const offers = offersFor(s, id, sug.affordanceId);
         const { resolution, booked } = answerNow(p, offers, sug);
         if (booked) {
           line(s, id, idx, resolution);
@@ -711,7 +795,31 @@ function applyInput(s: ClimbState, idx: number): void {
       return;
     }
     case 'lead':
+      if (inp.dir === 'with') {
+        s.leader.follow = inp.who ?? 'party';
+        leaderGo(s, m, 'stop');
+        s.journal.push({
+          at: s.minute,
+          text:
+            s.leader.follow === 'party'
+              ? 'You kept with the party.'
+              : `You went to ${memberOf(s.leader.follow).name}.`,
+        });
+        return;
+      }
+      s.leader.follow = null;
       leaderGo(s, m, inp.dir, inp.via);
+      // Turning answers anyone asking for company within earshot: the party is going down with them.
+      if (inp.dir === 'down')
+        for (const x of s.members)
+          if (x.asks && canHear(s, x.id)) {
+            x.asks = null;
+            s.journal.push({
+              at: s.minute,
+              who: x.id,
+              text: `You turned for home, and ${memberOf(x.id).name} had company down.`,
+            });
+          }
       return;
     case 'scout': {
       const L = s.leader;
@@ -952,11 +1060,48 @@ export function step(s: ClimbState): void {
   const left = s.members.some((x) => x.high !== m.hut);
   if ((allHome && left) || s.minute >= s.day * 1440 + 23 * 60) {
     s.over = true;
-    s.journal.push({
-      at: s.minute,
-      text: allHome ? 'Everyone was back at the hut.' : 'Night came down on the mountain.',
-    });
+    s.journal.push({ at: s.minute, text: dayAccount(s).line });
   }
+}
+
+/** Hurt, in the one set of words every account uses: the journal at the slip, the read-back, the next morning. */
+export type HurtLevel = 'none' | 'knock' | 'hurt' | 'badly';
+export function hurtLevel(severity: number): HurtLevel {
+  return severity >= 0.4 ? 'badly' : severity >= 0.15 ? 'hurt' : severity > 0 ? 'knock' : 'none';
+}
+
+/** The end of the day, once: who is down, who was down by dark (sunset plus 45 minutes of twilight), and the line. */
+export function dayAccount(s: ClimbState): {
+  dusk: number;
+  out: string[];
+  late: string[];
+  line: string;
+  stamp: string;
+} {
+  const m = mountainOf(s);
+  const dusk = s.day * 1440 + m.duskMinuteOfDay + 45;
+  const out = s.members.filter((x) => x.homeAt === null).map((x) => x.id);
+  const late = s.members.filter((x) => x.homeAt !== null && x.homeAt > dusk).map((x) => x.id);
+  const names = (ids: string[]) =>
+    ids
+      .map((id) => memberOf(id).name)
+      .join(', ')
+      .replace(/, ([^,]*)$/, ' and $1');
+  const line =
+    out.length === 0
+      ? late.length === 0
+        ? 'Everyone was back at the hut.'
+        : `Everyone was back at the hut, ${names(late)} after dark.`
+      : `Night came down on the mountain with ${names(out)} still out.`;
+  const stamp =
+    out.length === 0
+      ? late.length === 0
+        ? 'Everyone down'
+        : 'Everyone down, after dark'
+      : out.length === 1
+        ? `${names(out)} still on the hill`
+        : `${out.length === 5 ? 'All' : out.length} still on the hill`;
+  return { dusk, out, late, line, stamp };
 }
 
 /** Start the leader walking (or stop). Shared by the 'lead' input and the leader's own walking on. */
@@ -967,6 +1112,8 @@ function leaderGo(s: ClimbState, m: Mountain, dir: 'up' | 'down' | 'stop', via?:
   L.fixing = null;
   L.scouting = null;
   if (dir === 'stop') return;
+  // Leading up again undoes a turn: the next turn is the one a promise, a request or a debrief reads.
+  if (dir === 'up') L.turnedAt = null;
   const pos = L.pos;
   let lg: Leg | undefined;
   let fromT: number;
@@ -1007,6 +1154,57 @@ function leaderGo(s: ClimbState, m: Mountain, dir: 'up' | 'down' | 'stop', via?:
   return;
 }
 
+/** Who the leader walks toward: the middle of the party still out, or one person. */
+function followTarget(s: ClimbState): MemberState | null {
+  const f = s.leader.follow;
+  if (!f) return null;
+  if (f !== 'party') return s.members.find((x) => x.id === f && x.homeAt === null) ?? null;
+  const out = s.members
+    .filter((x) => x.homeAt === null)
+    .sort((a, b) => posXY(s, a.pos).alt - posXY(s, b.pos).alt);
+  return out[Math.floor(out.length / 2)] ?? null;
+}
+
+/** Walk toward the one followed along the legs: up the way they went, or back down. Stop beside them. */
+function followStep(s: ClimbState, m: Mountain): void {
+  const L = s.leader;
+  const t = followTarget(s);
+  if (!t) {
+    if (L.follow && L.follow !== 'party')
+      s.journal.push({
+        at: s.minute,
+        text: `${memberOf(L.follow).name} was down; you stopped where you were.`,
+      });
+    L.follow = null;
+    return;
+  }
+  const lp = L.move ? movePos(L.move, s.minute) : L.pos;
+  const close = distance(s, t.pos, lp) <= earshot(s) * 0.35;
+  const dAlt = posXY(s, t.pos).alt - posXY(s, lp).alt;
+  if (close || Math.abs(dAlt) < 4) {
+    if (L.move) leaderGo(s, m, 'stop');
+    return;
+  }
+  // Their way up from where you are: a leg they climbed or the one they are on.
+  const legs = [...t.path, ...(t.pos.leg ? [t.pos.leg] : [])];
+  const upWay = (place: string | null) => legs.find((id) => legOf(m, id).from === place);
+  if (dAlt > 0) {
+    if (L.move?.dir === 'up') return;
+    if (lp.place && !upWay(lp.place)) {
+      if (L.move?.dir !== 'down') leaderGo(s, m, 'down');
+      return;
+    }
+    if (lp.leg && !legs.includes(lp.leg)) {
+      if (L.move?.dir !== 'down') leaderGo(s, m, 'down');
+      return;
+    }
+    // Going up to fetch someone is not leading on: a turn already made still stands.
+    const turned = L.turnedAt;
+    leaderGo(s, m, 'up', lp.place ? upWay(lp.place) : undefined);
+    L.turnedAt = turned;
+  } else if (L.move?.dir !== 'down' && (L.path.length > 0 || L.pos.leg)) leaderGo(s, m, 'down');
+}
+
 function stepLeader(s: ClimbState, m: Mountain): void {
   const L = s.leader;
   if (L.scouting && s.minute >= L.scouting.until) {
@@ -1020,13 +1218,20 @@ function stepLeader(s: ClimbState, m: Mountain): void {
     s.journal.push({ at: s.minute, text: `The rope on ${legOf(m, L.fixing.leg).name} was fixed.` });
     L.fixing = null;
   }
+  if (L.follow && !L.fixing && !L.scouting) followStep(s, m);
   if (!L.move) return;
-  // Going up, you keep to the party's pace: when the nearest of them behind drops out of earshot, you wait.
-  if (L.move.dir === 'up') {
+  // Leading up means leading the party: you keep to the pace of the last of them still climbing, and wait
+  // when they fall back out of easy earshot.
+  if (L.move.dir === 'up' && !L.follow) {
     const here = posXY(s, L.pos).alt;
-    const behind = s.members.filter((x) => x.homeAt === null && posXY(s, x.pos).alt < here - 5);
-    const near = s.members.some((x) => x.homeAt === null && distance(s, x.pos, L.pos) <= earshot(s) * 0.8);
-    if (behind.length > 0 && !near) {
+    const climbing = s.members.filter(
+      (x) => x.homeAt === null && x.turnedAt === null && x.move?.dir !== 'down',
+    );
+    const behind = climbing.filter((x) => posXY(s, x.pos).alt < here - 5);
+    // Leading from the middle: you wait when half or more of those still climbing have fallen out of easy earshot
+    // behind. Waiting for the very last turns you into the sweeper, and the turn never reaches the front.
+    const far = behind.filter((x) => distance(s, x.pos, L.pos) > earshot(s) * 0.6).length;
+    if (far > 0 && far >= Math.ceil(climbing.length / 2)) {
       L.move.start += 1;
       L.move.end += 1;
     }
@@ -1040,14 +1245,19 @@ function stepLeader(s: ClimbState, m: Mountain): void {
       L.path.push(lg.id);
     } else {
       L.pos = at(lg.from);
-      L.path.pop();
+      // A leg turned back on halfway was never in the path: only a completed leg comes off it.
+      if (L.path[L.path.length - 1] === lg.id) L.path.pop();
     }
     L.move = null;
     // Walk on until the fork, the top or the hut: the player stops you, or chooses the way at a fork.
     const here = L.pos.place ?? '';
     // Going up, you wait at a place when nobody behind is in earshot any more: you do not walk away from them.
     const company = s.members.some((x) => x.homeAt === null && canHear(s, x.id));
-    if (dir === 'up' && here !== m.summit && legsUp(m, here).length === 1 && company) leaderGo(s, m, 'up');
+    const nextUp = legsUp(m, here);
+    // The leader stops below a leg a rope could be fixed on: the choice to fix it is the player's.
+    const fixHere = nextUp.some((x) => x.fixable && !s.fixed.includes(x.id));
+    if (L.follow) return;
+    if (dir === 'up' && here !== m.summit && nextUp.length === 1 && company && !fixHere) leaderGo(s, m, 'up');
     else if (dir === 'down' && L.path.length > 0) leaderGo(s, m, 'down');
   }
 }
@@ -1184,6 +1394,15 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
         text: `${memberOf(mem.id).name} turned for home from ${here(m, mem)}.`,
       });
     }
+    // A tug on the rope: the partner, if standing, decides again now (HF still decides whether to follow).
+    if (mem.ropedTo) {
+      const o = memberState(s, mem.ropedTo);
+      const op = personOf(s, o.id);
+      if (o.move === null) {
+        if (op.activity) interrupt(op, s.minute, 'rope:tug');
+        o.idleUntil = s.minute;
+      }
+    }
     mem.move = { leg: lg.id, dir: up ? 'up' : 'down', fromT, toT: up ? 1 : 0, start: s.minute, end };
     mem.pos = { place: null, leg: lg.id, t: fromT };
   } else {
@@ -1256,10 +1475,12 @@ function aims(s: ClimbState, m: Mountain): void {
 }
 
 /** Say a story beat once. */
-function beat(s: ClimbState, when: string): void {
+function beat(s: ClimbState, when: string, arriving?: string): void {
   if (s.beatsDone.includes(when)) return;
   const b: Beat | undefined = mountainOf(s).beats.find((x) => x.when === when);
   if (!b) return;
+  // A beat about one person waits for that person to arrive: Bilal's tin opens only when Bilal is on the top.
+  if (b.who && arriving && b.who !== arriving) return;
   s.beatsDone.push(when);
   s.journal.push({ at: s.minute, text: b.text, ...(b.who ? { who: b.who } : {}), story: true });
 }
@@ -1310,7 +1531,7 @@ function complete(
           }
         }
         if (placeOf(m, lg.to).alt > placeOf(m, mem.high).alt) mem.high = lg.to;
-        beat(s, lg.to === m.summit ? 'summit' : lg.to);
+        beat(s, lg.to === m.summit ? 'summit' : lg.to, mem.id);
         if (lg.to === m.summit && mem.summitAt === null) {
           mem.summitAt = s.minute;
           wantHome(s, p, mem.path.length);
@@ -1324,7 +1545,8 @@ function complete(
         }
       } else {
         mem.pos = at(lg.from);
-        mem.path.pop();
+        // A leg turned back on halfway was never in the path: only a completed leg comes off it.
+        if (mem.path[mem.path.length - 1] === lg.id) mem.path.pop();
         if (lg.from === m.hut && mem.homeAt === null) {
           mem.homeAt = s.minute;
           s.journal.push({
@@ -1363,6 +1585,14 @@ function complete(
   finish(p, out);
 }
 
+function ropeOffText(a: MemberState, b: MemberState): string {
+  const [na, nb] = [memberOf(a.id).name, memberOf(b.id).name];
+  const goer = a.move && !b.move ? [na, nb] : b.move && !a.move ? [nb, na] : null;
+  if (goer)
+    return `${goer[1]} stayed where ${memberOf(goer[1] === na ? a.id : b.id).they} was; ${goer[0]} untied and went on.`;
+  return `The rope between ${na} and ${nb} came off as they went different ways.`;
+}
+
 /** A rope comes off when the two drift apart. */
 function ropeCheck(s: ClimbState): void {
   for (const mem of s.members) {
@@ -1372,7 +1602,7 @@ function ropeCheck(s: ClimbState): void {
       s.journal.push({
         at: s.minute,
         who: mem.id,
-        text: `The rope between ${memberOf(mem.id).name} and ${memberOf(other.id).name} came off as they went different ways.`,
+        text: ropeOffText(mem, other),
       });
       mem.ropedTo = null;
       other.ropedTo = null;
@@ -1428,9 +1658,11 @@ function slips(s: ClimbState, m: Mountain): void {
         at: s.minute,
         who: mem.id,
         text:
-          sev > 0.45
+          hurtLevel(sev) === 'badly'
             ? `${name} fell on ${lg.name} and lay still a long minute.`
-            : `${name} slipped on ${lg.name} and got up hurt.`,
+            : hurtLevel(sev) === 'hurt'
+              ? `${name} slipped on ${lg.name} and got up hurt.`
+              : `${name} slipped on ${lg.name} and got up, shaken.`,
       });
     }
     if (sev >= 0.1) {
@@ -1556,6 +1788,19 @@ function checkPromise(s: ClimbState): void {
 /** Unprompted words are the journal's, not the people's: only the dusk prayer, quietly. */
 function quietLines(s: ClimbState, m: Mountain): void {
   const mod = minuteOfDay(s);
+  if (s.climbNo === 1) {
+    const k = (s.minute - s.startMinute) / 20;
+    const x = Number.isInteger(k) ? MEMBERS[k + 1] : undefined;
+    if (x && k >= 1) s.journal.push({ at: s.minute, text: x.first, who: x.id, story: true });
+  }
+  // The walk-in: a small thing every half hour after the introductions, so the first hours are never empty.
+  const since = s.minute - s.startMinute;
+  const ap = m.approach ?? [];
+  const ai = since % 30 === 0 ? since / 30 - 3 : -1;
+  if (ai >= 0 && ai < ap.length) {
+    const t = ap[ai];
+    if (t) s.journal.push({ at: s.minute, text: t, story: true });
+  }
   // The light going is a fact everyone on the hill can see: four hours before dark, getting down becomes a goal.
   if (mod === m.duskMinuteOfDay - 240) {
     s.journal.push({ at: s.minute, text: 'The light began to go long and yellow on the snow.' });

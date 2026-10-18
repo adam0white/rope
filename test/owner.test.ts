@@ -21,3 +21,14 @@ it('a promise is not credited by a turn made before it', () => {
   step(s);
   expect(s.journal.some((j) => j.text === 'You turned when you said you would.')).toBe(false);
 });
+
+it('a turn made after the promise, before its hour, is credited', () => {
+  const s = startClimb(1, 3);
+  queueInput(s, { t: 'lead', dir: 'up' });
+  for (let i = 0; i < 60; i++) step(s);
+  queueInput(s, { t: 'promise', hour: 16 });
+  for (let i = 0; i < 30; i++) step(s);
+  queueInput(s, { t: 'lead', dir: 'down' });
+  for (let i = 0; i < 5; i++) step(s);
+  expect(s.journal.some((j) => j.text === 'You turned when you said you would.')).toBe(true);
+});

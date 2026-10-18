@@ -44,3 +44,26 @@ it('sending someone with the asker pairs them on the rope going down', () => {
   }
   throw new Error('no seed paired an escort');
 });
+
+it('turning for home answers a request for company within earshot', () => {
+  let checked = 0;
+  for (let seed = 1; seed <= 12 && checked < 2; seed++) {
+    const s = startClimb(seed, 3);
+    queueInput(s, { t: 'lead', dir: 'up' });
+    queueInput(s, { t: 'say', to: 'all', act: 'climb', force: 'ask' });
+    for (let k = 0; k < 900 && !s.over; k++) {
+      step(s);
+      const asker = s.members.find((x) => x.asks && canHear(s, x.id));
+      if (asker) {
+        queueInput(s, { t: 'lead', dir: 'down' });
+        step(s);
+        if (canHear(s, asker.id)) {
+          expect(asker.asks ?? null).toBeNull();
+          checked++;
+        }
+        break;
+      }
+    }
+  }
+  expect(checked).toBeGreaterThan(0);
+});

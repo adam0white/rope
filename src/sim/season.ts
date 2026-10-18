@@ -14,7 +14,7 @@ import {
   tick,
   voiceOf,
 } from '@adam0white/human-framework';
-import { type ClimbState, snapshot, startClimb } from './climb.ts';
+import { type ClimbState, hurtLevel, snapshot, startClimb } from './climb.ts';
 import { type Branch, type Facts, factsOf } from './debrief.ts';
 import { SEASON } from './mountain.ts';
 import { createParty, LEADER, MEMBERS } from './party.ts';
@@ -114,7 +114,7 @@ function aftermath(climb: ClimbState, facts: Facts): void {
     if (!m) continue;
     const cap = readPerson(p).body.capacity;
     const f = facts[m.id];
-    if (f && f.hurt > 0.15)
+    if (f && (hurtLevel(f.hurt) === 'hurt' || hurtLevel(f.hurt) === 'badly'))
       lines.push([
         cap < 0.7
           ? `${m.name} was still hurt from ${f.hurtWhere ?? 'the last climb'}, and came anyway.`

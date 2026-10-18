@@ -3,6 +3,7 @@
  * player, voice id `leader`). The game never decides for them: it only offers what the mountain affords.
  */
 import { createPerson, type Person, type PersonSpec } from '@adam0white/human-framework';
+import { hashUnit } from './rng.ts';
 
 export const LEADER = 'leader';
 const YEAR = 525600;
@@ -88,6 +89,8 @@ function spec(seed: number, now: number, id: string): PersonSpec {
     seed,
     now,
     lexicon: { names: NAMES },
+    // HF 2.6.0: exertion accumulates over the day, so a long climb leaves a person spent for the descent.
+    enable: { fatigueStore: true },
   };
   const rel = (
     otherId: string,
@@ -176,7 +179,8 @@ function spec(seed: number, now: number, id: string): PersonSpec {
         },
         values: { selfDirection: 0.95, stimulation: 0.7, achievement: 0.7, conformity: 0.15, security: 0.35 },
         skills: { climbing: 0.7 },
-        body: { fitness: 0.75 },
+        // Some mornings Wren leaves without breakfast: a real need that can say no to the very first order.
+        body: { fitness: 0.75, satiety: 0.3 + 0.45 * hashUnit(seed, 4242) },
         goals: [summitGoal(0.7)],
         voices: [{ voiceId: LEADER, trust: 0.4 }],
         relationships: [rel('oskar', 0.2, 0.35, 0.55, ['rival'])],

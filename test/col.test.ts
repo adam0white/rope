@@ -17,7 +17,7 @@ function toCol(seed: number): ClimbState {
 }
 
 function turnBack(force: Force) {
-  const s = toCol(1);
+  const s = toCol(2);
   const wren = s.people.find((p) => p.id === 'wren');
   const before = wren ? (voiceOf(wren, 'leader')?.trust ?? 0) : 0;
   queueInput(s, { t: 'lead', dir: 'down' });
@@ -38,7 +38,7 @@ it('control: turning back at the col, asking gets deferrals that insisting does 
 });
 
 it('control: insisting again and again on the way up wears trust down, through HF', () => {
-  const s = toCol(1);
+  const s = toCol(2);
   const wren = s.people.find((p) => p.id === 'wren');
   if (!wren) throw new Error('no wren');
   const before = voiceOf(wren, 'leader')?.trust ?? 0;
