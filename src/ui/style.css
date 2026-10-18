@@ -216,7 +216,11 @@ a {
 .sheet {
   position: relative;
   z-index: 2;
-  flex: 0 0 auto;
+  /* A fixed height (the bottom 42%, thumb reach): panels change inside it, so the scene and camera never jump. */
+  flex: 0 0 42%;
+  height: 42%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-top: 1.5px solid var(--ink);
   background: var(--paper-2);
   padding: 8px 10px calc(10px + var(--safe-b));
