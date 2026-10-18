@@ -59,6 +59,8 @@ export interface Beat {
   when: string;
   text: string;
   who?: string;
+  /** What the moment brings back to `who`: an old harm tied to a place, perceived as a threat from it. */
+  memory?: { sourceId: string; severity: number; chance: number; summary: string };
 }
 
 export const DESCENT_FACTOR = 0.7;
@@ -95,6 +97,12 @@ export const HOLLIN: Mountain = {
       when: 'col',
       who: 'tamar',
       text: 'At the col Tamar looked at the gully for a long time and said nothing.',
+      memory: {
+        sourceId: 'gully',
+        severity: 0.7,
+        chance: 0.5,
+        summary: 'the gully, where it went wrong for Ezra',
+      },
     },
     {
       when: 'summit',

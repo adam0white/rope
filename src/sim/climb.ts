@@ -1045,6 +1045,20 @@ function beat(s: ClimbState, when: string): void {
   if (!b) return;
   s.beatsDone.push(when);
   s.journal.push({ at: s.minute, text: b.text, ...(b.who ? { who: b.who } : {}), story: true });
+  if (b.who && b.memory) {
+    const p = personOf(s, b.who);
+    perceive(p, [
+      {
+        at: s.minute,
+        channel: 'saw',
+        kind: 'memory',
+        salience: 0.8,
+        valence: -0.4,
+        summary: b.memory.summary,
+        threat: { severity: b.memory.severity, chance: b.memory.chance, sourceId: b.memory.sourceId },
+      },
+    ]);
+  }
 }
 
 function here(m: Mountain, mem: MemberState): string {
