@@ -3,11 +3,17 @@
   "name": "rope",
   "account_id": "a20259cba74e506296745f9c67c1f3bc",
   "compatibility_date": "2026-10-01",
+  "main": "worker/index.ts",
   "workers_dev": false,
   "preview_urls": false,
   "routes": [{ "pattern": "rope.adamwhite.work", "custom_domain": true }],
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "none"
-  }
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": ["/api/*"]
+  },
+  "ai": { "binding": "AI" },
+  // Kill switch for the camp voice: set to "off" (and deploy) to stop all model calls.
+  "vars": { "CAMP_AI": "on" }
 }

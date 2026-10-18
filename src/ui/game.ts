@@ -4,6 +4,7 @@
  * state and the input log, and the export replays exactly.
  */
 import { FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
+import { campFacts, campFallback } from '../sim/camp.ts';
 import {
   type ClimbState,
   canHear,
@@ -889,6 +890,8 @@ export class Game {
       <p class="sub">The day, read back</p>
       ${outcomes}
       ${story}
+      <h2>That night at the hut</h2>
+      <div class="camp" data-camp><p class="caption">They talk a little over the stove…</p></div>
       <h2>One thing you said</h2>
       <div class="branch" data-branch><p class="caption">Climbing it again in the notebook, without each of your words in turn…</p></div>
       <p>
@@ -907,10 +910,35 @@ export class Game {
         el.querySelector<HTMLElement>('[data-a="next"]')?.addEventListener('click', () => this.advance());
       },
     );
+    this.runCamp(m?.name ?? '');
     this.runDebrief();
   }
 
   private branch: Branch | null | undefined = undefined;
+
+  /** Camp talk: a model may voice it from the climb's HF records and journal; its text is never read into state. */
+  private runCamp(mountain: string): void {
+    const box = () => this.pageEl?.querySelector<HTMLElement>('[data-camp]');
+    const facts = campFacts(this.climb, mountain);
+    const show = (lines: string[], label: string) => {
+      const b = box();
+      if (b)
+        b.innerHTML = `${lines.map((l) => `<p class="hand">${esc(l)}</p>`).join('')}<p class="caption">${esc(label)}</p>`;
+    };
+    const fallback = () => show(campFallback(facts), 'Read from the journal (no model).');
+    fetch('/api/camp', {
+      method: 'POST',
+      body: JSON.stringify(facts),
+      headers: { 'content-type': 'application/json' },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((o: { lines?: string[] } | null) => {
+        if (o?.lines?.length)
+          show(o.lines, 'Voiced by a small language model from the journal; it changes nothing.');
+        else fallback();
+      })
+      .catch(fallback);
+  }
 
   private runDebrief(): void {
     const show = (b: Branch | null) => {
