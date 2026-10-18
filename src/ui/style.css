@@ -519,3 +519,10 @@ a {
     transition: none;
   }
 }
+
+.sent {
+  margin: 4px 0;
+  padding: 4px 8px;
+  border-left: 3px solid var(--rope);
+  font-style: italic;
+}

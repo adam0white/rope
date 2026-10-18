@@ -87,7 +87,7 @@ export class Game {
   private panel: Panel = 'main';
   private shownLines = 0;
   private shownJournal = 0;
-  private bubbles = new Map<string, { el: HTMLElement; until: number }>();
+  private bubbles = new Map<string, { el: HTMLElement; until: number; minute: number }>();
   private note: Note | null = null;
   private playing = false;
   private uiTick = 0;
@@ -265,8 +265,17 @@ export class Game {
 
   // ------------------------------------------------------------ input
 
+  /** The last order, shown in the sheet so what was sent is unmistakable. */
+  private lastSent: { text: string; until: number } | null = null;
+  /** Taps right after a send are dropped: the sheet rebuilds under the finger, and a second tap would land elsewhere. */
+  private sentAt = 0;
+
   private send(inp: NewInput): void {
     const c = this.climb;
+    if (performance.now() - this.sentAt < 450) return;
+    // Nothing stays focused after a send, so no key press can repeat the order.
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    this.sentAt = performance.now();
     queueInput(c, inp);
     // The word is spoken now: step the minute it applies in, so the answer comes at once.
     step(c);
@@ -307,6 +316,11 @@ export class Game {
       };
       const tone = inp.force === 'ask' ? '?' : inp.force === 'urge' ? '.' : '. Now.';
       words = `${who}, ${what[inp.act] ?? inp.act}${tone}`;
+      const how = inp.force === 'ask' ? 'You asked' : inp.force === 'urge' ? 'You urged' : 'You insisted:';
+      this.lastSent = {
+        text: `${how} ${inp.to === 'all' ? 'everyone' : memberOf(inp.to).name}: ${what[inp.act] ?? inp.act}.`,
+        until: performance.now() + 6000,
+      };
     } else if (inp.t === 'tell') words = FACTS[inp.fact].words.replace(/^./, (x) => x.toUpperCase());
     else if (inp.t === 'promise') words = `We turn back at ${inp.hour}:00. Wherever we are.`;
     else if (inp.t === 'share') words = 'Here, have some of mine.';
@@ -357,7 +371,7 @@ export class Game {
   private bubble(who: string, text: string, cls: string): void {
     let b = this.bubbles.get(who);
     if (!b) {
-      b = { el: h('div', 'bubble'), until: 0 };
+      b = { el: h('div', 'bubble'), until: 0, minute: 0 };
       this.bubblesEl.append(b.el);
       this.bubbles.set(who, b);
     }
@@ -367,6 +381,7 @@ export class Game {
     if (who === 'leader') b.el.style.color = 'var(--rope)';
     else b.el.style.color = '';
     b.until = performance.now() + BUBBLE_MS;
+    b.minute = this.climb.minute;
     requestAnimationFrame(() => b?.el.classList.add('on'));
   }
 
@@ -378,7 +393,8 @@ export class Game {
     const hits = (l: number, r: number, t: number, bt: number) =>
       placed.find((q) => l < q.r + 4 && r > q.l - 4 && t < q.b + 3 && bt > q.t - 3);
     const live = [...this.bubbles].filter(([who, b]) => {
-      const on = this.scene.at.has(who) && now <= b.until;
+      // A bubble lasts a few seconds and at most 20 minutes of the day, so fast time never leaves words hanging.
+      const on = this.scene.at.has(who) && now <= b.until && this.climb.minute - b.minute <= 20;
       if (!on) b.el.classList.remove('on');
       return on;
     });
@@ -486,6 +502,7 @@ export class Game {
         Math.round(distance(c, x.pos, L.pos) / 40),
       ]),
       Math.floor((c.minute % 1440) / 60),
+      this.lastSent && this.lastSent.until > performance.now() ? this.lastSent.text : '',
     ]);
     if (ifChanged && key === this.sheetKey) return;
     this.sheetKey = key;
@@ -528,6 +545,8 @@ export class Game {
     };
     if (this.panel !== 'main') label.append(cancel);
     sh.append(label, chips);
+    if (this.lastSent && this.lastSent.until > performance.now() && this.panel === 'main')
+      sh.append(h('div', 'sent', esc(this.lastSent.text)));
     if (this.panel === 'main' || this.panel === 'partner') sh.append(this.peopleVerbs(), this.leaderRow());
     else if (this.panel === 'force') sh.append(this.peopleVerbs(), this.forceRow());
     else if (this.panel === 'tell') sh.append(this.peopleVerbs(), this.tellRow());
@@ -867,8 +886,16 @@ export class Game {
     this.playing = false;
     this.save();
     const c = this.climb;
-    const allDown = c.members.every((x) => x.homeAt !== null);
-    this.stamp(allDown ? 'Everyone down' : 'Night on the hill');
+    // The banner reads the same facts as the debrief: down means down by dark.
+    const f = factsOf(c);
+    const out = c.members.filter((x) => !f[x.id]?.home).length;
+    this.stamp(
+      out === 0
+        ? 'Everyone down'
+        : out === 1
+          ? 'One still on the hill'
+          : `${out === 5 ? 'All' : 'Some'} still on the hill`,
+    );
     setTimeout(() => this.debriefPage(), 2600);
   }
 

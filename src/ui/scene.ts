@@ -4,7 +4,7 @@
  */
 import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics, Text } from 'pixi.js';
-import { type ClimbState, MOUNTAINS, memberState, personOf, posXY } from '../sim/climb.ts';
+import { type ClimbState, canHear, MOUNTAINS, memberState, personOf, posXY } from '../sim/climb.ts';
 import { coldAt, type Mountain, place, windAt } from '../sim/mountain.ts';
 import { MEMBERS } from '../sim/party.ts';
 import { hashUnit } from '../sim/rng.ts';
@@ -399,6 +399,10 @@ export class Scene {
         this.names.set(x.id, t);
       }
       t.style.fill = this.selected === x.id ? P.rope : mem.homeAt !== null ? P.soft : P.ink;
+      // Out of earshot: the name fades and trails off, so who can hear you is visible on the hill.
+      const far = mem.homeAt === null && !canHear(s, x.id);
+      t.alpha = far ? 0.45 : 1;
+      t.text = far ? `${x.name}…` : x.name;
       // Names of people standing together stagger down in rows so they stay readable.
       t.position.set(sp.x, sp.y + 3 + ((slotOf.get(x.id) ?? 0) % 3) * 13);
     }

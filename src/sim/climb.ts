@@ -352,7 +352,12 @@ function danger(s: ClimbState, alt: number): number {
   return Math.min(1, 0.5 * late + 0.6 * wind * Math.min(1, (alt - 1400) / 1200));
 }
 
-function pace(s: ClimbState, p: Person, mem: MemberState, lg: Leg): number {
+function pace(s: ClimbState, p: Person, mem: MemberState, lg: Leg, roped = true): number {
+  // A rope team moves at the pace of its slower member.
+  if (roped && mem.ropedTo) {
+    const o = memberState(s, mem.ropedTo);
+    return Math.max(pace(s, p, mem, lg, false), pace(s, personOf(s, o.id), o, lg, false));
+  }
   const body = readPerson(p).body;
   const wind = windAt(s.seed, s.weather, s.minute) * lg.exposure;
   return (1 / (0.35 + 0.65 * body.capacity)) * (1 + 0.4 * wind) * (mem.pack ? 1 : 0.88);
@@ -1088,6 +1093,15 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
     const lg = legOf(m, aff.placeId ?? '');
     const up = aff.id.startsWith('up:');
     const fromT = mem.pos.leg ? mem.pos.t : up ? 0 : 1;
+    if (up && mem.turnedAt !== null) {
+      // Turned and then went up again: the turn no longer stands, so the day's record does not say both.
+      mem.turnedAt = null;
+      s.journal.push({
+        at: s.minute,
+        who: mem.id,
+        text: `${memberOf(mem.id).name} changed their mind and went up again.`,
+      });
+    }
     if (!up && mem.turnedAt === null) {
       mem.turnedAt = s.minute;
       wantHome(s, p, mem.path.length + (mem.pos.leg ? 1 : 0));
@@ -1436,7 +1450,8 @@ function checkPromise(s: ClimbState): void {
   const pr = s.promise;
   if (pr?.status !== 'open') return;
   const deadline = s.day * 1440 + pr.hour * 60 + 30;
-  const kept = s.leader.turnedAt !== null && s.leader.turnedAt <= deadline;
+  // Kept only by a turn made after the promise: a turn already behind you keeps nothing.
+  const kept = s.leader.turnedAt !== null && s.leader.turnedAt >= pr.at && s.leader.turnedAt <= deadline;
   if (!kept && s.minute < deadline) return;
   pr.status = kept ? 'kept' : 'broken';
   for (const id of pr.hearers) {

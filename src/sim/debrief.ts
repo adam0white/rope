@@ -35,7 +35,9 @@ export function factsOf(s: ClimbState): Facts {
       at: 0,
       caught: false,
     });
-    const turnedEntry = s.journal.find((j) => j.who === mem.id && j.text.includes('turned for home from'));
+    const turnedEntry = s.journal.findLast(
+      (j) => j.who === mem.id && j.text.includes('turned for home from'),
+    );
     out[mem.id] = {
       high: mem.high,
       summit: mem.summitAt !== null,
@@ -44,9 +46,10 @@ export function factsOf(s: ClimbState): Facts {
       hurt: worst.severity,
       hurtWhere: worst.leg ? (m.legs.find((l) => l.id === worst.leg)?.name ?? null) : null,
       turnedAt: mem.turnedAt,
-      turnedWhere: turnedEntry
-        ? (turnedEntry.text.split('turned for home from ')[1]?.replace(/\.$/, '') ?? null)
-        : null,
+      turnedWhere:
+        mem.turnedAt !== null && turnedEntry
+          ? (turnedEntry.text.split('turned for home from ')[1]?.replace(/\.$/, '') ?? null)
+          : null,
     };
   }
   return out;
