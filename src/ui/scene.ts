@@ -1,8 +1,8 @@
 /**
-import 'pixi.js/unsafe-eval';
  * The scene: a side profile of the mountain in ink, the party drawn from their HF state (look.ts), the weather as
  * hatching and streaks. PixiJS draws; nothing here changes the simulation.
  */
+import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics, Text } from 'pixi.js';
 import { type ClimbState, MOUNTAINS, memberState, personOf, posXY } from '../sim/climb.ts';
 import { coldAt, type Mountain, place, windAt } from '../sim/mountain.ts';
