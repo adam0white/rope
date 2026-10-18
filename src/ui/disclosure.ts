@@ -42,13 +42,23 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       return {
         id: 'lead',
         lit: 'lead',
-        text: 'You lead. Tap **Lead on** to start up the path. They walk at their own pace and come if they want to.',
+        text: 'You lead. Tap **Lead on** to start the party up the path. You keep to their pace and wait for the last of them; they come if they want to.',
       };
     if (!seen('ask') && sayInputs === 0 && s.members.some((x) => x.homeAt === null && canHear(s, x.id)))
       return {
         id: 'ask',
         lit: 'climb',
         text: 'Now ask them along: **everyone** is picked. Tap **Climb on**, then **ask**.',
+      };
+    const apart =
+      leaderInputs > 0 &&
+      s.members.some((x) => x.homeAt === null) &&
+      !s.members.some((x) => x.homeAt === null && canHear(s, x.id));
+    if (!seen('with') && apart)
+      return {
+        id: 'with',
+        lit: 'with',
+        text: 'Nobody can hear you from here. Tap **Stay with them** to walk back to the party, or pick someone first and walk to them.',
       };
     if (!seen('watch') && s.lines.length > 0)
       return {

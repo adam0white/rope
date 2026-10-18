@@ -189,19 +189,25 @@ a {
 
 /* A margin note: the tutorial and moments that need you. */
 .note {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 8px;
-  padding: 6px 10px;
+  position: relative;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--ink-soft);
+  /* A fixed strip, empty or not, so a note arriving never moves the map. Long notes scroll inside it. */
+  height: 4.3em;
+  overflow-y: auto;
   border-left: 2px solid var(--rope);
-  background: color-mix(in srgb, var(--paper) 88%, transparent);
-  font-size: 15px;
-  line-height: 1.35;
+  /* Opaque enough that the weather's ink never runs through the words. */
+  background: color-mix(in srgb, var(--paper) 97%, transparent);
+  z-index: 2;
+  font-size: 14px;
+  line-height: 1.3;
 }
 .note .hand {
   font-family: var(--hand);
-  font-size: 20px;
+  font-size: 18px;
+  line-height: 1.1;
 }
 .note button {
   float: right;
@@ -217,8 +223,8 @@ a {
   position: relative;
   z-index: 2;
   /* A fixed height (the bottom 42%, thumb reach): panels change inside it, so the scene and camera never jump. */
-  flex: 0 0 42%;
-  height: 42%;
+  flex: 0 0 46%;
+  height: 46%;
   overflow-y: auto;
   overscroll-behavior: contain;
   border-top: 1.5px solid var(--ink);
@@ -268,9 +274,12 @@ a {
   border-style: dashed;
 }
 .chip small {
-  font-family: var(--text);
-  font-size: 11px;
+  /* The mood word, in the hand: a reading of the figure, not a stat. */
+  font-family: var(--hand);
+  font-size: 15px;
+  line-height: 1;
   color: var(--ink-soft);
+  min-height: 15px;
 }
 .verbs {
   display: grid;
@@ -541,4 +550,83 @@ a {
 }
 .ask-bar span {
   flex: 1 0 100%;
+}
+
+/* Phones: the mountain and the clock matter more than the framework mark. */
+@media (max-width: 420px) {
+  .mark {
+    display: none;
+  }
+  .where {
+    text-align: left;
+    font-size: 18px;
+  }
+}
+/* Landscape phones: the sheet moves beside the hill instead of under it. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #app {
+    display: grid;
+    grid-template-columns: 1fr minmax(300px, 42%);
+    grid-template-rows: auto 1fr;
+  }
+  .top {
+    grid-column: 1 / -1;
+  }
+  #app {
+    grid-template-rows: auto auto 1fr;
+  }
+  .note {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .scene {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .sheet {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    height: auto;
+    border-top: none;
+    border-left: 1.5px solid var(--ink);
+  }
+  /* Short screens: compact verbs so most of the sheet shows without scrolling. */
+  #app .sheet .verbs {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+  }
+  #app .sheet .verbs .verb {
+    min-height: 40px;
+    font-size: 11.5px;
+  }
+}
+.ask-bar.faint {
+  border-style: dotted;
+  opacity: 0.8;
+  font-style: italic;
+}
+/* The sheet scrolls; its rows never shrink to fit (landscape clipped the name chips). */
+.sheet > * {
+  flex-shrink: 0;
+}
+/* Every verb above the fold on a 780-tall phone: five to a row once the full set is out, compact. */
+.verbs:has(> :nth-child(6)) {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+.verbs:has(> :nth-child(6)) .verb {
+  min-height: 46px;
+  font-size: 12px;
+}
+.verbs:has(> :nth-child(6)) .verb svg {
+  width: 19px;
+  height: 19px;
+}
+.chip svg {
+  width: 15px;
+  height: 15px;
+}
+.note .quiet {
+  color: var(--ink-soft);
+  font-style: italic;
 }

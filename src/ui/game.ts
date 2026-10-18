@@ -3,12 +3,14 @@
  * pages (title, journal, debrief, season). All play goes through `queueInput` + `step`, so the save is the start
  * state and the input log, and the export replays exactly.
  */
+
 import { FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
 import { campFacts, campFallback } from '../sim/camp.ts';
 import {
   type ClimbState,
   canHear,
   clock,
+  dayAccount,
   distance,
   FACTS,
   type Force,
@@ -17,26 +19,30 @@ import {
   MOUNTAINS,
   memberState,
   type NewInput,
+  personOf,
+  posXY,
   queueInput,
   replay,
   snapshot,
   step,
 } from '../sim/climb.ts';
 import { ALTERNATIVE_CAPTION, type Branch, outcomeWords } from '../sim/debrief.ts';
-import { legsUp, SEASON } from '../sim/mountain.ts';
+import { coldAt, legsUp, SEASON } from '../sim/mountain.ts';
 import { MEMBERS, memberOf } from '../sim/party.ts';
 import { exportClimb, newSeason, nextClimb, type SeasonState } from '../sim/season.ts';
 import { type Disclosure, has, markSeen, type Note, newDisclosure, nextNote } from './disclosure.ts';
 import { icon } from './icons.ts';
+import { moodWord } from './look.ts';
+import { PACE } from './pace.ts';
 import { Scene } from './scene.ts';
 
 const SAVE_KEY = 'rope.save.v1';
 /** Sim minutes per real second. Normal makes a twelve-hour day about twenty minutes. */
-const RATE = { slow: 0.15, normal: 0.6, fast: 2.4 } as const;
+const RATE = { slow: PACE.slow, normal: PACE.normal, fast: PACE.fast } as const;
 type Speed = keyof typeof RATE;
 /** Tactical slowdown: how much and for how long (real ms) after a moment that needs you. */
-const SLOW = 0.25;
-const SLOW_MS = 7000;
+const SLOW = PACE.slowFactor;
+const SLOW_MS = PACE.slowMs;
 const BUBBLE_MS = 7500;
 
 interface Save {
@@ -114,11 +120,12 @@ export class Game {
       b.dataset.speed = sp;
       this.speedEl.append(b);
     }
-    this.sceneEl.append(this.bubblesEl, this.noteEl, this.stampEl);
+    this.sceneEl.append(this.bubblesEl, this.stampEl);
     const jb = h('button', 'drawer-btn', 'journal');
     jb.onclick = () => this.journalPage();
     this.sceneEl.append(jb);
-    this.root.append(this.top, this.sceneEl, this.sheet);
+    // The margin note is docked between the top bar and the map: it takes room from the map, never covers it.
+    this.root.append(this.top, this.noteEl, this.sceneEl, this.sheet);
     await this.scene.mount(this.sceneEl);
     this.scene.onTap = (id) => {
       if (id === 'leader') return;
@@ -148,7 +155,8 @@ export class Game {
     const s: Save = {
       v: 1,
       season: this.season,
-      start: this.start,
+      // The season already holds this climb's start: write it once, not twice (halves the save).
+      start: this.start === this.season.start ? '' : this.start,
       inputs: this.climb.inputs,
       minute: this.climb.minute,
       disclosure: this.disc,
@@ -172,8 +180,9 @@ export class Game {
   private resume(sv: Save): void {
     this.season = sv.season;
     this.disc = sv.disclosure;
-    const c = replay(sv.start, sv.inputs, sv.minute);
-    this.begin(c, sv.start, true);
+    const start = sv.start || sv.season.start || '';
+    const c = replay(start, sv.inputs, sv.minute);
+    this.begin(c, start, true);
     if (c.over || sv.over) this.endClimb();
   }
 
@@ -189,7 +198,11 @@ export class Game {
     this.acc = 0;
     for (const b of this.bubbles.values()) b.el.remove();
     this.bubbles.clear();
+    // A new climb starts clean: no stamp from the last one, and the clock at normal speed.
     this.stampEl.classList.remove('on');
+    this.stampEl.textContent = '';
+    if (!resumed) this.speed = 'normal';
+    this.ending = false;
     this.closePage();
     this.playing = true;
     if (!resumed) this.climbIntro();
@@ -223,6 +236,7 @@ export class Game {
       if (now - this.uiTick > 300) {
         this.uiTick = now;
         this.renderTop();
+        this.quietHint();
         if (this.panel === 'main' && this.verb === null) this.renderSheet(true);
       }
       if (now - this.lastSave > 4000) {
@@ -247,6 +261,9 @@ export class Game {
       if (j.text.includes('stood on the summit') && j.who)
         this.stamp(`Summit · ${memberOf(j.who).name} · ${clock(j.at)}`);
       if (j.story) this.showStory(j.text);
+      // Key events far off still reach you as a margin note: you see it happen, but you cannot speak to them.
+      else if (j.who && !canHear(c, j.who) && /fell|slipped|untied|stood on the summit/.test(j.text))
+        this.showStory(`Far off: ${j.text}`);
     }
     if (!this.note || this.disc.seen.includes(this.note.id)) {
       const n = nextNote(this.disc, c);
@@ -254,8 +271,8 @@ export class Game {
     }
   }
 
-  private slow(): void {
-    this.slowUntil = performance.now() + SLOW_MS;
+  private slow(ms: number = SLOW_MS): void {
+    this.slowUntil = Math.max(this.slowUntil, performance.now() + ms);
   }
 
   private stamp(text: string): void {
@@ -271,17 +288,23 @@ export class Game {
   /** Taps right after a send are dropped: the sheet rebuilds under the finger, and a second tap would land elsewhere. */
   private sentAt = 0;
 
-  private send(inp: NewInput): void {
+  private send(inp: NewInput, also?: NewInput): void {
     const c = this.climb;
     if (performance.now() - this.sentAt < 450) return;
     // Nothing stays focused after a send, so no key press can repeat the order.
     (document.activeElement as HTMLElement | null)?.blur?.();
     this.sentAt = performance.now();
+    // Words to people replace what they last said: an old yes never hangs on after a new order.
+    for (const x of [inp, also])
+      if (x?.t === 'say')
+        for (const id of x.to === 'all' ? c.members.map((m) => m.id) : [x.to, ...(x.with ? [x.with] : [])])
+          this.hideBubble(id);
     queueInput(c, inp);
+    if (also) queueInput(c, also);
     // The word is spoken now: step the minute it applies in, so the answer comes at once.
     step(c);
     this.afterStep();
-    this.saySelf(inp);
+    this.saySelf(also ?? inp);
     if (this.note?.lit) {
       const lit = this.note.lit;
       const matched =
@@ -290,7 +313,8 @@ export class Game {
         (lit === 'tell' && inp.t === 'tell') ||
         (lit === 'promise' && inp.t === 'promise') ||
         (lit === 'rope' && inp.t === 'say' && inp.act === 'rope') ||
-        (lit === 'fix' && inp.t === 'fix');
+        (lit === 'fix' && inp.t === 'fix') ||
+        (lit === 'with' && inp.t === 'lead' && inp.dir === 'with');
       if (matched) this.dismissNote();
     }
     this.verb = null;
@@ -336,7 +360,9 @@ export class Game {
   private pickTarget(id: string): void {
     if (this.panel === 'partner') {
       if (id !== this.target && id !== 'all') {
+        // Pick A, pick B, then how hard: ask, urge or insist, as for any other word.
         this.partner = id;
+        this.verb = 'rope';
         this.panel = 'force';
         this.renderSheet();
       }
@@ -368,6 +394,30 @@ export class Game {
     const turned = trust < was - 0.01 ? ` (${memberOf(l.who).they} looks away)` : '';
     this.bubble(l.who, l.says + turned, cls);
     if (l.verdict !== 'assented' && l.verdict !== 'heard') this.slow();
+  }
+
+  /** A quiet stretch says so in the margin, with the way to walk it faster. Never over a real note or story. */
+  private hinting = false;
+  private quietHint(): void {
+    const c = this.climb;
+    if (this.note || (!this.hinting && this.noteEl.innerHTML !== '')) return;
+    const lastLine = c.lines[c.lines.length - 1]?.at ?? c.startMinute;
+    const lastJournal = c.journal[c.journal.length - 1]?.at ?? c.startMinute;
+    const quiet = c.minute - Math.max(lastLine, lastJournal) >= 20 && this.speed !== 'fast' && !c.over;
+    if (quiet && !this.hinting) {
+      this.noteEl.innerHTML = '<span class="quiet">A quiet stretch. Tap <b>▷▷</b> to walk it faster.</span>';
+      this.hinting = true;
+    } else if (!quiet && this.hinting) {
+      this.noteEl.innerHTML = '';
+      this.hinting = false;
+    }
+  }
+
+  private hideBubble(who: string): void {
+    const b = this.bubbles.get(who);
+    if (!b) return;
+    b.until = 0;
+    b.el.classList.remove('on');
   }
 
   private bubble(who: string, text: string, cls: string): void {
@@ -424,13 +474,13 @@ export class Game {
 
   private showNote(n: Note): void {
     this.note = n;
+    this.hinting = false;
     this.noteEl.innerHTML = `<button aria-label="dismiss">got it</button>${bold(n.text)}`;
-    this.noteEl.style.display = '';
     const btn = this.noteEl.querySelector('button');
     if (btn) btn.onclick = () => this.dismissNote();
     if (n.unlock) markSeen(this.disc, { ...n, id: `${n.id}:unlock` });
     if (n.unlock && !this.disc.unlocked.includes(n.unlock)) this.disc.unlocked.push(n.unlock);
-    this.slow();
+    this.slow(PACE.noteSlowMs);
     this.renderSheet();
     if (!n.lit) setTimeout(() => this.note?.id === n.id && this.dismissNote(), 16000);
   }
@@ -438,16 +488,16 @@ export class Game {
   private dismissNote(): void {
     if (this.note) markSeen(this.disc, this.note);
     this.note = null;
-    this.noteEl.style.display = 'none';
+    this.noteEl.innerHTML = '';
     this.renderSheet();
   }
 
   private showStory(text: string): void {
+    this.hinting = false;
     this.noteEl.innerHTML = `<span class="hand">${esc(text)}</span>`;
-    this.noteEl.style.display = '';
-    this.slow();
+    this.slow(PACE.noteSlowMs);
     setTimeout(() => {
-      if (!this.note) this.noteEl.style.display = 'none';
+      if (!this.note) this.noteEl.innerHTML = '';
       else this.showNote(this.note);
     }, 9000);
   }
@@ -457,7 +507,7 @@ export class Game {
   private renderAll(): void {
     this.renderTop();
     this.renderSheet();
-    this.noteEl.style.display = 'none';
+    this.noteEl.innerHTML = '';
   }
 
   private renderTop(): void {
@@ -514,11 +564,7 @@ export class Game {
     // Who you speak to.
     const chips = h('div', 'row');
     const mk = (id: string, label: string, ic: string, far: boolean, sub = '') => {
-      const b = h(
-        'button',
-        `chip${far ? ' far' : ''}`,
-        `${icon(ic)}${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ''}`,
-      );
+      const b = h('button', `chip${far ? ' far' : ''}`, `${icon(ic)}${esc(label)}<small>${esc(sub)}</small>`);
       const pressed = this.panel === 'partner' ? this.partner === id : this.target === id;
       b.setAttribute('aria-pressed', String(pressed));
       if (this.panel === 'partner' && (id === this.target || id === 'all'))
@@ -531,14 +577,17 @@ export class Game {
     for (const x of MEMBERS) {
       const mem = memberState(c, x.id);
       const far = mem.homeAt === null && !canHear(c, x.id);
-      mk(x.id, x.name, 'person', far, mem.homeAt !== null ? 'down' : far ? 'far' : '');
+      const mood = moodWord(personOf(c, x.id), coldAt(c.seed, c.weather, c.minute, posXY(c, mem.pos).alt));
+      mk(x.id, x.name, 'person', far, mem.homeAt !== null ? 'down' : far ? 'far' : mood);
     }
     const label = h('div', 'label');
     const tgt = this.target === 'all' ? 'everyone' : memberOf(this.target).name;
     label.innerHTML =
       this.panel === 'partner'
         ? `<span>rope ${esc(tgt)} to whom?</span>`
-        : `<span>to ${esc(tgt)}</span><span>${c.members.some((x) => x.ropedTo) ? 'roped' : ''}</span>`;
+        : this.panel === 'force' && this.verb === 'rope' && this.partner
+          ? `<span>rope ${esc(tgt)} to ${esc(memberOf(this.partner).name)}: how hard?</span>`
+          : `<span>to ${esc(tgt)}</span><span>${c.members.some((x) => x.ropedTo) ? 'roped' : ''}</span>`;
     const cancel = h('button', '', 'cancel');
     cancel.onclick = () => {
       this.verb = null;
@@ -549,13 +598,23 @@ export class Game {
     if (this.panel !== 'main') label.append(cancel);
     sh.append(label, chips);
     // Someone asks who will go down with them: the player's answer, as words to people.
-    const asking = c.members.find((x) => x.asks && x.homeAt === null);
+    // Requests queue: one prompt at a time, the oldest first, labelled by its asker; the next replaces it.
+    const queue = c.members
+      .filter((x) => x.asks && x.homeAt === null)
+      .sort((a, b) => (a.asks?.at ?? 0) - (b.asks?.at ?? 0));
+    const asking = queue[0];
     if (asking && this.panel === 'main') {
       const nm = memberOf(asking.id).name;
+      const near = canHear(c, asking.id);
+      const below = posXY(c, asking.pos).alt < posXY(c, c.leader.pos).alt;
+      const obj = memberOf(asking.id).they === 'she' ? 'her' : 'him';
+      // Out of earshot the call still carries, faintly: walking back to answer it is the player's choice.
       const bar = h(
         'div',
-        'ask-bar',
-        `<span>${esc(nm)} wants to go down. Who goes with ${memberOf(asking.id).they === 'she' ? 'her' : 'him'}?</span>`,
+        `ask-bar${near ? '' : ' faint'}`,
+        near
+          ? `<span><b>${esc(nm)}</b> wants to go down. Who goes with ${obj}?${queue.length > 1 ? ` <small>(${queue.length - 1} more waiting)</small>` : ''}</span>`
+          : `<span><b>${esc(nm)}</b> is calling from ${below ? 'below' : 'above'}, too far to make out.</span>`,
       );
       for (const o of c.members) {
         if (o.id === asking.id || o.homeAt !== null || !canHear(c, o.id)) continue;
@@ -563,19 +622,27 @@ export class Game {
         b.onclick = () => this.send({ t: 'say', to: o.id, act: 'escort', force: 'ask', with: asking.id });
         bar.append(b);
       }
-      const w = h('button', 'force', 'ask to wait');
-      w.onclick = () => this.send({ t: 'say', to: asking.id, act: 'wait', force: 'ask' });
-      const all = h('button', 'force', 'we all turn');
-      all.onclick = () => this.send({ t: 'lead', dir: 'down' });
-      bar.append(w, all);
+      if (near) {
+        const w = h('button', 'force', 'ask to wait');
+        w.onclick = () => this.send({ t: 'say', to: asking.id, act: 'wait', force: 'ask' });
+        const all = h('button', 'force', 'we all turn');
+        all.onclick = () =>
+          this.send({ t: 'lead', dir: 'down' }, { t: 'say', to: 'all', act: 'descend', force: 'urge' });
+        bar.append(w, all);
+      } else if (below) {
+        const back = h('button', 'force', `go back to ${obj}`);
+        back.onclick = () => this.send({ t: 'lead', dir: 'down' });
+        bar.append(back);
+      }
       sh.append(bar);
     }
     if (this.lastSent && this.lastSent.until > performance.now() && this.panel === 'main')
       sh.append(h('div', 'sent', esc(this.lastSent.text)));
     if (this.panel === 'main' || this.panel === 'partner') sh.append(this.peopleVerbs(), this.leaderRow());
-    else if (this.panel === 'force') sh.append(this.peopleVerbs(), this.forceRow());
-    else if (this.panel === 'tell') sh.append(this.peopleVerbs(), this.tellRow());
-    else if (this.panel === 'promise') sh.append(this.peopleVerbs(), this.promiseRow());
+    // With a prompt open, the you row sits above it, so it never scrolls out of sight under the prompt.
+    else if (this.panel === 'force') sh.append(this.leaderRow(), this.peopleVerbs(), this.forceRow());
+    else if (this.panel === 'tell') sh.append(this.leaderRow(), this.peopleVerbs(), this.tellRow());
+    else if (this.panel === 'promise') sh.append(this.leaderRow(), this.peopleVerbs(), this.promiseRow());
     else if (this.panel === 'route') sh.append(this.peopleVerbs(), this.routeRow());
     else if (this.panel === 'scout') sh.append(this.peopleVerbs(), this.routeRow(true));
   }
@@ -677,8 +744,19 @@ export class Game {
       this.verbBtn('down', 'go down', 'down', L.path.length > 0 || L.pos.leg !== null, () =>
         this.send({ t: 'lead', dir: 'down' }),
       ),
-      this.verbBtn('stop', L.fixing ? 'fixing…' : 'stop', 'stop', L.move !== null, () =>
+      this.verbBtn('stop', L.fixing ? 'fixing…' : 'stop', 'stop', L.move !== null || !!L.follow, () =>
         this.send({ t: 'lead', dir: 'stop' }),
+      ),
+    );
+    // Walking with them: the whole party, or the one picked in the chips.
+    const one = this.target !== 'all' ? MEMBERS.find((x) => x.id === this.target) : undefined;
+    g.append(
+      this.verbBtn(
+        'with',
+        one ? `walk to ${one.name}` : L.follow === 'party' ? 'with them' : 'stay with them',
+        'all',
+        true,
+        () => this.send({ t: 'lead', dir: 'with', who: one ? one.id : 'party' }),
       ),
     );
     if (has(this.disc, 'tell')) {
@@ -919,16 +997,8 @@ export class Game {
     this.playing = false;
     this.save();
     const c = this.climb;
-    // The banner reads the same facts as the debrief: down means down by dark.
-    const f = factsOf(c);
-    const out = c.members.filter((x) => !f[x.id]?.home).length;
-    this.stamp(
-      out === 0
-        ? 'Everyone down'
-        : out === 1
-          ? 'One still on the hill'
-          : `${out === 5 ? 'All' : 'Some'} still on the hill`,
-    );
+    // The stamp reads the same day account as the journal's last line and the read-back.
+    this.stamp(dayAccount(c).stamp);
     setTimeout(() => this.debriefPage(), 2600);
   }
 

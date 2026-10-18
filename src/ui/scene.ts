@@ -68,6 +68,8 @@ export class Scene {
   async mount(el: HTMLElement): Promise<void> {
     await this.app.init({
       resizeTo: el,
+      // WebGL only: Pixi's WebGPU path still checks for unsafe-eval, which the CSP forbids (the console error on load).
+      preference: 'webgl',
       backgroundAlpha: 0,
       antialias: true,
       resolution: Math.min(2, window.devicePixelRatio || 1),
@@ -100,11 +102,17 @@ export class Scene {
     });
   }
 
+  /** Gentle zoom-out (down to 0.6) so a spread party fits; eased, never snapping. */
+  private zoom = 1;
+  private ppu(): number {
+    return (this.w / SPAN) * this.zoom;
+  }
+
   private sx(x: number): number {
-    return (x - this.camX) * (this.w / SPAN) + this.w / 2;
+    return (x - this.camX) * this.ppu() + this.w / 2;
   }
   private sy(alt: number): number {
-    return this.h * 0.58 - (alt - this.camAlt) * (this.w / SPAN) * VE;
+    return this.h * 0.58 - (alt - this.camAlt) * this.ppu() * VE;
   }
 
   /** Draw a frame. `dt` is real seconds since the last frame; `moving` animates walking. */
@@ -125,16 +133,38 @@ export class Scene {
     const xs = s.members.filter((x) => x.homeAt === null).map((x) => posXY(s, x.pos));
     const mx = xs.length ? xs.reduce((a, b) => a + b.x, 0) / xs.length : L.x;
     const ma = xs.length ? xs.reduce((a, b) => a + b.alt, 0) / xs.length : L.alt;
-    const tx = L.x * 0.6 + mx * 0.4;
-    const ta = L.alt * 0.6 + ma * 0.4;
+    // Frame the party: the middle of the span from the leader to the farthest of those still out.
+    const all = [L, ...xs];
+    const span = (f: (p: { x: number; alt: number }) => number) => {
+      const v = all.map(f);
+      return (Math.min(...v) + Math.max(...v)) / 2;
+    };
+    const tx = xs.length ? span((p) => p.x) * 0.7 + mx * 0.3 : L.x;
+    const ta = xs.length ? span((p) => p.alt) * 0.7 + ma * 0.3 : L.alt;
+    // You are always in frame, whatever the spread.
+    const clamp = (v: number, c: number, r: number) => Math.max(c - r, Math.min(c + r, v));
+    const ppu = this.ppu();
+    const cx = clamp(tx, L.x, (this.w * 0.38) / ppu);
+    const ca = clamp(ta, L.alt, (this.h * 0.3) / (ppu * VE));
     if (!this.camReady) {
-      this.camX = tx;
-      this.camAlt = ta;
+      this.camX = cx;
+      this.camAlt = ca;
       this.camReady = true;
     }
     const k = Math.min(1, dt * 1.5);
-    this.camX += (tx - this.camX) * k;
-    this.camAlt += (ta - this.camAlt) * k;
+    // Fit the spread: the zoom that puts everyone within 80% of the width and 55% of the height.
+    const base = this.w / SPAN;
+    const wx = Math.max(...all.map((p) => p.x)) - Math.min(...all.map((p) => p.x));
+    const wa = Math.max(...all.map((p) => p.alt)) - Math.min(...all.map((p) => p.alt));
+    const fit = Math.min(
+      1,
+      (this.w * 0.8) / Math.max(1, wx * base),
+      (this.h * 0.55) / Math.max(1, wa * base * VE),
+    );
+    const zt = Math.max(0.6, fit);
+    this.zoom += (zt - this.zoom) * Math.min(1, dt * 0.8);
+    this.camX += (cx - this.camX) * k;
+    this.camAlt += (ca - this.camAlt) * k;
   }
 
   /** A wobbly ink line through world points, jitter keyed to the world so it does not shimmer. */
@@ -349,7 +379,7 @@ export class Scene {
     const place2screen = (p: { x: number; alt: number }, key: string, id = ''): ScreenPoint => {
       const k = spot(key);
       slotOf.set(id, k);
-      return { x: this.sx(p.x) + (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2) * 9, y: this.sy(p.alt) };
+      return { x: this.sx(p.x) + (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2) * 14, y: this.sy(p.alt) };
     };
     const lp = s.leader.pos;
     pos.set('leader', place2screen(posXY(s, lp), lp.place ?? `${lp.leg}:${lp.t.toFixed(2)}`));
@@ -366,6 +396,7 @@ export class Scene {
       g.stroke({ width: 1.3, color: P.rope });
     }
     this.at.clear();
+    const placedNames: { x: number; y: number; half: number }[] = [];
     for (const x of MEMBERS) {
       const mem = memberState(s, x.id);
       const p = personOf(s, x.id);
@@ -404,7 +435,16 @@ export class Scene {
       t.alpha = far ? 0.45 : 1;
       t.text = far ? `${x.name}…` : x.name;
       // Names of people standing together stagger down in rows so they stay readable.
-      t.position.set(sp.x, sp.y + 3 + ((slotOf.get(x.id) ?? 0) % 3) * 13);
+      // Names never overlap: each drops a row below the last name it would collide with.
+      let ny = sp.y + 3;
+      const half = t.width / 2 + 2;
+      for (let tries = 0; tries < 6; tries++) {
+        const hit = placedNames.find((q) => Math.abs(q.x - sp.x) < q.half + half && Math.abs(q.y - ny) < 13);
+        if (!hit) break;
+        ny = hit.y + 13;
+      }
+      placedNames.push({ x: sp.x, y: ny, half });
+      t.position.set(sp.x, ny);
     }
     const L = pos.get('leader');
     if (L) {
@@ -492,14 +532,14 @@ export class Scene {
     if (look.blot > 0.05)
       g.circle(hip.x + 0.5, hip.y - 3, 1.5 + 3 * look.blot).fill({ color: this.pal.ink, alpha: 0.85 });
     // Cold: short hatching around the shoulders.
-    if (o.cold > 0.55) {
-      const n = Math.round((o.cold - 0.5) * 10);
+    if (o.cold > 0.4) {
+      const n = Math.round((o.cold - 0.3) * 14);
       for (let i = 0; i < n; i++) {
         const ax = x + (i % 2 === 0 ? -8 : 7) - i * 0.6;
         const ay = y - 18 + i * 3;
         g.moveTo(ax, ay).lineTo(ax + 3, ay - 3);
       }
-      g.stroke({ width: 1, color: this.pal.sky });
+      g.stroke({ width: 1.4, color: this.pal.sky });
     }
   }
 }
