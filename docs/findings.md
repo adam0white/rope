@@ -26,3 +26,6 @@
 - Kestrel before: first top 15:06, 7–10 of 60 on top, 16–38 down, 20–23 hurt, injuries spread across the morning glacier as well as the afternoon wall. Too punishing, and the morning falls read as arbitrary.
 - Kestrel after (legs shortened, lower-glacier and wall footing eased): turning at 12:00, first top 13:16, 28 on top, 32 down, 20 hurt, now mostly on the ice wall and the summit ridge after 11:00, when sun and wind are on them. Kept hard on purpose as the finale; roping and fixed ropes (unused by the script) are the answer to it.
 - Nell now refuses from her own HF promise (reason `commitment:c1`), and the person quotes the HF commitment's label: "… I promised: down before dark, as I told Mum."
+
+## Camp voice: 1B against 8B (2026-10-18)
+Three fixed records (seeds 1, 4, 7 on Hollin, turning at 11:00, 13:00, 15:00), same prompt. Llama 3.2 1B wrote "Hollin: said." five times, spoke as the mountain, and invented a person ("Ezra"). Llama 3.1 8B (fp8-fast) spoke only as the party and drew on real records (the gully against the ridge, Nell's call to her mother), though it still embroiders blame ("I told you the moraine was loose"). Kept 8B. The label says the talk is a model's and changes nothing.

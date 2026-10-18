@@ -10,12 +10,14 @@ interface Env {
   ASSETS: { fetch(r: Request): Promise<Response> };
   AI: { run(model: string, input: unknown): Promise<{ response?: string }> };
   CAMP_AI?: string;
+  CAMP_MODEL?: string;
 }
 
-const MODEL = '@cf/meta/llama-3.2-1b-instruct';
+const MODELS = ['@cf/meta/llama-3.2-1b-instruct', '@cf/meta/llama-3.1-8b-instruct-fp8-fast'];
+const DEFAULT_MODEL = '@cf/meta/llama-3.1-8b-instruct-fp8-fast';
 const MAX_TOKENS = 180;
 const PER_IP_PER_HOUR = 6;
-const DAILY_CAP = 200;
+const DAILY_CAP = 100;
 const MAX_BODY = 6000;
 
 const perIp = new Map<string, number[]>();
@@ -74,8 +76,9 @@ async function camp(req: Request, env: Env): Promise<Response> {
     'The journal:',
     ...strs(f.journal, 20),
   ].join('\n');
+  const model = MODELS.includes(env.CAMP_MODEL ?? '') ? (env.CAMP_MODEL as string) : DEFAULT_MODEL;
   try {
-    const out = await env.AI.run(MODEL, {
+    const out = await env.AI.run(model, {
       max_tokens: MAX_TOKENS,
       messages: [
         {
@@ -93,7 +96,7 @@ async function camp(req: Request, env: Env): Promise<Response> {
       .filter((l) => /^[A-Z][a-z]+: /.test(l))
       .slice(0, 5);
     if (!lines.length) return json({ fallback: true, why: 'empty' });
-    return json({ lines, model: MODEL });
+    return json({ lines, model });
   } catch {
     return json({ fallback: true, why: 'error' });
   }
