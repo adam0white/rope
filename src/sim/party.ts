@@ -65,6 +65,7 @@ export const memberOf = (id: string): Member => {
 const NAMES: Record<string, string> = Object.fromEntries([
   ...MEMBERS.map((m) => [m.id, m.name]),
   [LEADER, 'you'],
+  ['nell-mother', 'Mum'],
 ]);
 
 /** Standing on the top: valued by expected completion (HF 2.3 temporal goals), so time left matters. */

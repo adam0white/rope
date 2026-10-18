@@ -510,9 +510,20 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
     verdict: r.verdict,
     ...(r.kind ? { kind: r.kind } : {}),
     reason: r.reason,
-    says: r.says,
+    says: withPromise(s, who, r),
   });
   if (r.verdict !== 'assented') s.journal.push({ at: s.minute, who, text: journalFor(who, r) });
+}
+
+/**
+ * When HF names a commitment as the reason (`commitment:<id>`), the person says which promise, quoting the label of
+ * that HF commitment record. The verdict and reason stay HF's; only the record's own words are added.
+ */
+function withPromise(s: ClimbState, who: string, r: SuggestionResolution): string {
+  const id = r.reason.startsWith('commitment:') ? r.reason.slice('commitment:'.length) : r.commitmentId;
+  if (!id || r.verdict === 'assented') return r.says;
+  const c = personOf(s, who).agenda.commitments.find((x) => x.id === id);
+  return c?.label ? `${r.says} I promised: ${c.label}.` : r.says;
 }
 
 function journalFor(who: string, r: SuggestionResolution): string {
@@ -1040,6 +1051,12 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
  * The top is halfway. Once someone stands on it or turns for home, getting down becomes their goal: an HF temporal
  * goal advanced by each leg of descent, so the hours left before dark weigh on it.
  */
+function promisedDown(p: Person, now: number): boolean {
+  return p.agenda.commitments.some(
+    (c) => c.actions.includes('descend') && c.status !== 'kept' && c.status !== 'broken' && c.until > now,
+  );
+}
+
 function wantHome(s: ClimbState, p: Person, legsLeft: number): void {
   if (p.agenda.goals.some((g) => g.label === 'get down safely' && g.status === 'active')) return;
   adoptGoal(
@@ -1048,7 +1065,8 @@ function wantHome(s: ClimbState, p: Person, legsLeft: number): void {
       label: 'get down safely',
       serves: ['safety', 'security'],
       advancedBy: [{ action: 'descend', amount: 1 / Math.max(1, legsLeft) }],
-      importance: 0.7,
+      // Someone already bound by a promise to be down goes down for that promise; the goal only backs it up.
+      importance: promisedDown(p, s.minute) ? 0.3 : 0.7,
       temporal: { halfLifeMinutes: 180 },
       deadline: s.day * 1440 + mountainOf(s).duskMinuteOfDay,
     },
@@ -1069,8 +1087,8 @@ function aims(s: ClimbState, m: Mountain): void {
     toId: 'nell-mother',
     actions: ['descend'],
     from: dusk - 300,
-    until: dusk,
-    importance: 0.75,
+    until: dusk - 150,
+    importance: 0.9,
     label: 'down before dark, as I told Mum',
   });
   s.journal.push({
