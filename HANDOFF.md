@@ -1,5 +1,10 @@
 # Handoff
 
+## HF 2.8.0 (2026-10-19)
+- **Live:** https://rope.adamwhite.work, Worker version f3b1977b-3055-419f-8c9f-3c372ce73301, bundle `assets/index-B3bkadIs.js`; its sha256 matches dist. HF is pinned at 2.8.0 exactly.
+- Host rules 2 (`ClimbState.rules`): fullness on, no "step aside" offer, `alongside` and `reconsider` for roped partners. Numbers and the old-export rule are in docs/findings.md ("HF 2.8.0 and host rules 2"). Saves and exports from before this build replay under rules 1; both owner exports still match their saved answers (test/rules2.test.ts).
+- `npm test` now runs with a 30 s timeout: the 12-seed sweeps time out at 5 s when the machine is busy.
+
 ## Owner playtest round (2026-10-18, night)
 - Live: Worker version 6d18e37d-6bce-4c23-901d-fe6b159ffae2, bundle `assets/index-C7ttQYIy.js`. Its sha256 matches dist.
 - Owner: "rope was not that fun". Diagnosis and fixes are in docs/playtests/owner-2026-10-18.md; the late playtest is in docs/playtests/latecasual-2026-10-18.md.
