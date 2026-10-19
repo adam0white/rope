@@ -630,3 +630,15 @@ a {
   color: var(--ink-soft);
   font-style: italic;
 }
+
+/* A fresh hurt: the one solid rope-coloured bar, so it reads as more urgent than a request. */
+.ask-bar.hurt {
+  border-style: solid;
+  border-width: 2px;
+}
+/* The plan at the hut: the day's first choice, buttons wrapping on a phone. */
+.plan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

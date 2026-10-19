@@ -566,7 +566,13 @@ export function queueInput(s: ClimbState, input: NewInput): number {
 
 function line(s: ClimbState, who: string, input: number, r: SuggestionResolution): void {
   const own = voiced(s.seed, who, s.minute, r.verdict, r.says, r.reason);
-  const says = withForecast(s, who, input, r, withPromise(s, who, { ...r, says: own }));
+  const says = withCause(
+    s,
+    who,
+    input,
+    r,
+    withForecast(s, who, input, r, withPromise(s, who, { ...r, says: own })),
+  );
   s.lines.push({
     at: s.minute,
     who,
@@ -603,6 +609,29 @@ function withForecast(
   if (yes) return /\b(but|though|won't|can't)\b/.test(fc.line) ? `${says} ${fc.line}` : says;
   if (!/^(forecast|need|goal|commitment):/.test(r.reason)) return says;
   return `${says} ${fc.line}`;
+}
+
+/**
+ * When HF refuses because the act is not on offer (`unavailable`), the person says what the host knows is missing:
+ * the partner is too far off to tie to, or their food is gone. The verdict stays HF's; only the plain cause is added,
+ * so the player can learn what "not here" meant (owner playtest 2026-10-18).
+ */
+function withCause(s: ClimbState, who: string, input: number, r: SuggestionResolution, says: string): string {
+  if (r.reason !== 'unavailable') return says;
+  const inp = s.inputs[input];
+  if (inp?.t !== 'say') return says;
+  const mem = memberState(s, who);
+  if (inp.act === 'rope') {
+    const other = inp.to === who ? inp.with : inp.to;
+    if (!other || other === who) return says;
+    const o = memberState(s, other);
+    const name = memberOf(other).name;
+    if (o.ropedTo !== null || mem.ropedTo !== null) return `${says} One of us is tied in already.`;
+    if (distance(s, mem.pos, o.pos) >= 40) return `${says} ${name}'s too far off to tie to.`;
+    return says;
+  }
+  if (inp.act === 'eat' && mem.rations <= 0) return `${says} My food's gone.`;
+  return says;
 }
 
 /**
@@ -1205,6 +1234,23 @@ function followStep(s: ClimbState, m: Mountain): void {
   } else if (L.move?.dir !== 'down' && (L.path.length > 0 || L.pos.leg)) leaderGo(s, m, 'down');
 }
 
+/**
+ * Whom the leader is waiting for while leading up: those still climbing who have fallen out of easy earshot behind,
+ * once they are half or more of the climbers. Leading from the middle: waiting for the very last turns you into the
+ * sweeper, and the turn never reaches the front. Empty when not waiting.
+ */
+export function waitingFor(s: ClimbState): string[] {
+  const L = s.leader;
+  if (L.move?.dir !== 'up' || L.follow) return [];
+  const here = posXY(s, L.pos).alt;
+  const climbing = s.members.filter(
+    (x) => x.homeAt === null && x.turnedAt === null && x.move?.dir !== 'down',
+  );
+  const behind = climbing.filter((x) => posXY(s, x.pos).alt < here - 5);
+  const far = behind.filter((x) => distance(s, x.pos, L.pos) > earshot(s) * 0.6);
+  return far.length > 0 && far.length >= Math.ceil(climbing.length / 2) ? far.map((x) => x.id) : [];
+}
+
 function stepLeader(s: ClimbState, m: Mountain): void {
   const L = s.leader;
   if (L.scouting && s.minute >= L.scouting.until) {
@@ -1222,19 +1268,9 @@ function stepLeader(s: ClimbState, m: Mountain): void {
   if (!L.move) return;
   // Leading up means leading the party: you keep to the pace of the last of them still climbing, and wait
   // when they fall back out of easy earshot.
-  if (L.move.dir === 'up' && !L.follow) {
-    const here = posXY(s, L.pos).alt;
-    const climbing = s.members.filter(
-      (x) => x.homeAt === null && x.turnedAt === null && x.move?.dir !== 'down',
-    );
-    const behind = climbing.filter((x) => posXY(s, x.pos).alt < here - 5);
-    // Leading from the middle: you wait when half or more of those still climbing have fallen out of easy earshot
-    // behind. Waiting for the very last turns you into the sweeper, and the turn never reaches the front.
-    const far = behind.filter((x) => distance(s, x.pos, L.pos) > earshot(s) * 0.6).length;
-    if (far > 0 && far >= Math.ceil(climbing.length / 2)) {
-      L.move.start += 1;
-      L.move.end += 1;
-    }
+  if (waitingFor(s).length > 0 && L.move) {
+    L.move.start += 1;
+    L.move.end += 1;
   }
   L.pos = movePos(L.move, s.minute);
   if (s.minute >= L.move.end) {

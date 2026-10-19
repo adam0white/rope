@@ -30,6 +30,7 @@ import { ALTERNATIVE_CAPTION, type Branch, outcomeWords } from '../sim/debrief.t
 import { coldAt, legsUp, SEASON } from '../sim/mountain.ts';
 import { MEMBERS, memberOf } from '../sim/party.ts';
 import { exportClimb, newSeason, nextClimb, type SeasonState } from '../sim/season.ts';
+import { haltReason, hurtCall, onlyWalkingLeft } from './calls.ts';
 import { type Disclosure, has, markSeen, type Note, newDisclosure, nextNote } from './disclosure.ts';
 import { icon } from './icons.ts';
 import { moodWord } from './look.ts';
@@ -85,6 +86,8 @@ export class Game {
   private disc: Disclosure = newDisclosure();
   private speed: Speed = 'normal';
   private slowUntil = 0;
+  /** Walking the rest of the day quickly: on only while nothing is left to decide (`onlyWalkingLeft`). */
+  private skipping = false;
   private acc = 0;
   private last = performance.now();
   private target = 'all';
@@ -202,6 +205,7 @@ export class Game {
     this.stampEl.classList.remove('on');
     this.stampEl.textContent = '';
     if (!resumed) this.speed = 'normal';
+    this.skipping = false;
     this.ending = false;
     this.closePage();
     this.playing = true;
@@ -218,10 +222,11 @@ export class Game {
     this.last = now;
     if (this.playing && this.climb && !this.climb.over && !this.pageOpen()) {
       const slowed = now < this.slowUntil || this.panel !== 'main' || this.verb !== null;
-      const rate = RATE[this.speed] * (slowed && this.speed !== 'slow' ? SLOW : 1);
+      if (this.skipping && !onlyWalkingLeft(this.climb)) this.skipping = false;
+      const rate = this.skipping ? 1200 : RATE[this.speed] * (slowed && this.speed !== 'slow' ? SLOW : 1);
       this.acc += dt * rate;
       let n = 0;
-      while (this.acc >= 1 && n < 30 && !this.climb.over) {
+      while (this.acc >= 1 && n < (this.skipping ? 40 : 30) && !this.climb.over) {
         step(this.climb);
         this.acc -= 1;
         n++;
@@ -258,6 +263,11 @@ export class Game {
       if (!j) continue;
       if (/fell|slipped|turned for home|would not|put you off|summit\.|stood on the summit/.test(j.text))
         this.slow();
+      // A fall brings the clock back from fast: the player should be there for it, not past it.
+      if (/\bfell\b/.test(j.text) && j.who && this.speed === 'fast') {
+        this.speed = 'normal';
+        this.renderTop();
+      }
       if (j.text.includes('stood on the summit') && j.who)
         this.stamp(`Summit · ${memberOf(j.who).name} · ${clock(j.at)}`);
       if (j.story) this.showStory(j.text);
@@ -398,16 +408,20 @@ export class Game {
 
   /** A quiet stretch says so in the margin, with the way to walk it faster. Never over a real note or story. */
   private hinting = false;
+  private hintText = '';
   private quietHint(): void {
     const c = this.climb;
     if (this.note || (!this.hinting && this.noteEl.innerHTML !== '')) return;
     const lastLine = c.lines[c.lines.length - 1]?.at ?? c.startMinute;
     const lastJournal = c.journal[c.journal.length - 1]?.at ?? c.startMinute;
+    const halt = haltReason(c);
     const quiet = c.minute - Math.max(lastLine, lastJournal) >= 20 && this.speed !== 'fast' && !c.over;
-    if (quiet && !this.hinting) {
-      this.noteEl.innerHTML = '<span class="quiet">A quiet stretch. Tap <b>▷▷</b> to walk it faster.</span>';
+    const text = halt ?? (quiet ? 'A quiet stretch. Tap <b>▷▷</b> to walk it faster.' : null);
+    if (text && (!this.hinting || this.hintText !== text)) {
+      this.noteEl.innerHTML = `<span class="quiet">${text}</span>`;
       this.hinting = true;
-    } else if (!quiet && this.hinting) {
+      this.hintText = text;
+    } else if (!text && this.hinting) {
       this.noteEl.innerHTML = '';
       this.hinting = false;
     }
@@ -599,6 +613,36 @@ export class Game {
     sh.append(label, chips);
     // Someone asks who will go down with them: the player's answer, as words to people.
     // Requests queue: one prompt at a time, the oldest first, labelled by its asker; the next replaces it.
+    // A fresh hurt calls the leader: go to them, or (in earshot) turn them back.
+    const hurt = this.panel === 'main' ? hurtCall(c) : null;
+    if (hurt) {
+      const nm = memberOf(hurt.who).name;
+      const obj = memberOf(hurt.who).they === 'she' ? 'her' : 'him';
+      const bar = h(
+        'div',
+        `ask-bar hurt${hurt.near ? '' : ' faint'}`,
+        `<span><b>${esc(nm)}</b> fell on ${esc(hurt.where)} and is hurt.${hurt.near ? '' : ' Too far to call to.'}</span>`,
+      );
+      const go = h('button', 'force', `go to ${obj}`);
+      go.onclick = () => this.send({ t: 'lead', dir: 'with', who: hurt.who });
+      bar.append(go);
+      if (hurt.near) {
+        const back = h('button', 'force', `turn ${obj} back`);
+        back.onclick = () => this.send({ t: 'say', to: hurt.who, act: 'descend', force: 'urge' });
+        bar.append(back);
+      }
+      sh.append(bar);
+    }
+    if (this.panel === 'main' && !hurt && onlyWalkingLeft(c) && !this.skipping) {
+      const bar = h('div', 'ask-bar faint', '<span>Nothing left to decide but the walk down.</span>');
+      const b = h('button', 'force', 'walk on to nightfall');
+      b.onclick = () => {
+        this.skipping = true;
+        this.renderSheet();
+      };
+      bar.append(b);
+      sh.append(bar);
+    }
     const queue = c.members
       .filter((x) => x.asks && x.homeAt === null)
       .sort((a, b) => (a.asks?.at ?? 0) - (b.asks?.at ?? 0));
@@ -685,7 +729,13 @@ export class Game {
       this.verbBtn('climb', 'climb on', 'up', ok, choose('climb')),
       this.verbBtn('descend', 'turn back', 'down', ok, choose('descend')),
       this.verbBtn('rest', 'rest', 'rest', ok, choose('rest')),
-      this.verbBtn('eat', 'eat', 'eat', ok, choose('eat')),
+      this.verbBtn(
+        'eat',
+        one && memberState(c, this.target).rations <= 0 ? 'no food' : 'eat',
+        'eat',
+        ok && !(one && memberState(c, this.target).rations <= 0),
+        choose('eat'),
+      ),
       this.verbBtn('wait', 'wait', 'wait', ok, choose('wait')),
     );
     if (has(this.disc, 'tell')) g.append(this.verbBtn('ahead', 'go ahead', 'up', ok && one, choose('ahead')));
@@ -753,9 +803,15 @@ export class Game {
     g.append(
       this.verbBtn(
         'with',
-        one ? `walk to ${one.name}` : L.follow === 'party' ? 'with them' : 'stay with them',
+        one
+          ? memberState(c, one.id).homeAt !== null
+            ? `${one.name} is down`
+            : `walk to ${one.name}`
+          : L.follow === 'party'
+            ? 'with them'
+            : 'stay with them',
         'all',
-        true,
+        !one || memberState(c, one.id).homeAt === null,
         () => this.send({ t: 'lead', dir: 'with', who: one ? one.id : 'party' }),
       ),
     );
@@ -811,6 +867,8 @@ export class Game {
       b.disabled = !enabled;
       b.onclick = () => {
         const act = v as 'climb' | 'descend' | 'rest' | 'eat' | 'wait' | 'rope' | 'pack' | 'ahead';
+        // A rope needs two different people (owner playtest: Nell was once asked to rope up with Nell).
+        if (act === 'rope' && (!this.partner || this.partner === this.target)) return;
         this.send({
           t: 'say',
           to: this.target,
@@ -949,9 +1007,21 @@ export class Game {
       `<h1>${esc(m?.name ?? '')}</h1>
       <p class="sub">Climb ${c.climbNo} of ${SEASON.length} · ${clock(c.minute)}, at the hut</p>
       ${lines}
-      <p><button class="btn go" data-a="go">Step outside</button></p>`,
-      (el) =>
-        el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => this.closePage()),
+      <p class="hand">They want to know one thing before the door opens: when do you turn back?</p>
+      <p class="plan">${[12, 13, 14]
+        .map((hr) => `<button class="btn" data-hour="${hr}">We turn at ${hr}:00</button>`)
+        .join('')}<button class="btn go" data-a="go">We'll see</button></p>
+      <p class="sub">A promised hour holds them, and you: they will remember whether you kept it.</p>`,
+      (el) => {
+        el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => this.closePage());
+        for (const b of el.querySelectorAll<HTMLElement>('[data-hour]'))
+          b.addEventListener('click', () => {
+            this.closePage();
+            // The first choice of the day, made at the hut where everyone hears it (owner playtest 2026-10-18).
+            if (!this.disc.unlocked.includes('promise')) this.disc.unlocked.push('promise');
+            this.send({ t: 'promise', hour: Number(b.dataset.hour) });
+          });
+      },
     );
   }
 

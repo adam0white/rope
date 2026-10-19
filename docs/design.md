@@ -10,3 +10,4 @@
 - Camp conversation via Workers AI with caps, kill switch and labelled fallback: after the core is judged fun (target 2026-11-01).
 - Sheet height stays fixed so the camera does not jump when panels change: polish pass (2026-10-21).
 - Wake lock and fullscreen on start: polish pass (2026-10-21).
+- Colliding wants surfaced as short exchanges between members (Nell's call against Oskar's top), and two or three set-piece cruxes per peak with a visible storm clock: from the owner playtest consult 2026-10-18 (target 2026-10-28).

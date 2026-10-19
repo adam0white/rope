@@ -10,12 +10,18 @@ if (!file) throw new Error('usage: node scripts/replay-export.ts <export.json>')
 const e = JSON.parse(readFileSync(file, 'utf8'));
 const c = replay(e.start, e.inputs);
 const saved = JSON.parse(e.state);
-const same = JSON.stringify(c.journal) === JSON.stringify(saved.journal);
+// Text can change across builds (added causes, voices); what people did must not: compare who, when and verdict.
+const key = (ls: { at: number; who: string; verdict: string }[]) =>
+  JSON.stringify(ls.map((l) => [l.at, l.who, l.verdict]));
+const sameText = JSON.stringify(c.journal) === JSON.stringify(saved.journal);
+const same = key(c.lines) === key(saved.lines) && c.journal.length === saved.journal.length;
 const hm = (m: number) => {
   const d = ((m % 1440) + 1440) % 1440;
   return `${String(Math.floor(d / 60)).padStart(2, '0')}:${String(d % 60).padStart(2, '0')}`;
 };
-console.log(`replay matches saved journal: ${same}; over=${c.over}; minute ${hm(c.minute)}`);
+console.log(
+  `replay matches saved answers: ${same}; journal text identical: ${sameText}; over=${c.over}; minute ${hm(c.minute)}`,
+);
 type Row = { at: number; k: string; text: string };
 const rows: Row[] = [];
 e.inputs.forEach((i: { at: number }, n: number) => {
