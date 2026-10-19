@@ -15,6 +15,7 @@ import {
   bodyForecast,
   type DecisionRecord,
   decide,
+  enableFullness,
   type FollowOn,
   finish,
   interrupt,
@@ -164,6 +165,8 @@ export interface JournalEntry {
 
 export interface ClimbState {
   v: 1;
+  /** Host rules version. Absent (1): climbs saved before HF 2.8.0. 2: fullness on, alongside, reconsider. */
+  rules?: 2;
   seed: number;
   day: number;
   mountain: string;
@@ -226,9 +229,14 @@ export function startClimb(
   if (!m) throw new Error(`no mountain ${mountainId}`);
   const start = day * 1440 + m.startMinuteOfDay;
   const party = people ?? createParty(seed, start - 30);
-  for (const p of party) tick(p, start);
+  // HF 2.8.0 fullness: a person at comfort stops finding a drink worth walking to (the Kestrel drink loop).
+  for (const p of party) {
+    enableFullness(p);
+    tick(p, start);
+  }
   const s: ClimbState = {
     v: 1,
+    rules: 2,
     seed,
     day,
     mountain: mountainId,
@@ -434,6 +442,26 @@ function upOffer(s: ClimbState, p: Person, mem: MemberState, lg: Leg, fromT: num
  * Tied to a partner: going where they go serves belonging, going the other way (or on while they stop) costs it.
  * HF weighs it like any other appeal; the rope itself decides nothing.
  */
+/** Rules 2 (HF 2.8.0): climbs started from this build. Older saves and exports replay under the old rules. */
+const rules2 = (s: ClimbState): boolean => (s.rules ?? 1) >= 2;
+
+/** A roped person's offers that go the way the partner is going are 'alongside' the partner. */
+function alongsidePartner(s: ClimbState, mem: MemberState, offers: Affordance[]): Affordance[] {
+  if (!rules2(s) || !mem.ropedTo) return offers;
+  const partner = mem.ropedTo;
+  const dir = memberState(s, partner).move?.dir ?? 'stay';
+  return offers.map((o) => {
+    const d = o.id.startsWith('up:')
+      ? 'up'
+      : o.id.startsWith('down:')
+        ? 'down'
+        : o.id.startsWith('rope:') || o.id === 'pack'
+          ? null
+          : 'stay';
+    return d === dir ? { ...o, alongside: [partner] } : o;
+  });
+}
+
 function ropeTug(s: ClimbState, mem: MemberState, dir: 'up' | 'down' | 'stay'): number {
   if (!mem.ropedTo) return 0;
   const o = memberState(s, mem.ropedTo);
@@ -520,7 +548,9 @@ export function offersFor(s: ClimbState, id: string, asking?: string): Affordanc
   };
   out.push(stay(small('rest', 'rest', 'sit and rest', 15, { rest: 0.25 })));
   out.push(stay(small('drink', 'drink', 'drink', 4, { water: 0.35 })));
-  out.push(stay(small('relieve', 'relieve', 'step aside', 4, { relief: 0.8 })));
+  // HF reads `relief` as relief from pain, not the toilet, and has no bladder (2.8.0 triage): from rules 2 there is
+  // no "step aside" offer, since an offer that advertises nothing is only ever chosen as filler.
+  if (!rules2(s)) out.push(stay(small('relieve', 'relieve', 'step aside', 4, { relief: 0.8 })));
   if (mem.rations > 0 || atHut) out.push(stay(small('eat', 'eat', 'eat something', 10, { food: 0.45 })));
   out.push(
     stay({
@@ -1309,11 +1339,20 @@ function stepMember(s: ClimbState, m: Mountain, mem: MemberState): void {
   }
   const due = mem.pending !== null || (a ? s.minute >= a.reviewAt : s.minute >= mem.idleUntil);
   if (!due) return;
-  const offers = offersFor(s, mem.id).filter((o) => !a || o.id !== a.affordanceId);
+  const offers = alongsidePartner(
+    s,
+    mem,
+    offersFor(s, mem.id).filter((o) => !a || o.id !== a.affordanceId),
+  );
   const fresh = !a;
   const voice =
     mem.pending ?? (fresh && mem.deferred && s.minute <= mem.deferred.until ? mem.deferred : null);
-  const rec: DecisionRecord = decide(p, offers, voice ? { suggestion: voice.s } : {});
+  // A roped person whose partner is moving decides on the merits, not defending what they are already doing.
+  const tugged = rules2(s) && mem.ropedTo !== null && memberState(s, mem.ropedTo).move !== null;
+  const rec: DecisionRecord = decide(p, offers, {
+    ...(voice ? { suggestion: voice.s } : {}),
+    ...(tugged ? { reconsider: true } : {}),
+  });
   if (voice) {
     const r = rec.suggestion;
     const wasDeferred = voice === mem.deferred;
@@ -1443,6 +1482,9 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
         text: `${memberOf(mem.id).name} turned for home from ${here(m, mem)}.`,
       });
     }
+    // Set the move before the tug, so the partner's decision always sees it.
+    mem.move = { leg: lg.id, dir: up ? 'up' : 'down', fromT, toT: up ? 1 : 0, start: s.minute, end };
+    mem.pos = { place: null, leg: lg.id, t: fromT };
     // A tug on the rope: the partner, if standing, decides again now (HF still decides whether to follow).
     if (mem.ropedTo) {
       const o = memberState(s, mem.ropedTo);
@@ -1452,8 +1494,6 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
         o.idleUntil = s.minute;
       }
     }
-    mem.move = { leg: lg.id, dir: up ? 'up' : 'down', fromT, toT: up ? 1 : 0, start: s.minute, end };
-    mem.pos = { place: null, leg: lg.id, t: fromT };
   } else {
     mem.move = null;
   }
@@ -1612,7 +1652,7 @@ function complete(
       if (mem.pos.place !== m.hut) mem.rations = Math.max(0, mem.rations - 1);
       out.needs = { food: 0.45 };
     } else if (a.action === 'drink') out.needs = { water: 0.35 };
-    else if (a.action === 'relieve') out.needs = { relief: 0.8 };
+    else if (a.action === 'relieve' && !rules2(s)) out.needs = { relief: 0.8 };
     else if (a.action === 'pack') {
       mem.pack = false;
       s.leader.carrying.push(mem.id);

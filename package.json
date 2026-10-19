@@ -21,7 +21,7 @@
     "deploy": "npm run check && npm run build && wrangler deploy"
   },
   "dependencies": {
-    "@adam0white/human-framework": "2.6.0",
+    "@adam0white/human-framework": "2.8.0",
     "pixi.js": "8.22.0"
   },
   "devDependencies": {
