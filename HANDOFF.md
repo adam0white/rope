@@ -1,5 +1,18 @@
 # Handoff
 
+## Owner playtest round (2026-10-18, night)
+- Live: Worker version 6d18e37d-6bce-4c23-901d-fe6b159ffae2, bundle `assets/index-C7ttQYIy.js`. Its sha256 matches dist.
+- Owner: "rope was not that fun". Diagnosis and fixes are in docs/playtests/owner-2026-10-18.md; the late playtest is in docs/playtests/latecasual-2026-10-18.md.
+- Shipped:
+  - a turn-time choice at the hut;
+  - refusals that name their cause;
+  - leader-halt reasons;
+  - a hurt bar;
+  - a promised-hour bar;
+  - "walk on to nightfall";
+  - a promise now settles at its hour.
+- Next: the owner replays a climb. The deferred items, with dates, are in docs/design.md.
+
 ## State (2026-10-18, end of the Fable fix round)
 - **Live:** https://rope.adamwhite.work, Worker version 0e58bbc6-c867-4789-845d-bb11efb383ae, bundle `assets/index-DBYkc7yU.js`. HF is pinned at 2.6.0 exactly, with the fatigue store on. I fetched the bundle after each deploy and found the new strings in it.
 - **Committed 2026-10-18** (signing restored). Never `pkill -f`; kill by exact PID.
