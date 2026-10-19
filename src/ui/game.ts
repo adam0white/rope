@@ -30,7 +30,7 @@ import { ALTERNATIVE_CAPTION, type Branch, outcomeWords } from '../sim/debrief.t
 import { coldAt, legsUp, SEASON } from '../sim/mountain.ts';
 import { MEMBERS, memberOf } from '../sim/party.ts';
 import { exportClimb, newSeason, nextClimb, type SeasonState } from '../sim/season.ts';
-import { haltReason, hurtCall, onlyWalkingLeft } from './calls.ts';
+import { haltReason, hurtCall, namesOf, onlyWalkingLeft, promiseDue } from './calls.ts';
 import { type Disclosure, has, markSeen, type Note, newDisclosure, nextNote } from './disclosure.ts';
 import { icon } from './icons.ts';
 import { moodWord } from './look.ts';
@@ -274,6 +274,15 @@ export class Game {
       // Key events far off still reach you as a margin note: you see it happen, but you cannot speak to them.
       else if (j.who && !canHear(c, j.who) && /fell|slipped|untied|stood on the summit/.test(j.text))
         this.showStory(`Far off: ${j.text}`);
+    }
+    // The promised hour arriving is a moment to be present for: slow down, and leave fast speed.
+    const pr = c.promise;
+    if (pr && pr.status === 'open' && c.minute === c.day * 1440 + pr.hour * 60) {
+      this.slow();
+      if (this.speed === 'fast') {
+        this.speed = 'normal';
+        this.renderTop();
+      }
     }
     if (!this.note || this.disc.seen.includes(this.note.id)) {
       const n = nextNote(this.disc, c);
@@ -631,6 +640,20 @@ export class Game {
         back.onclick = () => this.send({ t: 'say', to: hurt.who, act: 'descend', force: 'urge' });
         bar.append(back);
       }
+      sh.append(bar);
+    }
+    // The promised hour: who can hear the call to turn, and who is too far.
+    const due = this.panel === 'main' ? promiseDue(c) : null;
+    if (due) {
+      const bar = h(
+        'div',
+        'ask-bar hurt',
+        `<span><b>${due.hour}:00</b>, the hour you promised.${due.near.length ? ` In earshot: ${esc(namesOf(due.near))}.` : ''}${due.far.length ? ` Too far to hear: ${esc(namesOf(due.far))}.` : ''}</span>`,
+      );
+      const all = h('button', 'force', 'we all turn');
+      all.onclick = () =>
+        this.send({ t: 'lead', dir: 'down' }, { t: 'say', to: 'all', act: 'descend', force: 'urge' });
+      bar.append(all);
       sh.append(bar);
     }
     if (this.panel === 'main' && !hurt && onlyWalkingLeft(c) && !this.skipping) {

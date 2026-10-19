@@ -36,3 +36,21 @@ it('after the turn, with nobody asking or freshly hurt, only the walk is left', 
   expect(onlyWalkingLeft(replay(ex.start, ex.inputs, at('12:00')))).toBe(false);
   expect(onlyWalkingLeft(replay(ex.start, ex.inputs, at('21:00')))).toBe(true);
 });
+
+it('the promised hour says who can hear the call and who cannot', async () => {
+  const { queueInput, startClimb, step } = await import('../src/sim/climb.ts');
+  const { promiseDue } = await import('../src/ui/calls.ts');
+  const s = startClimb(2, 3);
+  queueInput(s, { t: 'promise', hour: 9 });
+  queueInput(s, { t: 'lead', dir: 'up' });
+  while (s.minute < s.day * 1440 + 9 * 60 - 1) step(s);
+  expect(promiseDue(s)).toBeNull();
+  step(s);
+  const due = promiseDue(s);
+  expect(due?.hour).toBe(9);
+  expect((due?.near.length ?? 0) + (due?.far.length ?? 0)).toBe(5);
+  queueInput(s, { t: 'lead', dir: 'down' });
+  step(s);
+  step(s);
+  expect(promiseDue(s)).toBeNull();
+});

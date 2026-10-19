@@ -29,6 +29,19 @@ it('a turn made after the promise, before its hour, is credited', () => {
   queueInput(s, { t: 'promise', hour: 16 });
   for (let i = 0; i < 30; i++) step(s);
   queueInput(s, { t: 'lead', dir: 'down' });
-  for (let i = 0; i < 5; i++) step(s);
+  // Credited at the hour, once the turn has held until then.
+  while (!s.over && s.minute < s.day * 1440 + 16 * 60 + 1) step(s);
   expect(s.journal.some((j) => j.text === 'You turned when you said you would.')).toBe(true);
+});
+
+it('a walk down and back up before the hour keeps nothing', () => {
+  const s = startClimb(1, 3);
+  queueInput(s, { t: 'promise', hour: 12 });
+  queueInput(s, { t: 'lead', dir: 'up' });
+  for (let i = 0; i < 120; i++) step(s);
+  queueInput(s, { t: 'lead', dir: 'down' });
+  for (let i = 0; i < 5; i++) step(s);
+  queueInput(s, { t: 'lead', dir: 'up' });
+  while (!s.over && s.minute < s.day * 1440 + 12 * 60 + 31) step(s);
+  expect(s.promise?.status).toBe('broken');
 });

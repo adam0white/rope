@@ -1793,7 +1793,10 @@ function checkPromise(s: ClimbState): void {
   const deadline = s.day * 1440 + pr.hour * 60 + 30;
   // Kept only by a turn made after the promise: a turn already behind you keeps nothing.
   const kept = s.leader.turnedAt !== null && s.leader.turnedAt >= pr.at && s.leader.turnedAt <= deadline;
-  if (!kept && s.minute < deadline) return;
+  // Settled no earlier than the hour itself: a short walk down to fetch someone, then on up again, keeps nothing
+  // (owner and late playtests 2026-10-18: the promise read as kept by "stay with them" at 10:46).
+  const hour = s.day * 1440 + pr.hour * 60;
+  if ((!kept || s.minute < hour) && s.minute < deadline) return;
   pr.status = kept ? 'kept' : 'broken';
   for (const id of pr.hearers) {
     const p = personOf(s, id);

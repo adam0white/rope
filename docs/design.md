@@ -11,3 +11,4 @@
 - Sheet height stays fixed so the camera does not jump when panels change: polish pass (2026-10-21).
 - Wake lock and fullscreen on start: polish pass (2026-10-21).
 - Colliding wants surfaced as short exchanges between members (Nell's call against Oskar's top), and two or three set-piece cruxes per peak with a visible storm clock: from the owner playtest consult 2026-10-18 (target 2026-10-28).
+- Late playtest polish (docs/playtests/latecasual-2026-10-18.md): stale bubbles after a new call, feedback for far take-pack, tutorial clipping and repeat at 360 px, name chips off the edge: polish pass (target 2026-10-21). Mood word saturation ("tired" on all by 08:53): next retune (target 2026-10-25).

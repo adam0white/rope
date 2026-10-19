@@ -74,3 +74,30 @@ const names = (ids: string[]): string => {
   const n = ids.map((id) => memberOf(id).name);
   return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : (n[0] ?? '');
 };
+
+export interface PromiseDue {
+  hour: number;
+  near: string[];
+  far: string[];
+}
+
+/**
+ * The promised hour has come and the leader has not turned yet: for an hour after it, who can hear the call and who
+ * cannot. Late playtest 2026-10-18: "When my promised hour arrives … show clearly who heard me and who didn't."
+ */
+export function promiseDue(s: ClimbState): PromiseDue | null {
+  const pr = s.promise;
+  // Not the leader's turnedAt: walking back to the party also sets it. Heading down is what answers the hour.
+  if (!pr || pr.status !== 'open' || s.over || s.leader.move?.dir === 'down') return null;
+  const from = s.day * 1440 + pr.hour * 60;
+  if (s.minute < from || s.minute > from + 60) return null;
+  if (s.leader.turnedAt !== null && s.leader.turnedAt >= from) return null;
+  const out = s.members.filter((x) => x.homeAt === null);
+  return {
+    hour: pr.hour,
+    near: out.filter((x) => canHear(s, x.id)).map((x) => x.id),
+    far: out.filter((x) => !canHear(s, x.id)).map((x) => x.id),
+  };
+}
+
+export const namesOf = (ids: string[]): string => names(ids);
