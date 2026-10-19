@@ -1409,16 +1409,29 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
     }
     if (!up && mem.escortFor) {
       const o = memberState(s, mem.escortFor);
+      const nm = memberOf(mem.id).name;
+      const on = memberOf(o.id).name;
+      // The ask counts as answered either way (kept so saved runs replay exactly); only the words and the rope are honest.
       if (o.asks) o.asks = null;
-      if (mem.ropedTo === null && o.ropedTo === null && distance(s, mem.pos, o.pos) < 60) {
-        mem.ropedTo = o.id;
-        o.ropedTo = mem.id;
+      if (distance(s, mem.pos, o.pos) < 60) {
+        if (mem.ropedTo === null && o.ropedTo === null) {
+          mem.ropedTo = o.id;
+          o.ropedTo = mem.id;
+        }
+        const tied = mem.ropedTo === o.id;
+        s.journal.push({
+          at: s.minute,
+          who: mem.id,
+          text: `${nm} went down with ${on}${tied ? ', roped together' : ''}.`,
+        });
+      } else {
+        // Sent to someone far off: they turn, but nobody is with the asker, who goes on asking (owner playtest 2026-10-19).
+        s.journal.push({
+          at: s.minute,
+          who: mem.id,
+          text: `${nm} turned to go down toward ${on}, who is far off.`,
+        });
       }
-      s.journal.push({
-        at: s.minute,
-        who: mem.id,
-        text: `${memberOf(mem.id).name} went down with ${memberOf(o.id).name}, roped together.`,
-      });
       mem.escortFor = null;
     }
     if (!up && mem.turnedAt === null) {

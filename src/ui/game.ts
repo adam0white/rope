@@ -743,6 +743,10 @@ export class Game {
     const ok = this.heardTarget();
     const one = this.target !== 'all';
     const near = one && distance(c, memberState(c, this.target).pos, c.leader.pos) < 40;
+    // Nothing to offer: the one asked, or all of those who can hear, carry no food.
+    const noFood = one
+      ? memberState(c, this.target).rations <= 0
+      : c.members.every((x) => x.homeAt !== null || !canHear(c, x.id) || x.rations <= 0);
     const choose = (v: string) => () => {
       this.verb = v;
       this.panel = v === 'rope' ? 'partner' : 'force';
@@ -752,13 +756,7 @@ export class Game {
       this.verbBtn('climb', 'climb on', 'up', ok, choose('climb')),
       this.verbBtn('descend', 'turn back', 'down', ok, choose('descend')),
       this.verbBtn('rest', 'rest', 'rest', ok, choose('rest')),
-      this.verbBtn(
-        'eat',
-        one && memberState(c, this.target).rations <= 0 ? 'no food' : 'eat',
-        'eat',
-        ok && !(one && memberState(c, this.target).rations <= 0),
-        choose('eat'),
-      ),
+      this.verbBtn('eat', noFood ? 'no food' : 'eat', 'eat', ok && !noFood, choose('eat')),
       this.verbBtn('wait', 'wait', 'wait', ok, choose('wait')),
     );
     if (has(this.disc, 'tell')) g.append(this.verbBtn('ahead', 'go ahead', 'up', ok && one, choose('ahead')));
@@ -975,7 +973,7 @@ export class Game {
   }
 
   private footer(): string {
-    return `<div class="footer">other notebooks: <a href="https://neighbours.adamwhite.work">neighbours</a><a href="https://repair.adamwhite.work">repair</a><a href="https://pass.adamwhite.work">the pass</a><a href="https://human.adamwhite.work">human framework</a><br/>People by the Human Framework ${FRAMEWORK_VERSION}. Everything they say comes from it.</div>`;
+    return `<div class="footer"><a href="https://human.adamwhite.work/games/">◇ all notebooks</a><br/>People by the Human Framework ${FRAMEWORK_VERSION}. Everything they say comes from it.</div>`;
   }
 
   private peaksSvg(done: number): string {

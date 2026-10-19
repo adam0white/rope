@@ -67,3 +67,20 @@ it('turning for home answers a request for company within earshot', () => {
   }
   expect(checked).toBeGreaterThan(0);
 });
+
+it('an escort sent to someone far off does not claim a rope (owner playtest 2026-10-19)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { replay } = await import('../src/sim/climb.ts');
+  const e = JSON.parse(
+    readFileSync(
+      new URL('../docs/playtests/owner-2026-10-19-kestrel-334144833.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  const s = replay(e.start, e.inputs);
+  // Three people were sent to Oskar from the ice wall, hours from the lake where he sat.
+  const far = s.journal.filter((j) => j.text.includes('who is far off'));
+  expect(far.length).toBe(3);
+  expect(s.journal.some((j) => j.text.includes('roped together'))).toBe(false);
+  for (const m of s.members) expect(m.ropedTo).toBeNull();
+});
