@@ -975,7 +975,7 @@ export class Game {
   }
 
   private footer(): string {
-    return `<div class="footer">other notebooks: <a href="https://neighbours.adamwhite.work">neighbours</a><a href="https://repair.adamwhite.work">repair</a><a href="https://human.adamwhite.work">human framework</a><br/>People by the Human Framework ${FRAMEWORK_VERSION}. Everything they say comes from it.</div>`;
+    return `<div class="footer">other notebooks: <a href="https://neighbours.adamwhite.work">neighbours</a><a href="https://repair.adamwhite.work">repair</a><a href="https://pass.adamwhite.work">the pass</a><a href="https://human.adamwhite.work">human framework</a><br/>People by the Human Framework ${FRAMEWORK_VERSION}. Everything they say comes from it.</div>`;
   }
 
   private peaksSvg(done: number): string {
