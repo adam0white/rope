@@ -1,5 +1,13 @@
 # Handoff
 
+## Round 4: readable replies and reaching people (2026-10-20)
+- Remaining: Adam accepts feel. A fresh source-unread retest of this round remains unrun. None of the three requested fixes is deferred.
+- Opening promises retain all five exact HF replies in the same readable result panel as later requests. Bubbles that cannot fit without overlap give way to those recorded answers. Expanded answers survive movement/status refreshes.
+- Individual walks now use explicit `lead near`, reaching helping distance. A visible physical status names the active person, approximate distance and game-time ETA, with a moving-target caveat. Old saved `with` inputs keep their exact earshot behavior and are labelled accordingly.
+- A distance-blocked rope request offers **Close up**. Both named people answer through HF; accepted plans travel to a fixed meeting point and wait for a finite time. Refusals remain refusals. The result names acceptance and observed arrival; roping remains a separate request. Connected routes handle both forks and the summit without corrupting the return path.
+- Exact old owner exports, owner-night state hash and a pre-change rules-2 pursuit hash pass. New-input full-state replay and actual pack-transfer/rope-tie tests pass. `npm run check`: 22 files / 82 tests; three existing Biome warnings. HF stays exactly 2.8.0. The clock playback rate and Workers AI spend are unchanged; no model calls were made.
+- Mateo's report is retained verbatim in `docs/playtest-clarity-mateo-2026-10-20.md`. Phone/desktop renders, checks and delivery identity are in `/Users/abdul/code/human-framework/scratch/followups/rope-report.md`, **Round 4**, and its `rope/round4-*` evidence.
+
 ## F-230 phone and request results (2026-10-20)
 - Remaining: Adam accepts feel. A fresh source-unread retest remains unrun.
 - Help fits its full reserved strip at 360×690. An empty strip releases space to the mountain. Primary requests and movement stay on the main sheet; extra abilities live in “more actions”, with matching disclosure words and highlights. Outstanding company/hurt/turnback calls have a visible labelled button; opening it shows their original responses.

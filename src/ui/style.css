@@ -230,8 +230,8 @@ a {
   position: relative;
   z-index: 2;
   /* Reserve room for target, request, answers and commit at the 690px phone fixture. */
-  flex: 0 0 46%;
-  height: 46%;
+  flex: 0 0 48%;
+  height: 48%;
   overflow-y: auto;
   overscroll-behavior: contain;
   border-top: 1.5px solid var(--ink);
@@ -725,6 +725,23 @@ a {
 }
 .request-replies p {
   margin: 0 0 4px;
+}
+.request-result > p:last-child {
+  margin-bottom: 0;
+}
+.movement-status {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  background: var(--paper-2);
+  font-size: 14px;
+  line-height: 1.3;
+}
+.movement-status:empty {
+  display: none;
+}
+.gather-pair {
+  min-height: 44px;
+  margin-top: 4px;
 }
 .request-replies summary {
   min-height: 44px;

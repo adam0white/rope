@@ -23,3 +23,11 @@ Host decision rules and narration have separate versions. Narrator 1 preserves t
 The two rules-1 owner exports predate saved narration metadata. Their start states do not identify which narrator produced them. `replayExport` uses known narration evidence in the saved lines and journal to choose a version, then regenerates the entire state from the start and inputs at the saved minute. It never copies saved prose into the result. Tests compare the complete saved JSON state for both unchanged exports. The owner-night full-state hash still covers current rules.
 
 `replayExport` reconstructs a saved snapshot. Its result preserves the original JSON shape, including absent version fields; it is not a continuation API for unversioned legacy snapshots. For an unversioned start, `replay` alone defaults to narrator 1. A caller replaying a known later legacy narrator must pass the explicit narration version. No fixture was rewritten.
+
+## Explicit approaches and pair meetings (2026-10-20)
+
+New UI walks to an individual use `lead near`, which reaches within helping distance. The old `lead with` input retains its original earshot stopping rule for exact replay. It remains the party-follow input. Existing logs, start states and JSON shapes do not acquire new defaults or version fields.
+
+`gather` is a new spoken request to both named people. HF resolves each answer. The host offers travel to the first person's fixed position and a finite wait, with travel effort, footing risk and exposure while waiting. A refusal or deferral does not execute that person's plan. Accepted travel follows connected trail segments, preserves partial-leg positions and records real endpoint arrivals. A short approach downhill does not count as turning home. Roping up remains a separate two-person HF request.
+
+The optional leader `near` and member `gather` fields arise only from these new inputs. Legacy owner exports, the owner-night hash and a pre-change rules-2 individual-follow hash guard exact old replay. New-input tests compare the complete replayed state. UI distance and ETA are approximate, refer to game minutes and assume the target stays in place; a moving target is named as such. None of this changes the clock playback rate.

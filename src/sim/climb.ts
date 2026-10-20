@@ -4,7 +4,7 @@
  * begin, finish). Positions, slips, weather and the rope are the host's world. Every answer a person gives comes
  * from an HF resolution: `answerNow` for refusals between decisions, otherwise the next `decide` with the
  * suggestion. World draws are keyed by (seed, kind, leg, minute, member), never by draw order. Not modelled: a
- * shared plan between people, carrying an injured person, ropes longer than one partner, navigation.
+ * negotiated route plans, carrying an injured person, ropes longer than one partner, navigation.
  */
 import {
   type Affordance,
@@ -34,6 +34,7 @@ import {
   tick,
   voiceOf,
 } from '@adam0white/human-framework';
+import { type GatherPlan, type Segment, segmentMove, trailRoute } from './approach.ts';
 import {
   type Beat,
   coldAt,
@@ -104,6 +105,8 @@ export interface MemberState {
   alone?: boolean;
   /** Sent to go down with this person. */
   escortFor?: string | null;
+  /** An explicit, finite rendezvous request; absent in all older input paths. */
+  gather?: GatherPlan;
 }
 
 export interface LeaderState {
@@ -120,17 +123,29 @@ export interface LeaderState {
   turnedAt: number | null;
   /** Walking with someone: 'party' keeps to the middle of those still out, a member id walks to that person. */
   follow?: string | null;
+  /** Explicit close approach; old pursuit keeps its original rules. */
+  near?: string;
 }
 
 export type Force = 'ask' | 'urge' | 'insist';
-export type Act = 'climb' | 'descend' | 'rest' | 'eat' | 'wait' | 'rope' | 'pack' | 'ahead' | 'escort';
+export type Act =
+  | 'climb'
+  | 'descend'
+  | 'rest'
+  | 'eat'
+  | 'wait'
+  | 'rope'
+  | 'pack'
+  | 'ahead'
+  | 'escort'
+  | 'gather';
 export type FactId = 'storm' | 'gully-quiet' | 'gully-loose' | 'ridge-solid' | 'descent-tiring';
 
 export type Input =
   | { t: 'say'; at: number; to: string; act: Act; force: Force; via?: string; with?: string }
   | { t: 'promise'; at: number; hour: number }
   | { t: 'tell'; at: number; fact: FactId }
-  | { t: 'lead'; at: number; dir: 'up' | 'down' | 'stop' | 'with'; via?: string; who?: string }
+  | { t: 'lead'; at: number; dir: 'up' | 'down' | 'stop' | 'with' | 'near'; via?: string; who?: string }
   | { t: 'fix'; at: number }
   | { t: 'scout'; at: number; via?: string }
   | { t: 'share'; at: number; to: string };
@@ -566,6 +581,13 @@ export function offersFor(s: ClimbState, id: string, asking?: string): Affordanc
   );
   // Rope and pack are the leader's ideas: offered only while the leader is asking for them.
   const asked = asking ?? mem.pending?.s.affordanceId ?? '';
+  if (
+    mem.gather &&
+    s.minute < mem.gather.until &&
+    (asked === `gather:${mem.gather.with}` || p.activity?.affordanceId === `gather:${mem.gather.with}`) &&
+    gatherRoute(s, mem, mem.gather.point).reduce((n, x) => n + x.minutes, 0) <= mem.gather.until - s.minute
+  )
+    out.push(gatherOffer(s, mem, mem.gather));
   for (const other of s.members) {
     if (other.id === id || asked !== `rope:${other.id}`) continue;
     if (mem.ropedTo === null && other.ropedTo === null && distance(s, pos, other.pos) < 40) {
@@ -748,6 +770,8 @@ function suggestionFor(s: ClimbState, mem: MemberState, inp: Extract<Input, { t:
     case 'descend':
     case 'escort':
       return { ...base, action: 'descend' };
+    case 'gather':
+      return { ...base, affordanceId: `gather:${inp.with ?? ''}`, appeal: 'belonging' };
     case 'rope':
       return { ...base, affordanceId: `rope:${inp.with ?? ''}`, appeal: 'safety' };
     case 'pack':
@@ -773,9 +797,35 @@ function applyInput(s: ClimbState, idx: number): void {
       const targets =
         inp.to === 'all'
           ? s.members.map((x) => x.id)
-          : inp.act === 'rope' && inp.with
+          : (inp.act === 'rope' || inp.act === 'gather') && inp.with
             ? [inp.to, inp.with]
             : [inp.to];
+      if (inp.act === 'gather' && inp.with && inp.to !== 'all' && inp.to !== inp.with) {
+        const a = memberState(s, inp.to);
+        const b = memberState(s, inp.with);
+        for (const x of [a, b]) {
+          const p = personOf(s, x.id);
+          if (
+            x.homeAt === null &&
+            canHear(s, x.id) &&
+            x.gather &&
+            p.activity?.affordanceId.startsWith('gather:')
+          )
+            complete(s, m, x, p, 'interrupted');
+        }
+        const point = { ...a.pos };
+        const routes = [a, b].map((x) => gatherRoute(s, x, point));
+        const duration = Math.ceil(Math.max(...routes.map((r) => r.reduce((n, x) => n + x.minutes, 0)))) + 10;
+        for (const [i, x] of [a, b].entries())
+          if (canHear(s, x.id) && x.homeAt === null)
+            x.gather = {
+              with: x.id === a.id ? b.id : a.id,
+              point,
+              segments: routes[i] ?? [],
+              started: s.minute,
+              until: s.minute + duration,
+            };
+      }
       let heard = 0;
       for (const id of targets) {
         const mem = memberState(s, id);
@@ -787,7 +837,7 @@ function applyInput(s: ClimbState, idx: number): void {
         const sug = suggestionFor(
           s,
           mem,
-          inp.act === 'rope' && id === inp.with ? { ...inp, with: inp.to } : inp,
+          (inp.act === 'rope' || inp.act === 'gather') && id === inp.with ? { ...inp, with: inp.to } : inp,
         );
         const offers = offersFor(s, id, sug.affordanceId);
         const { resolution, booked } = answerNow(p, offers, sug);
@@ -861,6 +911,15 @@ function applyInput(s: ClimbState, idx: number): void {
       return;
     }
     case 'lead':
+      if (inp.dir === 'near') {
+        if (!inp.who || !s.members.some((x) => x.id === inp.who && x.homeAt === null)) return;
+        leaderGo(s, m, 'stop');
+        s.leader.follow = null;
+        s.leader.near = inp.who;
+        s.journal.push({ at: s.minute, text: `You started walking close to ${memberOf(inp.who).name}.` });
+        return;
+      }
+      if (s.leader.near) delete s.leader.near;
       if (inp.dir === 'with') {
         s.leader.follow = inp.who ?? 'party';
         leaderGo(s, m, 'stop');
@@ -1220,6 +1279,150 @@ function leaderGo(s: ClimbState, m: Mountain, dir: 'up' | 'down' | 'stop', via?:
   return;
 }
 
+/** Estimate the explicit close approach, without advancing the simulation. */
+export function approachEstimate(s: ClimbState, who: string): { metres: number; minutes: number } {
+  const target = memberState(s, who);
+  const route = trailRoute(mountainOf(s), s.leader.pos, target.pos);
+  return {
+    metres: distance(s, s.leader.pos, target.pos),
+    minutes: Math.ceil(
+      route.reduce((n, x) => n + x.minutes, 0) * 0.95 * (1 + 0.12 * s.leader.carrying.length),
+    ),
+  };
+}
+
+function gatherRoute(s: ClimbState, mem: MemberState, point: Pos): Segment[] {
+  return trailRoute(mountainOf(s), mem.pos, point).map((x) => ({
+    ...x,
+    minutes: Math.max(
+      1,
+      x.minutes * pace(s, personOf(s, mem.id), mem, legOf(mountainOf(s), x.leg), true, x.toT < x.fromT),
+    ),
+  }));
+}
+
+function gatherOffer(s: ClimbState, mem: MemberState, plan: GatherPlan): Affordance {
+  const m = mountainOf(s);
+  const segments = gatherRoute(s, mem, plan.point);
+  const travel = segments.reduce((n, x) => n + x.minutes, 0);
+  const duration = Math.max(1, plan.until - s.minute);
+  const effort =
+    segments.reduce((n, x) => n + legOf(m, x.leg).effort * x.minutes * (x.toT < x.fromT ? 0.6 : 1), 0) /
+    duration;
+  const risk = Math.min(
+    0.6,
+    segments.reduce(
+      (n, x) =>
+        n +
+        slipChance(s.seed, s.weather, legOf(m, x.leg), s.minute) *
+          x.minutes *
+          2.5 *
+          (s.fixed.includes(x.leg) ? 0.4 : 1),
+      0,
+    ),
+  );
+  const waiting = Math.max(0, duration - travel);
+  const exposed = plan.point.place === m.hut ? 0 : danger(s, posXY(s, plan.point).alt);
+  const waitRisk = Math.min(0.5, 0.25 * exposed * (waiting / 15));
+  return {
+    id: `gather:${plan.with}`,
+    action: 'gather',
+    targetId: plan.with,
+    label: `meet ${memberOf(plan.with).name} ${plan.point.place ? `at ${placeOf(m, plan.point.place).name}` : `on ${legOf(m, plan.point.leg ?? '').name}`} and wait until ${clock(plan.until)}`,
+    duration,
+    effort,
+    advertises: { belonging: 0.3, safety: -risk - 0.3 * exposed, autonomy: -0.04 },
+    ...(travel > 0 ? { requires: { moving: 0.3 } } : {}),
+    risk: { chance: Math.min(0.8, risk + waitRisk), severity: 0.5, kind: travel > 0 ? 'fall' : 'cold' },
+    tags: travel > 0 ? ['outdoors', 'work', 'social'] : ['outdoors', 'social'],
+  };
+}
+
+/** A valid way down from the lower end of an approach leg, including after crossing the summit. */
+function approachPath(m: Mountain, place: string): string[] {
+  if (place === m.hut) return [];
+  const leg = m.legs.find((x) => x.to === place);
+  return leg ? [...approachPath(m, leg.from), leg.id] : [];
+}
+
+/** Partial approaches stay on their leg. Descending a different branch replaces its ascent history. */
+function approachEndpoint(m: Mountain, actor: { pos: Pos; path: string[] }, mv: Move): void {
+  const lg = legOf(m, mv.leg);
+  actor.path = approachPath(m, lg.from);
+  if (mv.toT === 1) {
+    actor.pos = at(lg.to);
+    actor.path.push(lg.id);
+  } else if (mv.toT === 0) actor.pos = at(lg.from);
+  else actor.pos = { place: null, leg: lg.id, t: mv.toT };
+}
+
+function gatherArrival(s: ClimbState, m: Mountain, mem: MemberState, mv: Move): void {
+  const lg = legOf(m, mv.leg);
+  const p = personOf(s, mem.id);
+  if (mv.toT === 1) {
+    if (placeOf(m, lg.to).alt > placeOf(m, mem.high).alt) mem.high = lg.to;
+    beat(s, lg.to === m.summit ? 'summit' : lg.to, mem.id);
+    if (lg.to === m.summit && mem.summitAt === null) {
+      mem.summitAt = s.minute;
+      wantHome(s, p, mem.path.length);
+      s.journal.push({ at: s.minute, who: mem.id, text: `${memberOf(mem.id).name} stood on the summit.` });
+      witness(s, mem.id, 'summit', `${memberOf(mem.id).name} reached the top`, 0.3, null);
+    }
+  } else if (mv.toT === 0 && lg.from === m.hut && mem.homeAt === null) {
+    mem.homeAt = s.minute;
+    s.journal.push({ at: s.minute, who: mem.id, text: `${memberOf(mem.id).name} was back at the hut.` });
+  }
+}
+
+function gatherStep(s: ClimbState, m: Mountain, mem: MemberState): void {
+  const plan = mem.gather;
+  if (!plan) return;
+  mem.move = null;
+  while (plan.segments.length) {
+    const segment = plan.segments[0];
+    if (!segment) break;
+    const mv = segmentMove(segment, plan.started);
+    if (s.minute < mv.end) {
+      mem.path = approachPath(m, legOf(m, mv.leg).from);
+      mem.move = mv;
+      mem.pos = movePos(mv, s.minute);
+      return;
+    }
+    approachEndpoint(m, mem, mv);
+    gatherArrival(s, m, mem, mv);
+    plan.started = mv.end;
+    plan.segments.shift();
+  }
+}
+
+function nearStep(s: ClimbState, m: Mountain): void {
+  const L = s.leader;
+  const target = s.members.find((x) => x.id === L.near && x.homeAt === null);
+  if (L.move) {
+    L.pos = movePos(L.move, s.minute);
+    if (s.minute >= L.move.end) {
+      approachEndpoint(m, L, L.move);
+      L.move = null;
+    }
+  }
+  if (!target) {
+    L.move = null;
+    delete L.near;
+    return;
+  }
+  if (distance(s, L.pos, target.pos) < 25) {
+    L.move = null;
+    return;
+  }
+  if (L.move) return;
+  const route = trailRoute(m, L.pos, target.pos);
+  const first = route[0];
+  if (!first) return;
+  const segment = { ...first, minutes: Math.max(1, first.minutes * 0.95 * (1 + 0.12 * L.carrying.length)) };
+  L.path = approachPath(m, legOf(m, segment.leg).from);
+  L.move = segmentMove(segment, s.minute);
+}
+
 /** Who the leader walks toward: the middle of the party still out, or one person. */
 function followTarget(s: ClimbState): MemberState | null {
   const f = s.leader.follow;
@@ -1301,6 +1504,10 @@ function stepLeader(s: ClimbState, m: Mountain): void {
     s.journal.push({ at: s.minute, text: `The rope on ${legOf(m, L.fixing.leg).name} was fixed.` });
     L.fixing = null;
   }
+  if (L.near && !L.fixing && !L.scouting) {
+    nearStep(s, m);
+    return;
+  }
   if (L.follow && !L.fixing && !L.scouting) followStep(s, m);
   if (!L.move) return;
   // Leading up means leading the party: you keep to the pace of the last of them still climbing, and wait
@@ -1338,6 +1545,7 @@ function stepLeader(s: ClimbState, m: Mountain): void {
 function stepMember(s: ClimbState, m: Mountain, mem: MemberState): void {
   const p = personOf(s, mem.id);
   if (!p.body.alive) return;
+  if (mem.gather && p.activity?.affordanceId === `gather:${mem.gather.with}`) gatherStep(s, m, mem);
   if (mem.move) mem.pos = movePos(mem.move, s.minute);
   let a = p.activity;
   if (a && s.minute >= a.endsAt) {
@@ -1440,6 +1648,14 @@ function askCompany(s: ClimbState, mem: MemberState): void {
 function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance): void {
   const p = personOf(s, mem.id);
   const end = p.activity?.endsAt ?? s.minute + aff.duration;
+  if (aff.id.startsWith('gather:') && mem.gather) {
+    mem.gather.segments = gatherRoute(s, mem, mem.gather.point);
+    mem.gather.started = s.minute;
+    mem.gather.until = end;
+    mem.move = null;
+    gatherStep(s, m, mem);
+    return;
+  }
   if (aff.id.startsWith('up:') || aff.id.startsWith('down:')) {
     const lg = legOf(m, aff.placeId ?? '');
     const up = aff.id.startsWith('up:');
@@ -1610,6 +1826,12 @@ function complete(
     ...(a.protest ? { quality: 0.6 } : {}),
     ...extra,
   };
+  if (a.affordanceId.startsWith('gather:') && mem.gather) {
+    // Short movement never becomes a completed full leg or a turn for home.
+    if (mem.move) mem.pos = movePos(mem.move, s.minute);
+    mem.move = null;
+    delete mem.gather;
+  }
   const mv = mem.move;
   if (mv) {
     mem.pos = movePos(mv, s.minute);

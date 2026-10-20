@@ -102,6 +102,7 @@ export function inputPhrase(inp: Input): string {
         pack: 'hand you the pack',
         ahead: 'go on ahead',
         escort: `go down with ${inp.with ? memberOf(inp.with).name : 'someone'}`,
+        gather: `meet ${inp.with ? memberOf(inp.with).name : 'the other person'} and wait together`,
       };
       return inp.force === 'insist'
         ? `${verb} ${who} ${what[inp.act]}`
@@ -112,6 +113,7 @@ export function inputPhrase(inp: Input): string {
     case 'tell':
       return `told them ${FACTS[inp.fact].words.replace(/\.$/, '')}`;
     case 'lead':
+      if (inp.dir === 'near') return `walked close to ${inp.who ? memberOf(inp.who).name : 'someone'}`;
       if (inp.dir === 'with')
         return inp.who && inp.who !== 'party' ? `walked to ${memberOf(inp.who).name}` : 'kept with the party';
       return inp.dir === 'up'

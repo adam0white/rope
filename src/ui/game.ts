@@ -7,6 +7,7 @@
 import { FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
 import { campFacts, campFallback } from '../sim/camp.ts';
 import {
+  approachEstimate,
   type ClimbState,
   canHear,
   clock,
@@ -80,6 +81,7 @@ export class Game {
   private sceneEl = h('div', 'scene');
   private bubblesEl = h('div', 'bubbles');
   private noteEl = h('div', 'note');
+  private movementEl = h('div', 'movement-status');
   private stampEl = h('div', 'stamp');
   private sheet = h('div', 'sheet');
   private season!: SeasonState;
@@ -130,7 +132,7 @@ export class Game {
     jb.onclick = () => this.journalPage();
     this.sceneEl.append(jb);
     // The margin note is docked between the top bar and the map: it takes room from the map, never covers it.
-    this.root.append(this.top, this.noteEl, this.sceneEl, this.sheet);
+    this.root.append(this.top, this.noteEl, this.sceneEl, this.movementEl, this.sheet);
     await this.scene.mount(this.sceneEl);
     this.scene.onTap = (id) => {
       if (id === 'leader') return;
@@ -351,7 +353,12 @@ export class Game {
   private saySelf(inp: NewInput): void {
     let words = '';
     if (inp.t === 'say') {
-      const who = inp.to === 'all' ? 'Everyone' : memberOf(inp.to).name;
+      const who =
+        inp.to === 'all'
+          ? 'Everyone'
+          : inp.act === 'gather' && inp.with
+            ? `${memberOf(inp.to).name} and ${memberOf(inp.with).name}`
+            : memberOf(inp.to).name;
       const what: Record<string, string> = {
         climb: 'on we go',
         descend: 'we turn back',
@@ -362,6 +369,7 @@ export class Game {
         pack: 'give me your pack',
         ahead: 'go on ahead and call down what you see',
         escort: `go down with ${inp.with ? memberOf(inp.with).name : 'them'}`,
+        gather: 'close up and wait for each other',
       };
       const tone = inp.force === 'ask' ? '?' : inp.force === 'urge' ? '.' : '. Now.';
       words = `${who}, ${what[inp.act] ?? inp.act}${tone}`;
@@ -485,8 +493,15 @@ export class Game {
       if (bottom - bh < 4) {
         let top = at.y + 34;
         for (let q = hits(l, r, top, top + bh); q; q = hits(l, r, top, top + bh)) top = q.b + 3;
-        bottom = Math.min(H - 4, top + bh);
+        bottom = top + bh;
       }
+      // A crowded mountain cannot hold every speech bubble. Keep the recorded
+      // answers below the controls instead of clamping bubbles onto each other.
+      if (bottom > H - 4 || bottom - bh < 4 || hits(l, r, bottom - bh, bottom)) {
+        b.el.classList.remove('on');
+        continue;
+      }
+      b.el.classList.add('on');
       placed.push({ l, r, t: bottom - bh, b: bottom });
       b.el.style.left = `${cx}px`;
       b.el.style.top = `${bottom}px`;
@@ -550,6 +565,10 @@ export class Game {
     const c = this.climb;
     if (!c) return;
     const L = c.leader;
+    this.movementEl.textContent = this.movementWords();
+    const pairInput = c.inputs.findLast(
+      (input) => input.t === 'say' && (input.act === 'rope' || input.act === 'gather'),
+    );
     const key = JSON.stringify([
       this.panel,
       this.verb,
@@ -566,6 +585,8 @@ export class Game {
       L.move !== null,
       L.move?.dir,
       L.follow,
+      L.near,
+      this.movementWords(),
       c.inputs.length,
       c.lines.length,
       L.fixing,
@@ -582,12 +603,22 @@ export class Game {
       ]),
       Math.floor((c.minute % 1440) / 60),
       c.members.map((x) => (x.asks ? x.id : '')),
+      c.members.map(
+        (x) => x.gather && [x.gather.with, distance(c, x.pos, memberState(c, x.gather.with).pos) < 40],
+      ),
+      c.people.map((p) => (p.activity?.affordanceId.startsWith('gather:') ? p.activity.affordanceId : null)),
+      pairInput?.t === 'say' &&
+        pairInput.with &&
+        distance(c, memberState(c, pairInput.to).pos, memberState(c, pairInput.with).pos) < 40,
     ]);
     if (ifChanged && key === this.sheetKey) return;
     this.sheetKey = key;
     const sh = this.sheet;
     sh.className = `sheet sheet-${this.panel}`;
     const targetScroll = sh.querySelector('.targets')?.scrollLeft ?? 0;
+    const previousResult = sh.querySelector<HTMLElement>('.request-result');
+    const answersOpen = previousResult?.querySelector('details')?.open;
+    const answerInput = previousResult?.dataset.input;
     sh.innerHTML = '';
     // Who you speak to.
     const chips = h('div', 'row targets');
@@ -760,6 +791,9 @@ export class Game {
     else if (this.panel === 'promise') sh.append(this.promiseRow());
     else if (this.panel === 'route') sh.append(this.routeRow());
     else if (this.panel === 'scout') sh.append(this.routeRow(true));
+    const currentResult = sh.querySelector<HTMLElement>('.request-result');
+    const details = currentResult?.querySelector('details');
+    if (details && currentResult?.dataset.input === answerInput) details.open = !!answersOpen;
   }
 
   private verbBtn(
@@ -901,7 +935,7 @@ export class Game {
         'stop',
         L.fixing ? 'fixing…' : 'stop',
         'stop',
-        L.move !== null || !!L.follow,
+        L.move !== null || !!L.follow || !!L.near,
         () => this.send({ t: 'lead', dir: 'stop' }),
         L.fixing ? 'Finish fixing the rope first.' : 'Standing still; start walking.',
       ),
@@ -920,7 +954,7 @@ export class Game {
             : 'stay with them',
         'all',
         !one || memberState(c, one.id).homeAt === null,
-        () => this.send({ t: 'lead', dir: 'with', who: one ? one.id : 'party' }),
+        () => this.send({ t: 'lead', dir: one ? 'near' : 'with', who: one ? one.id : 'party' }),
         'Back at the hut for today.',
       ),
     );
@@ -1004,6 +1038,42 @@ export class Game {
     return wrap;
   }
 
+  /** Approximate physical distance and travel time, never a readout of inner state. */
+  private movementWords(): string {
+    const c = this.climb;
+    const id = c.leader.near ?? (c.leader.follow !== 'party' ? c.leader.follow : null);
+    if (!id) return '';
+    const mem = memberState(c, id);
+    const name = memberOf(id).name;
+    if (mem.homeAt !== null) return `${name} is back at the hut.`;
+    const { metres, minutes } = approachEstimate(c, id);
+    if (metres < 40) return `Close enough to help ${name}.`;
+    if (!c.leader.near && !c.leader.move)
+      return `Keeping ${name} in earshot, too far to help. Tap walk to ${name} to get closer.`;
+    const gap =
+      metres < 70
+        ? 'a few dozen metres'
+        : metres < 150
+          ? 'about a hundred metres'
+          : metres < 300
+            ? 'a few hundred metres'
+            : metres < 750
+              ? 'about half a kilometre'
+              : 'over half a kilometre';
+    const eta =
+      minutes < 3
+        ? 'a couple of minutes'
+        : minutes < 10
+          ? 'under ten minutes'
+          : minutes < 20
+            ? 'about a quarter-hour'
+            : minutes < 40
+              ? 'about half an hour'
+              : 'over half an hour';
+    const pronoun = memberOf(id).they;
+    return `Walking to ${name}: ${gap}; ${eta} if ${pronoun} stays here.${mem.move ? ` ${name} is still moving.` : ''}`;
+  }
+
   private forceRow(): HTMLElement {
     const g = h('div', 'forces');
     const v = this.verb ?? 'climb';
@@ -1060,6 +1130,7 @@ export class Game {
           pack: 'take pack',
           ahead: 'go ahead',
           escort: 'go down together',
+          gather: 'close up',
         } as Record<string, string>
       )[act] ?? act
     );
@@ -1069,13 +1140,29 @@ export class Game {
   private requestResult(): HTMLElement {
     const slot = h('div', 'request-feedback');
     const c = this.climb;
-    const index = c.inputs.findLastIndex((input) => input.t === 'say');
+    const index = c.inputs.findLastIndex((input) => input.t === 'say' || input.t === 'promise');
     const input = c.inputs[index];
-    if (input?.t !== 'say') return slot;
+    if (input?.t !== 'say' && input?.t !== 'promise') return slot;
     const latest = new Map<string, Line>();
     for (const line of c.lines) if (line.input === index) latest.set(line.who, line);
     const answers = [...latest.values()];
     const box = h('div', 'request-replies request-result');
+    box.dataset.input = String(index);
+    if (input.t === 'promise') {
+      box.append(h('p', 'request-acknowledgement', `Turnback promised at ${input.hour}:00.`));
+      const more = h('details', '', `<summary>All ${answers.length} recorded answers</summary>`);
+      const list = h('div', 'request-answer-list');
+      for (const line of answers)
+        list.append(h('p', '', `<b>${esc(memberOf(line.who).name)}</b>: “${esc(line.says)}”`));
+      more.append(list);
+      if (answers.length) box.append(more);
+      else
+        box.append(
+          h('p', '', c.unheard.includes(index) ? 'Nobody heard the promise.' : 'Awaiting their answers.'),
+        );
+      slot.append(box);
+      return slot;
+    }
     const previous = c.inputs[index - 1];
     const collectiveTurn =
       input.act === 'descend' &&
@@ -1096,6 +1183,7 @@ export class Game {
         pack: 'taking the pack',
         ahead: 'going ahead',
         escort: 'going down together',
+        gather: 'closing up',
       } as Record<string, string>
     )[input.act];
     const response = (line: Line): string => {
@@ -1144,6 +1232,7 @@ export class Game {
       );
       if (collectiveTurn) box.append(objection);
       else box.prepend(objection);
+      if (input.act === 'rope') box.querySelector('.request-acknowledgement')?.remove();
     } else if (!answers.length)
       box.append(
         h('p', '', c.unheard.includes(index) ? 'Nobody heard the request.' : 'Awaiting their answers.'),
@@ -1157,6 +1246,46 @@ export class Game {
         );
       more.append(list);
       box.append(more);
+    }
+    if ((input.act === 'rope' || input.act === 'gather') && input.with) {
+      const a = memberState(c, input.to);
+      const b = memberState(c, input.with);
+      const close = distance(c, a.pos, b.pos) < 40;
+      if (input.act === 'gather') {
+        const walking = [a, b].filter(
+          (m) => personOf(c, m.id).activity?.affordanceId === `gather:${m.gather?.with}`,
+        );
+        const unheard = [a, b].find((m) => !canHear(c, m.id) && !answers.some((line) => line.who === m.id));
+        box.append(
+          h(
+            'p',
+            'gather-status',
+            close
+              ? `${esc(memberOf(a.id).name)} and ${esc(memberOf(b.id).name)} are close enough to rope up.`
+              : walking.length
+                ? `${esc(namesOf(walking.map((m) => m.id)))} ${walking.length === 1 ? 'is' : 'are'} meeting at ${esc(memberOf(a.id).name)}’s position until ${clock(walking[0]?.gather?.until ?? c.minute)}; not together yet.`
+                : 'They are still apart. Their answers are recorded above.',
+          ),
+        );
+        if (unheard) {
+          const go = h(
+            'button',
+            'force gather-pair',
+            `Walk to ${esc(memberOf(unheard.id).name)}; out of earshot`,
+          );
+          go.onclick = () => this.send({ t: 'lead', dir: 'near', who: unheard.id });
+          box.append(go);
+        }
+      }
+      if (!close && a.homeAt === null && b.homeAt === null && input.act === 'rope') {
+        const gather = h(
+          'button',
+          'force gather-pair',
+          `Close up: ${esc(memberOf(a.id).name)} + ${esc(memberOf(b.id).name)}`,
+        );
+        gather.onclick = () => this.send({ t: 'say', to: a.id, act: 'gather', with: b.id, force: 'ask' });
+        box.append(gather);
+      }
     }
     slot.append(box);
     return slot;

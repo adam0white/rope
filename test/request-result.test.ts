@@ -113,3 +113,115 @@ it('reserves a feedback slot before the first request', async () => {
   expect(document.querySelector('.request-feedback')).not.toBeNull();
   expect(result()).toBeNull();
 });
+
+it('keeps every opening promise answer readable after speech expires', async () => {
+  const driver = await boot();
+  driver.send({ t: 'promise', hour: 12 });
+  const answers = driver.climb.lines.filter((line) => line.input === 0);
+  expect(answers).toHaveLength(5);
+  expect(result()?.textContent).toContain('Turnback promised at 12:00.');
+  const details = result()?.querySelector('details');
+  expect(details?.querySelector('summary')?.textContent).toBe('All 5 recorded answers');
+  for (const line of answers) expect(details?.textContent).toContain(line.says);
+  vi.advanceTimersByTime(8500);
+  driver.renderSheet(true);
+  for (const line of answers) expect(result()?.textContent).toContain(line.says);
+  vi.advanceTimersByTime(500);
+  driver.send({ t: 'say', to: 'tamar', act: 'rest', force: 'ask' });
+  expect(result()?.textContent).not.toContain('Turnback promised at 12:00.');
+});
+
+const tap = (text: string) => {
+  const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+    (b) =>
+      b.textContent === text ||
+      b.querySelector('span')?.textContent === text ||
+      b.getAttribute('aria-label') === text,
+  );
+  if (!button) throw new Error(`Missing button: ${text}`);
+  button.click();
+};
+
+it('distinguishes an old earshot follow from an active close approach and arrival', async () => {
+  const driver = await boot();
+  const c = driver.climb;
+  const tamar = c.members.find((m) => m.id === 'tamar');
+  if (!tamar) throw new Error('Missing Tamar');
+  for (const m of c.members) {
+    m.pos = { place: null, leg: 'meadow', t: 0.5 };
+    m.idleUntil = c.minute + 200;
+  }
+  c.leader.pos = { place: null, leg: 'meadow', t: 0.43 };
+  c.leader.follow = 'tamar';
+  tap('Tamar');
+  expect(document.querySelector('.movement-status')?.textContent).toContain('earshot');
+  expect(document.querySelector('.movement-status')?.textContent).toContain('too far to help');
+  tap('walk to Tamar');
+  expect(document.querySelector('.movement-status')?.textContent).toContain('Walking to Tamar');
+  expect(document.querySelector('.movement-status')?.textContent).toContain('metres');
+  expect(document.querySelector('.movement-status')?.textContent).toContain('if she stays');
+  c.leader.pos = { ...tamar.pos };
+  c.leader.move = null;
+  driver.renderSheet(true);
+  expect(document.querySelector('.movement-status')?.textContent).toContain('Close enough to help Tamar');
+  tap('stop');
+  expect(document.querySelector('.movement-status')?.textContent).not.toContain('Walking to Tamar');
+});
+
+it('offers a real pair gathering request after distance blocks roping', async () => {
+  const driver = await boot();
+  const c = driver.climb;
+  for (const m of c.members) {
+    m.pos = { place: null, leg: 'meadow', t: 0.5 };
+    m.idleUntil = c.minute + 200;
+  }
+  const oskar = c.members.find((m) => m.id === 'oskar');
+  if (!oskar) throw new Error('Missing Oskar');
+  oskar.pos.t = 0.6;
+  c.leader.pos = { place: null, leg: 'meadow', t: 0.55 };
+  driver.send({ t: 'say', to: 'tamar', act: 'rope', with: 'oskar', force: 'ask' });
+  expect(result()?.textContent).toContain('too far');
+  expect(document.querySelector('.gather-pair')?.textContent).toBe('Close up: Tamar + Oskar');
+  vi.advanceTimersByTime(500);
+  tap('Close up: Tamar + Oskar');
+  expect(c.inputs.at(-1)).toMatchObject({
+    t: 'say',
+    to: 'tamar',
+    act: 'gather',
+    with: 'oskar',
+    force: 'ask',
+  });
+  const answers = c.lines.filter((l) => l.input === c.inputs.length - 1);
+  expect(answers).toHaveLength(2);
+  for (const line of answers) expect(result()?.textContent).toContain(line.says);
+  expect(result()?.textContent).toContain('Close up');
+});
+
+it('keeps recorded answers open when walking progress rebuilds the sheet', async () => {
+  const driver = await boot();
+  driver.send({ t: 'promise', hour: 12 });
+  const details = result()?.querySelector('details');
+  if (!details) throw new Error('Missing answers');
+  details.open = true;
+  driver.climb.leader.near = 'tamar';
+  driver.renderSheet(true);
+  expect(result()?.querySelector('details')?.open).toBe(true);
+});
+
+it('removes a distance gathering response as soon as the pair reaches one another', async () => {
+  const driver = await boot();
+  const c = driver.climb;
+  for (const m of c.members) {
+    m.pos = { place: null, leg: 'meadow', t: 0.5 };
+    m.idleUntil = c.minute + 200;
+  }
+  const nell = c.members.find((m) => m.id === 'nell');
+  if (!nell) throw new Error('Missing Nell');
+  nell.pos.t = 0.6;
+  c.leader.pos = { place: null, leg: 'meadow', t: 0.55 };
+  driver.send({ t: 'say', to: 'tamar', act: 'rope', with: 'nell', force: 'ask' });
+  expect(document.querySelector('.gather-pair')).not.toBeNull();
+  nell.pos.t = 0.51;
+  driver.renderSheet(true);
+  expect(document.querySelector('.gather-pair')).toBeNull();
+});
