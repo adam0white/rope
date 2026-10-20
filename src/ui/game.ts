@@ -1069,7 +1069,12 @@ export class Game {
       <p><button class="btn" data-a="export">Export this climb (playtest)</button>
       <button class="btn" data-a="send">Send this run to the notebook</button></p>`,
       (el) => {
-        el.querySelector<HTMLElement>('[data-a="close"]')?.addEventListener('click', () => this.closePage());
+        el.querySelector<HTMLElement>('[data-a="close"]')?.addEventListener('click', () => {
+          // A finished climb has no running clock to reopen its read-back for us.
+          if (this.season.over) this.seasonPage();
+          else if (c.over) this.debriefPage();
+          else this.closePage();
+        });
         el.querySelector<HTMLElement>('[data-a="export"]')?.addEventListener('click', () => this.exportRun());
         el.querySelector<HTMLElement>('[data-a="send"]')?.addEventListener('click', () => this.sendRun());
       },
@@ -1097,6 +1102,7 @@ export class Game {
   }
 
   private ending = false;
+  private endTimer: ReturnType<typeof setTimeout> | null = null;
 
   private endClimb(): void {
     if (this.ending) return;
@@ -1106,10 +1112,14 @@ export class Game {
     const c = this.climb;
     // The stamp reads the same day account as the journal's last line and the read-back.
     this.stamp(dayAccount(c).stamp);
-    setTimeout(() => this.debriefPage(), 2600);
+    this.endTimer = setTimeout(() => this.debriefPage(), 2600);
   }
 
   private debriefPage(): void {
+    // Back from the journal may reach the read-back before the ending stamp expires.
+    // Cancel that transition before the player can start another climb.
+    if (this.endTimer !== null) clearTimeout(this.endTimer);
+    this.endTimer = null;
     const c = this.climb;
     lab.screen(climbScreen(c, 'debrief'));
     for (const name of climbMilestones(c)) lab.milestone(name);
@@ -1142,9 +1152,7 @@ export class Game {
       ${this.footer()}`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="journal"]')?.addEventListener('click', () => {
-          const back = () => this.debriefPage();
           this.journalPage();
-          this.pageEl?.querySelector<HTMLElement>('[data-a="close"]')?.addEventListener('click', back);
         });
         el.querySelector<HTMLElement>('[data-a="export"]')?.addEventListener('click', () => this.exportRun());
         el.querySelector<HTMLElement>('[data-a="send"]')?.addEventListener('click', () => this.sendRun());

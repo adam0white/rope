@@ -1,5 +1,13 @@
 # Handoff
 
+## Owner night transition (2026-10-20)
+- Remaining: confirm the exact screen the owner saw in run `r-4sha5x28jz`; the export does not record page navigation. See docs/playtests/owner-2026-10-20.md.
+- The owner replay reconstructs the entire saved state byte for byte at 23:00, `over: true`. No simulation or host-rule change; HF stays pinned at 2.8.0.
+- Fixed a journal return path that exposed a stopped, finished map. All finished-climb journal returns now open the read-back; a closed season returns to the season page. Returning during the ending stamp cancels its timer before the next climb starts.
+- Added DOM integration coverage for normal speed, fast speed, the actual nightfall button, journal returns, the pending-timer race and season closure. The minimal owner input log and full-state SHA-256 are in test/fixtures/owner-night.ts; the private export was not copied.
+- `npm run check`: 19 files / 48 tests passed. Three existing Biome warnings remain. `happy-dom` is an exact development dependency for real page tests; WebGL, camp networking and the debrief Worker are replaced at their boundaries.
+- Release identity: the deployed `/release.json` must match this change's pushed commit with `dirty: false`.
+
 ## Lab client (2026-10-19, deployed)
 - `@adam0white/lab-client` 0.1.0 (release tarball) is wired in: `src/ui/lab.ts` (`createLab({ game: 'rope' })`), names in `src/ui/labnames.ts` (screens `title`, `climb N <mountain>: hut|climb|debrief`, `season`; milestones `climb N done|summit|all home`, `season done`; no player text). "Send this run to the notebook" sits beside each Export button (journal and debrief) and sends `exportClimb` output. `connect-src` in `public/_headers` now includes https://human.adamwhite.work.
 - `/release.json` was 404 because nothing wrote it. `npm run build` now runs `scripts/stamp-release.ts` first, which writes `public/release.json` (gitignored, copied to dist). The Worker only runs first for `/api/*`, so assets serve the file; `public/sw.js` now skips `/release.json` (it was cache-first and would have frozen the build stamp).

@@ -1,0 +1,135 @@
+// @vitest-environment happy-dom
+import { createHash } from 'node:crypto';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { type ClimbState, replay, snapshot } from '../src/sim/climb.ts';
+import { newSeason } from '../src/sim/season.ts';
+import { Game } from '../src/ui/game.ts';
+import { ownerNight } from './fixtures/owner-night.ts';
+
+// Keep the real clock, inputs and pages; replace only WebGL and the external camp/worker boundaries.
+vi.mock('../src/ui/scene.ts', () => ({
+  Scene: class {
+    at = new Map();
+    mount = async () => {};
+    draw = () => {};
+  },
+}));
+vi.mock('../src/ui/lab.ts', () => ({ lab: { screen() {}, milestone() {} } }));
+
+interface Driver {
+  climb: ClimbState;
+  last: number;
+  resume(save: unknown): void;
+  frame(): void;
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+  vi.stubGlobal('requestAnimationFrame', () => 0);
+  vi.stubGlobal('fetch', async () => ({ ok: false }));
+  vi.stubGlobal(
+    'Worker',
+    class {
+      postMessage() {}
+    },
+  );
+  localStorage.clear();
+  document.body.innerHTML = '<div id="app"></div>';
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+async function atNight(speed: 'normal' | 'fast', skip: boolean) {
+  const { season } = newSeason(ownerNight.seed);
+  const game = new Game(document.querySelector<HTMLElement>('#app') as HTMLElement);
+  await game.boot();
+  const driver = game as unknown as Driver;
+  driver.resume({
+    v: 1,
+    season,
+    start: season.start,
+    inputs: ownerNight.inputs,
+    minute: 5699,
+    disclosure: { unlocked: ['insist', 'tell', 'promise', 'rope', 'fix', 'pack', 'share'], seen: [] },
+    over: false,
+  });
+  const speedButton = document.querySelector<HTMLButtonElement>(`[data-speed="${speed}"]`);
+  expect(speedButton).not.toBeNull();
+  speedButton?.click();
+  if (skip) {
+    const walk = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'walk on to nightfall',
+    );
+    expect(walk).toBeDefined();
+    walk?.click();
+  }
+  for (let i = 0; i < 200 && !driver.climb.over; i++) {
+    driver.last = performance.now() - 100;
+    driver.frame();
+  }
+  return driver;
+}
+
+it('the owner replay still reproduces the full legacy state exactly', () => {
+  const { season } = newSeason(ownerNight.seed);
+  const played = replay(season.start as string, ownerNight.inputs);
+  expect(played.minute).toBe(5700);
+  expect(played.over).toBe(true);
+  expect(createHash('sha256').update(snapshot(played)).digest('hex')).toBe(ownerNight.stateHash);
+});
+
+it.each([
+  ['normal', false],
+  ['fast', false],
+  ['fast', true],
+] as const)('%s speed (skip=%s) ends the owner night and permits the next climb', async (speed, skip) => {
+  const driver = await atNight(speed, skip);
+  expect(driver.climb.over).toBe(true);
+  vi.advanceTimersByTime(2600);
+  const next = document.querySelector<HTMLButtonElement>('[data-a="next"]');
+  expect(next?.textContent).toBe('On to The Tooth');
+  next?.click();
+  expect(driver.climb.climbNo).toBe(2);
+});
+
+// The drawer remains keyboard-focusable under a page. Returning from its journal must
+// never reveal an ended map, whose stopped clock cannot run endClimb a second time.
+it('Back from the drawer journal after auto-ending returns to the next phase', async () => {
+  const driver = await atNight('fast', true);
+  vi.advanceTimersByTime(2600);
+  document.querySelector<HTMLButtonElement>('.drawer-btn')?.click();
+  expect(document.querySelector('.page h2')?.textContent).toBe('Journal');
+  document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
+  expect(document.querySelector<HTMLButtonElement>('[data-a="next"]')?.textContent).toBe('On to The Tooth');
+  document.querySelector<HTMLButtonElement>('[data-a="next"]')?.click();
+  expect(driver.climb.climbNo).toBe(2);
+});
+
+it('leaving the journal during the ending stamp cannot later reopen an obsolete debrief', async () => {
+  const driver = await atNight('fast', true);
+  document.querySelector<HTMLButtonElement>('.drawer-btn')?.click();
+  document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
+  expect(document.querySelector<HTMLButtonElement>('[data-a="next"]')?.textContent).toBe('On to The Tooth');
+  document.querySelector<HTMLButtonElement>('[data-a="next"]')?.click();
+  expect(driver.climb.climbNo).toBe(2);
+  vi.advanceTimersByTime(2600);
+  expect(document.querySelector('.page')?.textContent).toContain('when do you turn back?');
+  expect(document.querySelector('[data-a="next"]')).toBeNull();
+});
+
+it('Back from the journal after closing the season keeps the season closed', async () => {
+  const driver = await atNight('fast', true);
+  // Exercise the same page lifecycle at the last climb's end.
+  driver.climb.climbNo = 3;
+  vi.advanceTimersByTime(2600);
+  const close = document.querySelector<HTMLButtonElement>('[data-a="next"]');
+  expect(close?.textContent).toBe('Close the season');
+  close?.click();
+  expect(document.querySelector('.page h1')?.textContent).toBe('The season');
+  document.querySelector<HTMLButtonElement>('.drawer-btn')?.click();
+  document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
+  expect(document.querySelector('.page h1')?.textContent).toBe('The season');
+  expect(document.querySelector('[data-a="next"]')).toBeNull();
+});

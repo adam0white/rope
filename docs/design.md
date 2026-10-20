@@ -6,6 +6,8 @@
 - **Leader pace.** Going up, you wait mid-leg when the nearest person behind falls out of earshot. That is the player's own body, kept in the host.
 
 ## Deferred (with targets)
+- Confirm the exact screen and page-navigation sequence behind owner run `r-4sha5x28jz`; the replay ends correctly and a journal-return trap is fixed, but the export has no navigation log (target 2026-10-21).
+- Scope asynchronous debrief Worker replies to their originating climb so a slow reply cannot populate a later read-back; found during transition review, predates this fix (target 2026-10-25).
 - Send ahead / scout a crossing as verbs: after first reviewer feedback (target 2026-10-25).
 - Camp conversation via Workers AI with caps, kill switch and labelled fallback: after the core is judged fun (target 2026-11-01).
 - Sheet height stays fixed so the camera does not jump when panels change: polish pass (2026-10-21).
