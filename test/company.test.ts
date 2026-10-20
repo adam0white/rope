@@ -68,7 +68,7 @@ it('turning for home answers a request for company within earshot', () => {
   expect(checked).toBeGreaterThan(0);
 });
 
-it('an escort sent to someone far off does not claim a rope (owner playtest 2026-10-19)', async () => {
+it('current narration of an escort sent to someone far off does not claim a rope', async () => {
   const { readFileSync } = await import('node:fs');
   const { replay } = await import('../src/sim/climb.ts');
   const e = JSON.parse(
@@ -77,7 +77,8 @@ it('an escort sent to someone far off does not claim a rope (owner playtest 2026
       'utf8',
     ),
   );
-  const s = replay(e.start, e.inputs);
+  // Exercise today's narrator against the original host-rules-1 decision sequence.
+  const s = replay(e.start, e.inputs, undefined, 3);
   // Three people were sent to Oskar from the ice wall, hours from the lake where he sat.
   const far = s.journal.filter((j) => j.text.includes('who is far off'));
   expect(far.length).toBe(3);

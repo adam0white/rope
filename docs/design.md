@@ -14,3 +14,12 @@
 - Wake lock and fullscreen on start: polish pass (2026-10-21).
 - Colliding wants surfaced as short exchanges between members (Nell's call against Oskar's top), and two or three set-piece cruxes per peak with a visible storm clock: from the owner playtest consult 2026-10-18 (target 2026-10-28).
 - Late playtest polish (docs/playtests/latecasual-2026-10-18.md): stale bubbles after a new call, feedback for far take-pack, tutorial clipping and repeat at 360 px, name chips off the edge: polish pass (target 2026-10-21). Mood word saturation ("tired" on all by 08:53): next retune (target 2026-10-25).
+
+
+## Legacy export narration (2026-10-20)
+
+Host decision rules and narration have separate versions. Narrator 1 preserves the original HF words and the original escort journal sentence. Narrator 2 adds known refusal causes. Narrator 3 also distinguishes walking toward a distant person from walking together, and says a rope exists only when one was tied. Host rules 2 imply narrator 3; new games keep the current words and decisions.
+
+The two rules-1 owner exports predate saved narration metadata. Their start states do not identify which narrator produced them. `replayExport` uses known narration evidence in the saved lines and journal to choose a version, then regenerates the entire state from the start and inputs at the saved minute. It never copies saved prose into the result. Tests compare the complete saved JSON state for both unchanged exports. The owner-night full-state hash still covers current rules.
+
+`replayExport` reconstructs a saved snapshot. Its result preserves the original JSON shape, including absent version fields; it is not a continuation API for unversioned legacy snapshots. For an unversioned start, `replay` alone defaults to narrator 1. A caller replaying a known later legacy narrator must pass the explicit narration version. No fixture was rewritten.

@@ -14,7 +14,15 @@ import {
   tick,
   voiceOf,
 } from '@adam0white/human-framework';
-import { type ClimbState, hurtLevel, snapshot, startClimb } from './climb.ts';
+import {
+  type ClimbState,
+  hurtLevel,
+  type NarrationVersion,
+  replay,
+  restore,
+  snapshot,
+  startClimb,
+} from './climb.ts';
 import { type Branch, type Facts, factsOf } from './debrief.ts';
 import { SEASON } from './mountain.ts';
 import { createParty, LEADER, MEMBERS } from './party.ts';
@@ -269,4 +277,27 @@ export function exportClimb(start: string, s: ClimbState, engine: string): Playt
     inputs: s.inputs,
     state: snapshot(s),
   };
+}
+
+/**
+ * Reconstruct an export snapshot at its saved minute. Unversioned releases used several narration revisions.
+ * Their saved words identify the narrator revision only; the simulation regenerates every line and journal entry.
+ * A start state and input log alone cannot distinguish those releases. Rules 2 identifies the current narrator.
+ * This reconstructs a snapshot only: the temporary legacy override is removed to preserve the saved JSON shape.
+ * Continuing an unversioned result with step() requires an explicit narration version.
+ */
+export function replayExport(e: PlaytestExport): ClimbState {
+  const start = restore(e.start);
+  const saved = restore(e.state);
+  let narration: NarrationVersion | undefined;
+  if (start.rules === undefined && start.narration === undefined) {
+    const causes = saved.lines.some((l) =>
+      / (?:My food's gone|One of us is tied in already|.+?'s too far off to tie to)\.$/.test(l.says),
+    );
+    const truthfulEscort = saved.journal.some((j) =>
+      / (?:turned to go down toward .+, who is far off|went down with [^,.]+)\.$/.test(j.text),
+    );
+    narration = truthfulEscort ? 3 : causes ? 2 : 1;
+  }
+  return replay(e.start, e.inputs, saved.minute, narration);
 }

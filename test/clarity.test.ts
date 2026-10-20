@@ -43,11 +43,11 @@ const button = (text: string) => {
   return found;
 };
 
-async function boot(all = false) {
+async function boot(all = false, seed = 20261018) {
   const game = new Game(document.querySelector('#app') as HTMLElement);
   await game.boot();
   if (all) {
-    const { season, climb } = newSeason(20261018);
+    const { season, climb } = newSeason(seed);
     (game as unknown as Driver).resume({
       season,
       start: season.start,
@@ -89,6 +89,7 @@ it('gives every unavailable verb an adjacent readable reason and updates changed
   const nell = driver.climb.members.find((x) => x.id === 'nell');
   if (!nell) throw new Error('Nell missing');
   nell.rations = 0;
+  nell.pos = { place: null, leg: MOUNTAINS[driver.climb.mountain]?.legs[0]?.id ?? null, t: 0 };
   driver.renderSheet(true);
   expect(button('eat').disabled).toBe(true);
   expect(button('eat').parentElement?.textContent).toContain('food');
@@ -186,4 +187,82 @@ it('updates take-pack availability at the actual forty-metre boundary', async ()
   standAt(41);
   expect(button('take pack').disabled).toBe(true);
   expect(button('take pack').parentElement?.textContent).toContain('Walk to them first');
+});
+
+it('keeps eating available without carried rations at the hut, for one person or the group', async () => {
+  const driver = await boot(true);
+  const c = driver.climb;
+  const m = MOUNTAINS[c.mountain];
+  if (!m?.legs[0]) throw new Error('Missing mountain');
+  const nell = c.members.find((x) => x.id === 'nell');
+  if (!nell) throw new Error('Nell missing');
+  for (const person of c.members) {
+    person.rations = 0;
+    person.pos = { place: null, leg: m.legs[0].id, t: 0 };
+  }
+  c.leader.rations = 0;
+  button('Nell').click();
+  expect(button('eat').disabled).toBe(true);
+  expect(button('eat').parentElement?.textContent).toContain('hut');
+  nell.pos = { place: m.hut, leg: null, t: 0 };
+  driver.renderSheet(true);
+  expect(button('eat').disabled).toBe(false);
+  button('everyone').click();
+  expect(button('eat').disabled).toBe(false);
+  nell.pos = { place: null, leg: m.legs[0].id, t: 0 };
+  driver.renderSheet(true);
+  expect(button('eat').disabled).toBe(true);
+});
+
+it('retains both rope partners’ HF answers after bubble expiry and when the pair is reversed', async () => {
+  const driver = await boot(true, 1);
+  button('Nell').click();
+  button('rope up').click();
+  button('Oskar').click();
+  vi.advanceTimersByTime(500);
+  document.querySelector<HTMLButtonElement>('.forces button')?.click();
+  const nell = driver.climb.lines.find((l) => l.who === 'nell') as Line;
+  const oskar = driver.climb.lines.find((l) => l.who === 'oskar') as Line;
+  expect(nell.verdict).toBe('assented');
+  expect(oskar.verdict).toBe('deferred');
+  vi.advanceTimersByTime(8500);
+  driver.renderSheet(true);
+  const replies = () => document.querySelector('.request-replies');
+  expect(replies()?.querySelector('p')?.textContent).toContain(oskar.says);
+  expect(replies()?.textContent).toContain(nell.says);
+  button('rope up').click();
+  button('Oskar').click();
+  expect(replies()?.querySelector('p')?.textContent).toContain(oskar.says);
+  expect(replies()?.textContent).toContain(nell.says);
+  button('cancel').click();
+  button('Oskar').click();
+  button('rope up').click();
+  button('Nell').click();
+  expect(replies()?.querySelector('p')?.textContent).toContain(oskar.says);
+  expect(replies()?.textContent).toContain(nell.says);
+  // Another pair must not inherit the Nell/Oskar answer.
+  button('cancel').click();
+  button('rope up').click();
+  button('Tamar').click();
+  expect(replies()).toBeNull();
+});
+
+it('shows the saved climb, mountain and time beside Continue without advancing the save', async () => {
+  const { season, climb } = newSeason(23);
+  const saved = JSON.stringify({
+    v: 1,
+    season,
+    start: '',
+    inputs: [],
+    minute: climb.minute + 13,
+    over: false,
+    disclosure: { unlocked: [], seen: [] },
+  });
+  localStorage.setItem('rope.save.v1', saved);
+  await boot();
+  expect(button('Continue the season')).toBeTruthy();
+  expect(document.querySelector('.continue-summary')?.textContent).toContain('Climb 1 of 3');
+  expect(document.querySelector('.continue-summary')?.textContent).toContain('Hollin');
+  expect(document.querySelector('.continue-summary')?.textContent).toContain('05:13');
+  expect(localStorage.getItem('rope.save.v1')).toBe(saved);
 });

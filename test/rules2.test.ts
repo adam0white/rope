@@ -1,23 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { replay, startClimb, step } from '../src/sim/climb.ts';
+import { type Input, replay, snapshot, startClimb, step } from '../src/sim/climb.ts';
+import { exportClimb, replayExport } from '../src/sim/season.ts';
 import { playScripted } from './script.ts';
 
 // HF 2.8.0 host rules (docs/findings.md, 2026-10-19): fullness, no "step aside" offer, alongside and reconsider.
 
-it('exports saved before rules 2 replay under the old rules and match their saved answers', () => {
-  for (const f of ['owner-2026-10-18-hollin-334144833', 'owner-2026-10-19-kestrel-334144833']) {
+it.each(['owner-2026-10-18-hollin-334144833', 'owner-2026-10-19-kestrel-334144833'])(
+  '%s replays its complete saved JSON state exactly under rules 1',
+  (f) => {
     const e = JSON.parse(readFileSync(new URL(`../docs/playtests/${f}.json`, import.meta.url), 'utf8'));
     expect(JSON.parse(e.start).rules).toBeUndefined();
-    const c = replay(e.start, e.inputs);
-    const saved = JSON.parse(e.state);
-    const key = (ls: { at: number; who: string; verdict: string }[]) =>
-      JSON.stringify(ls.map((l) => [l.at, l.who, l.verdict]));
+    const c = replayExport(e);
     expect(c.rules).toBeUndefined();
-    expect(key(c.lines)).toBe(key(saved.lines));
-    expect(c.journal.length).toBe(saved.journal.length);
-  }
-});
+    expect(snapshot(c)).toBe(e.state);
+  },
+);
 
 it('control: with nothing asked, nobody drinks all day, and no one steps aside as an HF act', () => {
   let drinks = 0;
@@ -50,4 +48,50 @@ it('control: roped partners mostly stay together on Kestrel', () => {
   }
   // 12 of 12 split before alongside and reconsider.
   expect(off).toBeLessThan(6);
+});
+
+it('a rules 2 export replays its complete state at the saved minute', () => {
+  const s = startClimb(23, 3);
+  const start = snapshot(s);
+  for (let i = 0; i < 90; i++) step(s);
+  const e = exportClimb(start, s, '2.8.0');
+  expect(JSON.parse(snapshot(replayExport(e)))).toEqual(JSON.parse(e.state));
+  expect(snapshot(replay(start, s.inputs, s.minute))).toBe(e.state);
+});
+
+it('legacy export replay uses saved words only to identify the narrator revision', () => {
+  const e = JSON.parse(
+    readFileSync(
+      new URL('../docs/playtests/owner-2026-10-19-kestrel-334144833.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  const expected = JSON.parse(e.state);
+  const edited = JSON.parse(e.state);
+  edited.lines[0].says = 'This edited line must never become replay output.';
+  edited.journal[0].text = 'This edited journal must never become replay output.';
+  e.state = JSON.stringify(edited);
+  expect(JSON.parse(snapshot(replayExport(e)))).toEqual(expected);
+});
+
+it('an unversioned nearby escort tied to someone else replays narrator 3 exactly', () => {
+  const s = startClimb(1, 3);
+  delete s.rules;
+  // A valid mid-path start: everyone is nearby and Tamar is already tied to Oskar.
+  for (const mem of [...s.members, s.leader]) mem.pos = { place: null, leg: 'meadow', t: 0.5 };
+  const tamar = s.members.find((m) => m.id === 'tamar');
+  const oskar = s.members.find((m) => m.id === 'oskar');
+  if (!tamar || !oskar) throw new Error('missing party');
+  tamar.ropedTo = 'oskar';
+  oskar.ropedTo = 'tamar';
+  const start = snapshot(s);
+  const inputs: Input[] = [
+    { t: 'say', to: 'tamar', act: 'escort', force: 'insist', with: 'nell', at: s.minute + 1 },
+  ];
+  const played = replay(start, inputs, s.minute + 2, 3);
+  expect(played.lines[0]?.verdict).toBe('assented');
+  expect(played.journal.some((j) => j.text === 'Tamar went down with Nell.')).toBe(true);
+  expect(played.members.find((m) => m.id === 'tamar')?.ropedTo).toBe('oskar');
+  const e = exportClimb(start, played, '2.6.0');
+  expect(snapshot(replayExport(e))).toBe(e.state);
 });

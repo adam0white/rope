@@ -1,5 +1,12 @@
 # Handoff
 
+## F-209 review follow-up (2026-10-20)
+- Remaining: Adam accepts feel. Cold-player understanding and the first-action timing protocol remain untested; Rope has no HF-character adapter.
+- Rope request feedback now retains both partners’ HF answers, including either refusal, for either pair orientation. A different pair does not inherit their answers. Empty rations no longer disable eating at the hut; the UI cache follows hut availability.
+- Speed, journal and note-dismiss buttons have 44×44 minimum hit boxes. Continue names the saved climb, mountain and time.
+- Legacy narration is versioned separately from host decisions. Use `replayExport` to reconstruct an old export at its saved minute. The two unchanged owner exports now have full-state equality tests. Unversioned starts alone cannot distinguish releases; see docs/design.md. Current rules-2 replay and the owner-night hash stay unchanged.
+- Browser renders, check/deploy logs, live release identity and the finding-by-finding report are in `/Users/abdul/code/human-framework/scratch/clarity/rope-report.md` (Follow-up) and `rope/followup-*`. No Workers AI calls were made.
+
 ## F-209 first-minute clarity (2026-10-20)
 - Remaining: Adam's feel acceptance stays with Adam. This round implements only the three filed clarity fixes; no HF-character playtest was requested because Rope has no adapter.
 - Disabled verbs now show adjacent, readable circumstances, not hover titles. Recorded HF answers persist by request and person, with refusals ahead of grudging yeses. The first actual objection immediately unlocks the existing insist disclosure. Ration, proximity and follow changes invalidate the UI cache.

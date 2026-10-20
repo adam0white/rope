@@ -574,7 +574,7 @@ export class Game {
         canHear(c, x.id),
         x.ropedTo,
         x.pack,
-        x.rations > 0,
+        x.rations > 0 || x.pos.place === MOUNTAINS[c.mountain]?.hut,
         distance(c, x.pos, L.pos) < 40,
       ]),
       Math.floor((c.minute % 1440) / 60),
@@ -775,10 +775,12 @@ export class Game {
         : 'Out of earshot; walk to them.';
     const chooseOne = !one ? 'Pick one person.' : '';
     const near = one && distance(c, memberState(c, this.target).pos, c.leader.pos) < 40;
-    // Nothing to offer: the one asked, or all of those who can hear, carry no food.
+    // Match the offer builder: the hut provides food without consuming carried rations.
+    const foodAvailable = (x: ClimbState['members'][number]) =>
+      x.rations > 0 || x.pos.place === MOUNTAINS[c.mountain]?.hut;
     const noFood = one
-      ? memberState(c, this.target).rations <= 0
-      : c.members.every((x) => x.homeAt !== null || !canHear(c, x.id) || x.rations <= 0);
+      ? !foodAvailable(memberState(c, this.target))
+      : c.members.every((x) => x.homeAt !== null || !canHear(c, x.id) || !foodAvailable(x));
     const choose = (v: string) => () => {
       this.verb = v;
       this.panel = v === 'rope' ? 'partner' : 'force';
@@ -798,7 +800,7 @@ export class Game {
           ? unheard
           : c.leader.rations > 0
             ? 'No food left; you can share yours.'
-            : 'No food left; resupply at the hut.',
+            : 'No food left; eat at the hut.',
       ),
       this.verbBtn('wait', 'wait', 'wait', ok, choose('wait'), unheard),
     );
@@ -1032,13 +1034,33 @@ export class Game {
   /** Last recorded HF answer for each addressed person and this request. Never predicts a new verdict. */
   private requestReplies(act: string, refusalsOnly = false): HTMLElement | null {
     const latest = new Map<string, Line>();
+    // A rope request addresses a pair. On the main sheet recover the last pair involving
+    // the selection; in the composer match the chosen pair in either orientation.
+    const priorRope = [...this.climb.inputs]
+      .reverse()
+      .find(
+        (i) =>
+          i.t === 'say' &&
+          i.act === 'rope' &&
+          i.with &&
+          (this.target === 'all' || i.to === this.target || i.with === this.target),
+      );
+    const pair =
+      act !== 'rope'
+        ? null
+        : this.panel === 'force' && this.partner
+          ? [this.target, this.partner]
+          : priorRope?.t === 'say' && priorRope.with
+            ? [priorRope.to, priorRope.with]
+            : [];
     for (const line of this.climb.lines) {
       const input = this.climb.inputs[line.input];
       if (
         input?.t === 'say' &&
         input.act === act &&
-        (act !== 'rope' || this.panel !== 'force' || input.with === this.partner) &&
-        (this.target === 'all' || line.who === this.target)
+        (pair
+          ? pair.includes(input.to) && !!input.with && pair.includes(input.with) && pair.includes(line.who)
+          : this.target === 'all' || line.who === this.target)
       )
         latest.set(line.who, line);
     }
@@ -1054,7 +1076,7 @@ export class Game {
         `<b>${esc(this.requestName(act))} · ${esc(memberOf(first.who).name)}</b> (${clock(first.at)}): “${esc(first.says)}”`,
       ),
     );
-    if (answers.length > 1 && !refusalsOnly) {
+    if (answers.length > 1 && (!refusalsOnly || act === 'rope')) {
       const more = h('details', '', `<summary>All ${answers.length} recorded answers</summary>`);
       for (const l of answers) more.append(h('p', '', `${esc(memberOf(l.who).name)}: “${esc(l.says)}”`));
       box.append(more);
@@ -1159,6 +1181,7 @@ export class Game {
       <details><summary>More about the season</summary>
       <p>For eleven summers Ezra led them. This year they asked you.</p>
       <p>You walk with them, carry what you can, and say what you think. They decide for themselves: tired legs, fear, trust and old promises all have a say. Coming down safe is a good day.</p></details>
+      ${cont && sv ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}
       <p>
         ${cont ? '<button class="btn go" data-a="continue">Continue the season</button>' : ''}
         <button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'Begin a new season' : 'Begin the season'}</button>

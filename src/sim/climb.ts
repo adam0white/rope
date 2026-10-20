@@ -163,10 +163,15 @@ export interface JournalEntry {
   story?: boolean;
 }
 
+/** 1: original HF words; 2: host refusal causes; 3: truthful escort narration. */
+export type NarrationVersion = 1 | 2 | 3;
+
 export interface ClimbState {
   v: 1;
   /** Host rules version. Absent (1): climbs saved before HF 2.8.0. 2: fullness on, alongside, reconsider. */
   rules?: 2;
+  /** Explicit override for replaying releases that predate the saved rules field. */
+  narration?: NarrationVersion;
   seed: number;
   day: number;
   mountain: string;
@@ -444,6 +449,7 @@ function upOffer(s: ClimbState, p: Person, mem: MemberState, lg: Leg, fromT: num
  */
 /** Rules 2 (HF 2.8.0): climbs started from this build. Older saves and exports replay under the old rules. */
 const rules2 = (s: ClimbState): boolean => (s.rules ?? 1) >= 2;
+const narrationVersion = (s: ClimbState): NarrationVersion => s.narration ?? (rules2(s) ? 3 : 1);
 
 /** A roped person's offers that go the way the partner is going are 'alongside' the partner. */
 function alongsidePartner(s: ClimbState, mem: MemberState, offers: Affordance[]): Affordance[] {
@@ -647,7 +653,8 @@ function withForecast(
  * so the player can learn what "not here" meant (owner playtest 2026-10-18).
  */
 function withCause(s: ClimbState, who: string, input: number, r: SuggestionResolution, says: string): string {
-  if (r.reason !== 'unavailable') return says;
+  // Narrator 1 saved HF's original words before host cause narration was added.
+  if (narrationVersion(s) < 2 || r.reason !== 'unavailable') return says;
   const inp = s.inputs[input];
   if (inp?.t !== 'say') return says;
   const mem = memberState(s, who);
@@ -1461,14 +1468,18 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
         s.journal.push({
           at: s.minute,
           who: mem.id,
-          text: `${nm} went down with ${on}${tied ? ', roped together' : ''}.`,
+          text: `${nm} went down with ${on}${narrationVersion(s) < 3 || tied ? ', roped together' : ''}.`,
         });
       } else {
         // Sent to someone far off: they turn, but nobody is with the asker, who goes on asking (owner playtest 2026-10-19).
         s.journal.push({
           at: s.minute,
           who: mem.id,
-          text: `${nm} turned to go down toward ${on}, who is far off.`,
+          // Narrators 1 and 2 used this same sentence even when no rope could be tied.
+          text:
+            narrationVersion(s) >= 3
+              ? `${nm} turned to go down toward ${on}, who is far off.`
+              : `${nm} went down with ${on}, roped together.`,
         });
       }
       mem.escortFor = null;
@@ -1917,10 +1928,20 @@ export const snapshot = (s: ClimbState): string => JSON.stringify(s);
 export const restore = (json: string): ClimbState => JSON.parse(json) as ClimbState;
 
 /** Replay a start state with a list of inputs to the end of the climb. */
-export function replay(startJson: string, inputs: readonly Input[], until?: number): ClimbState {
+export function replay(
+  startJson: string,
+  inputs: readonly Input[],
+  until?: number,
+  narration?: NarrationVersion,
+): ClimbState {
   const s = restore(startJson);
+  const savedNarration = s.narration;
+  if (narration !== undefined) s.narration = narration;
   s.inputs = inputs.map((x) => ({ ...x }));
   while (!s.over && (until === undefined || s.minute < until)) step(s);
+  // The compatibility override does not rewrite the original saved state's metadata.
+  if (savedNarration === undefined) delete s.narration;
+  else s.narration = savedNarration;
   return s;
 }
 
