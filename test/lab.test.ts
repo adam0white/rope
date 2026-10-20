@@ -19,8 +19,8 @@ it('lab names are short, stable and carry no player text', () => {
   expect(climbMilestones(playScripted(startClimb(3, 3), { turnAt: 12 * 60 }))).toEqual(climbMilestones(done));
 });
 
-it('the stamp script writes public/release.json with the build', () => {
-  execFileSync('node', ['scripts/stamp-release.ts'], { stdio: 'pipe' });
+it('the released lab-kit stamp writes public/release.json with the build', () => {
+  execFileSync('node', ['node_modules/@adam0white/lab-kit/bin/stamp-release'], { stdio: 'pipe' });
   const r = JSON.parse(readFileSync('public/release.json', 'utf8'));
   const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
   const hf = JSON.parse(readFileSync('node_modules/@adam0white/human-framework/package.json', 'utf8'));

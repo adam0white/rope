@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/stamp-release.ts && vite build",
+    "build": "stamp-release && vite build",
     "preview": "vite preview",
     "test": "vitest run --testTimeout=30000",
     "typecheck": "tsc -p tsconfig.json",
@@ -26,6 +26,7 @@
     "pixi.js": "8.22.0"
   },
   "devDependencies": {
+    "@adam0white/lab-kit": "https://github.com/adam0white/human-framework/releases/download/lab-kit-v0.1.0/adam0white-lab-kit-0.1.0.tgz",
     "@biomejs/biome": "2.5.15",
     "@types/node": "26.6.4",
     "happy-dom": "21.0.3",

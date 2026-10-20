@@ -1,5 +1,14 @@
 # Handoff
 
+## F-209 first-minute clarity (2026-10-20)
+- Remaining: Adam's feel acceptance stays with Adam. This round implements only the three filed clarity fixes; no HF-character playtest was requested because Rope has no adapter.
+- Disabled verbs now show adjacent, readable circumstances, not hover titles. Recorded HF answers persist by request and person, with refusals ahead of grudging yeses. The first actual objection immediately unlocks the existing insist disclosure. Ration, proximity and follow changes invalidate the UI cache.
+- Phone request panels show only the target, request and commitment controls. The person strip has an explicit swipe cue and preserves its scroll position. The phone sheet reserves space for replies and safe-area padding; desktop keeps its prior height. Selected chips and speed use ink outlines; the request choices own the accent.
+- Mandatory opening story before the first meaningful choice: 136 → 27 words across title and hut. The cut story remains in “More about the season” and “At the hut”. The turnback choices and simulation inputs are unchanged.
+- Lab-kit 0.1.0's released stamp replaces the copied release script. Its lockfile integrity matches the common brief. No kit CSS, runtime menu or glossary was imported. HF remains exactly 2.8.0; no sim files changed; Workers AI usage is unchanged.
+- Six DOM regressions cover opening copy, disabled reasons and changing food/proximity, compact composers and accent classes, authentic updated refusal words, and open requests losing/regaining earshot. The existing stamp test now invokes the released bin; the night-page assertion follows the shortened question.
+- Before/after Chromium renders at 360×690 and 1280×800, the two-person rope request, safe-area checks, delivery identity and final check results are recorded in `/Users/abdul/code/human-framework/scratch/clarity/rope-report.md`. Screenshots live beside that report in `rope/`.
+
 ## Owner night transition (2026-10-20)
 - Remaining: confirm the exact screen the owner saw in run `r-4sha5x28jz`; the export does not record page navigation. See docs/playtests/owner-2026-10-20.md.
 - The owner replay reconstructs the entire saved state byte for byte at 23:00, `over: true`. No simulation or host-rule change; HF stays pinned at 2.8.0.

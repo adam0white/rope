@@ -37,6 +37,15 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
   const mod = s.minute - s.day * 1440;
   const leaderInputs = s.inputs.filter((i) => i.t === 'lead').length;
   const sayInputs = s.inputs.filter((i) => i.t === 'say').length;
+  const refusal = s.lines.find(
+    (l) => l.verdict === 'refused' || l.verdict === 'deferred' || l.verdict === 'modified',
+  );
+  if (!has(d, 'insist') && refusal)
+    return {
+      id: 'insist',
+      unlock: 'insist',
+      text: 'Someone said no. You can wait, offer rest, change your plan, or **insist**. Insisting turns a “not now” into a grudging yes, never a “won’t”, and it costs trust.',
+    };
   if (s.climbNo === 1) {
     if (!seen('lead') && leaderInputs === 0)
       return {
@@ -66,15 +75,6 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
         text: 'Each answers for themself. Watch how they walk: short steps and a bent back mean tired; a bowed head, low spirits.',
       };
   }
-  const refusal = s.lines.find(
-    (l) => l.verdict === 'refused' || l.verdict === 'deferred' || l.verdict === 'modified',
-  );
-  if (!has(d, 'insist') && refusal)
-    return {
-      id: 'insist',
-      unlock: 'insist',
-      text: 'Someone said no. You can wait, offer rest, change your plan, or **insist**. Insisting turns a “not now” into a grudging yes, never a “won’t”, and it costs trust.',
-    };
   const fork = forkOf(m);
   if (!has(d, 'tell') && (s.known.length > 1 || (fork && s.leader.pos.place === fork)))
     return {

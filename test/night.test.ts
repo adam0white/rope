@@ -115,7 +115,7 @@ it('leaving the journal during the ending stamp cannot later reopen an obsolete 
   document.querySelector<HTMLButtonElement>('[data-a="next"]')?.click();
   expect(driver.climb.climbNo).toBe(2);
   vi.advanceTimersByTime(2600);
-  expect(document.querySelector('.page')?.textContent).toContain('when do you turn back?');
+  expect(document.querySelector('.page')?.textContent).toContain('When do you turn back?');
   expect(document.querySelector('[data-a="next"]')).toBeNull();
 });
 

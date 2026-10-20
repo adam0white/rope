@@ -245,7 +245,7 @@ export class Game {
         this.uiTick = now;
         this.renderTop();
         this.quietHint();
-        if (this.panel === 'main' && this.verb === null) this.renderSheet(true);
+        this.renderSheet(true);
       }
       if (now - this.lastSave > 4000) {
         this.lastSave = now;
@@ -287,7 +287,10 @@ export class Game {
         this.renderTop();
       }
     }
-    if (!this.note || this.disc.seen.includes(this.note.id)) {
+    const objected =
+      !has(this.disc, 'insist') &&
+      c.lines.some((l) => ['refused', 'deferred', 'modified'].includes(l.verdict));
+    if (!this.note || this.disc.seen.includes(this.note.id) || objected) {
       const n = nextNote(this.disc, c);
       if (n && n.id !== this.note?.id) this.showNote(n);
     }
@@ -305,8 +308,6 @@ export class Game {
 
   // ------------------------------------------------------------ input
 
-  /** The last order, shown in the sheet so what was sent is unmistakable. */
-  private lastSent: { text: string; until: number } | null = null;
   /** Taps right after a send are dropped: the sheet rebuilds under the finger, and a second tap would land elsewhere. */
   private sentAt = 0;
 
@@ -364,11 +365,6 @@ export class Game {
       };
       const tone = inp.force === 'ask' ? '?' : inp.force === 'urge' ? '.' : '. Now.';
       words = `${who}, ${what[inp.act] ?? inp.act}${tone}`;
-      const how = inp.force === 'ask' ? 'You asked' : inp.force === 'urge' ? 'You urged' : 'You insisted:';
-      this.lastSent = {
-        text: `${how} ${inp.to === 'all' ? 'everyone' : memberOf(inp.to).name}: ${what[inp.act] ?? inp.act}.`,
-        until: performance.now() + 6000,
-      };
     } else if (inp.t === 'tell') words = FACTS[inp.fact].words.replace(/^./, (x) => x.toUpperCase());
     else if (inp.t === 'promise') words = `We turn back at ${inp.hour}:00. Wherever we are.`;
     else if (inp.t === 'share') words = 'Here, have some of mine.';
@@ -390,7 +386,7 @@ export class Game {
       }
       return;
     }
-    this.target = this.target === id ? 'all' : id;
+    this.target = this.target === id && this.verb !== 'rope' ? 'all' : id;
     this.renderSheet();
   }
 
@@ -456,8 +452,7 @@ export class Game {
     const name = who === 'leader' ? 'you' : memberOf(who).name;
     b.el.className = `bubble ${cls}`;
     b.el.innerHTML = `<span class="who">${esc(name)}</span>${esc(text)}`;
-    if (who === 'leader') b.el.style.color = 'var(--rope)';
-    else b.el.style.color = '';
+    b.el.style.color = '';
     b.until = performance.now() + BUBBLE_MS;
     b.minute = this.climb.minute;
     requestAnimationFrame(() => b?.el.classList.add('on'));
@@ -569,6 +564,8 @@ export class Game {
       L.pos.leg,
       L.path.length,
       L.move !== null,
+      L.follow,
+      c.lines.length,
       L.fixing,
       L.scouting,
       L.rations,
@@ -577,24 +574,26 @@ export class Game {
         canHear(c, x.id),
         x.ropedTo,
         x.pack,
-        Math.round(distance(c, x.pos, L.pos) / 40),
+        x.rations > 0,
+        distance(c, x.pos, L.pos) < 40,
       ]),
       Math.floor((c.minute % 1440) / 60),
-      this.lastSent && this.lastSent.until > performance.now() ? this.lastSent.text : '',
       c.members.map((x) => (x.asks ? x.id : '')),
     ]);
     if (ifChanged && key === this.sheetKey) return;
     this.sheetKey = key;
     const sh = this.sheet;
+    const targetScroll = sh.querySelector('.targets')?.scrollLeft ?? 0;
     sh.innerHTML = '';
     // Who you speak to.
-    const chips = h('div', 'row');
+    const chips = h('div', 'row targets');
     const mk = (id: string, label: string, ic: string, far: boolean, sub = '') => {
+      if (this.panel === 'partner' && (id === this.target || id === 'all')) return;
+      if (this.panel === 'force' && this.verb === 'rope' && (id === this.partner || id === 'all')) return;
       const b = h('button', `chip${far ? ' far' : ''}`, `${icon(ic)}${esc(label)}<small>${esc(sub)}</small>`);
       const pressed = this.panel === 'partner' ? this.partner === id : this.target === id;
       b.setAttribute('aria-pressed', String(pressed));
-      if (this.panel === 'partner' && (id === this.target || id === 'all'))
-        (b as HTMLButtonElement).disabled = true;
+      b.setAttribute('aria-label', label);
       b.onclick = () => this.pickTarget(id);
       chips.append(b);
     };
@@ -622,7 +621,9 @@ export class Game {
       this.renderSheet();
     };
     if (this.panel !== 'main') label.append(cancel);
+    label.append(h('span', 'target-hint', 'swipe for people →'));
     sh.append(label, chips);
+    chips.scrollLeft = targetScroll;
     // Someone asks who will go down with them: the player's answer, as words to people.
     // Requests queue: one prompt at a time, the oldest first, labelled by its asker; the next replaces it.
     // A fresh hurt calls the leader: go to them, or (in earshot) turn them back.
@@ -706,15 +707,31 @@ export class Game {
       }
       sh.append(bar);
     }
-    if (this.lastSent && this.lastSent.until > performance.now() && this.panel === 'main')
-      sh.append(h('div', 'sent', esc(this.lastSent.text)));
-    if (this.panel === 'main' || this.panel === 'partner') sh.append(this.peopleVerbs(), this.leaderRow());
-    // With a prompt open, the you row sits above it, so it never scrolls out of sight under the prompt.
-    else if (this.panel === 'force') sh.append(this.leaderRow(), this.peopleVerbs(), this.forceRow());
-    else if (this.panel === 'tell') sh.append(this.leaderRow(), this.peopleVerbs(), this.tellRow());
-    else if (this.panel === 'promise') sh.append(this.leaderRow(), this.peopleVerbs(), this.promiseRow());
-    else if (this.panel === 'route') sh.append(this.peopleVerbs(), this.routeRow());
-    else if (this.panel === 'scout') sh.append(this.peopleVerbs(), this.routeRow(true));
+
+    if (this.panel === 'main') {
+      const last = [...c.inputs].reverse().find((i) => i.t === 'say');
+      if (last?.t === 'say') {
+        const replies = this.requestReplies(last.act, true);
+        if (replies) sh.append(replies);
+      }
+      sh.append(this.peopleVerbs(), this.leaderRow());
+    } else if (this.panel === 'partner') {
+      sh.append(h('p', 'request-summary', `Choose a different partner for ${esc(tgt)}.`));
+    } else if (this.panel === 'force') {
+      sh.append(
+        h(
+          'p',
+          'request-summary',
+          `${esc(tgt)}: <b>${esc(this.requestName(this.verb ?? 'climb'))}</b>${this.partner ? ` with ${esc(memberOf(this.partner).name)}` : ''}`,
+        ),
+      );
+      sh.append(this.forceRow());
+      const replies = this.requestReplies(this.verb ?? 'climb');
+      if (replies) sh.append(replies);
+    } else if (this.panel === 'tell') sh.append(this.tellRow());
+    else if (this.panel === 'promise') sh.append(this.promiseRow());
+    else if (this.panel === 'route') sh.append(this.routeRow());
+    else if (this.panel === 'scout') sh.append(this.routeRow(true));
   }
 
   private verbBtn(
@@ -723,14 +740,21 @@ export class Game {
     ic: string,
     enabled: boolean,
     onclick: () => void,
-    title = '',
+    reason = '',
   ): HTMLElement {
     const b = h('button', 'verb', `${icon(ic)}<span>${esc(label)}</span>`) as HTMLButtonElement;
     b.disabled = !enabled;
     if (this.note?.lit === id || this.verb === id) b.classList.add('lit');
-    if (title) b.title = title;
     b.onclick = onclick;
-    return b;
+    const wrap = h('div', 'verb-option');
+    wrap.append(b);
+    if (!enabled) {
+      const why = h('small', 'verb-reason', esc(reason));
+      why.id = `reason-${id}`;
+      b.setAttribute('aria-describedby', why.id);
+      wrap.append(why);
+    }
+    return wrap;
   }
 
   private heardTarget(): boolean {
@@ -745,6 +769,11 @@ export class Game {
     const g = h('div', 'verbs');
     const ok = this.heardTarget();
     const one = this.target !== 'all';
+    const unheard =
+      one && memberState(c, this.target).homeAt !== null
+        ? 'Back at the hut for today.'
+        : 'Out of earshot; walk to them.';
+    const chooseOne = !one ? 'Pick one person.' : '';
     const near = one && distance(c, memberState(c, this.target).pos, c.leader.pos) < 40;
     // Nothing to offer: the one asked, or all of those who can hear, carry no food.
     const noFood = one
@@ -756,13 +785,25 @@ export class Game {
       this.renderSheet();
     };
     g.append(
-      this.verbBtn('climb', 'climb on', 'up', ok, choose('climb')),
-      this.verbBtn('descend', 'turn back', 'down', ok, choose('descend')),
-      this.verbBtn('rest', 'rest', 'rest', ok, choose('rest')),
-      this.verbBtn('eat', noFood ? 'no food' : 'eat', 'eat', ok && !noFood, choose('eat')),
-      this.verbBtn('wait', 'wait', 'wait', ok, choose('wait')),
+      this.verbBtn('climb', 'climb on', 'up', ok, choose('climb'), unheard),
+      this.verbBtn('descend', 'turn back', 'down', ok, choose('descend'), unheard),
+      this.verbBtn('rest', 'rest', 'rest', ok, choose('rest'), unheard),
+      this.verbBtn(
+        'eat',
+        'eat',
+        'eat',
+        ok && !noFood,
+        choose('eat'),
+        !ok
+          ? unheard
+          : c.leader.rations > 0
+            ? 'No food left; you can share yours.'
+            : 'No food left; resupply at the hut.',
+      ),
+      this.verbBtn('wait', 'wait', 'wait', ok, choose('wait'), unheard),
     );
-    if (has(this.disc, 'tell')) g.append(this.verbBtn('ahead', 'go ahead', 'up', ok && one, choose('ahead')));
+    if (has(this.disc, 'tell'))
+      g.append(this.verbBtn('ahead', 'go ahead', 'up', ok && one, choose('ahead'), chooseOne || unheard));
     if (has(this.disc, 'rope'))
       g.append(
         this.verbBtn(
@@ -771,6 +812,7 @@ export class Game {
           'rope',
           ok && one && !memberState(c, this.target).ropedTo,
           choose('rope'),
+          chooseOne || (!ok ? unheard : 'Already tied to a partner.'),
         ),
       );
     if (has(this.disc, 'pack')) {
@@ -782,7 +824,7 @@ export class Game {
           'pack',
           canPack,
           choose('pack'),
-          one && !near ? 'go to them first' : '',
+          chooseOne || (!ok ? unheard : !near ? 'Walk to them first.' : 'You already carry this pack.'),
         ),
       );
     }
@@ -795,7 +837,7 @@ export class Game {
           'share',
           canShare,
           () => this.send({ t: 'share', to: this.target }),
-          one && !near ? 'go to them first' : '',
+          chooseOne || (!near ? 'Walk to them first.' : 'Your food is gone.'),
         ),
       );
     }
@@ -815,11 +857,21 @@ export class Game {
           this.renderSheet();
         } else this.send({ t: 'lead', dir: 'up' });
       }),
-      this.verbBtn('down', 'go down', 'down', L.path.length > 0 || L.pos.leg !== null, () =>
-        this.send({ t: 'lead', dir: 'down' }),
+      this.verbBtn(
+        'down',
+        'go down',
+        'down',
+        L.path.length > 0 || L.pos.leg !== null,
+        () => this.send({ t: 'lead', dir: 'down' }),
+        'At the hut; climb first.',
       ),
-      this.verbBtn('stop', L.fixing ? 'fixing…' : 'stop', 'stop', L.move !== null || !!L.follow, () =>
-        this.send({ t: 'lead', dir: 'stop' }),
+      this.verbBtn(
+        'stop',
+        L.fixing ? 'fixing…' : 'stop',
+        'stop',
+        L.move !== null || !!L.follow,
+        () => this.send({ t: 'lead', dir: 'stop' }),
+        L.fixing ? 'Finish fixing the rope first.' : 'Standing still; start walking.',
       ),
     );
     // Walking with them: the whole party, or the one picked in the chips.
@@ -837,6 +889,7 @@ export class Game {
         'all',
         !one || memberState(c, one.id).homeAt === null,
         () => this.send({ t: 'lead', dir: 'with', who: one ? one.id : 'party' }),
+        'Back at the hut for today.',
       ),
     );
     if (has(this.disc, 'tell')) {
@@ -853,29 +906,61 @@ export class Game {
               this.renderSheet();
             } else this.send({ t: 'scout' });
           },
+          L.scouting
+            ? 'Already looking; wait for your return.'
+            : L.move
+              ? 'Stop at a junction first.'
+              : 'No path above to scout here.',
         ),
       );
     }
     if (has(this.disc, 'tell'))
       g.append(
-        this.verbBtn('tell', 'tell', 'tell', c.known.length > 0, () => {
-          this.panel = 'tell';
-          this.renderSheet();
-        }),
+        this.verbBtn(
+          'tell',
+          'tell',
+          'tell',
+          c.known.length > 0,
+          () => {
+            this.panel = 'tell';
+            this.renderSheet();
+          },
+          'Nothing learned yet; scout a path.',
+        ),
       );
     if (has(this.disc, 'promise'))
       g.append(
-        this.verbBtn('promise', c.promise ? 'promised' : 'promise', 'promise', c.promise === null, () => {
-          this.panel = 'promise';
-          this.renderSheet();
-        }),
+        this.verbBtn(
+          'promise',
+          c.promise ? 'promised' : 'promise',
+          'promise',
+          c.promise === null,
+          () => {
+            this.panel = 'promise';
+            this.renderSheet();
+          },
+          `Turnback promised at ${c.promise?.hour}:00.`,
+        ),
       );
     if (has(this.disc, 'fix')) {
       const fixable =
         m && L.pos.place && !L.move && !L.fixing
           ? legsUp(m, L.pos.place).some((l) => l.fixable && !c.fixed.includes(l.id))
           : false;
-      g.append(this.verbBtn('fix', 'fix rope', 'fix', Boolean(fixable), () => this.send({ t: 'fix' })));
+      g.append(
+        this.verbBtn(
+          'fix',
+          'fix rope',
+          'fix',
+          Boolean(fixable),
+          () => this.send({ t: 'fix' }),
+          L.fixing
+            ? 'Already fixing; wait until done.'
+            : L.move
+              ? 'Stop below a fixable leg first.'
+              : 'No unfixed rope site above here.',
+        ),
+      );
     }
     const wrap = h('div');
     const lab = h('div', 'label', '<span>you</span>');
@@ -887,8 +972,8 @@ export class Game {
     const g = h('div', 'forces');
     const v = this.verb ?? 'climb';
     const f = (force: Force, label: string, sub: string, enabled = true) => {
-      const b = h('button', 'force', `${label}<small>${sub}</small>`) as HTMLButtonElement;
-      b.disabled = !enabled;
+      const b = h('button', 'force task', `${label}<small>${sub}</small>`) as HTMLButtonElement;
+      b.disabled = !enabled || !this.heardTarget();
       b.onclick = () => {
         const act = v as 'climb' | 'descend' | 'rest' | 'eat' | 'wait' | 'rope' | 'pack' | 'ahead';
         // A rope needs two different people (owner playtest: Nell was once asked to rope up with Nell).
@@ -903,12 +988,78 @@ export class Game {
       };
       return b;
     };
+    if (!this.heardTarget())
+      g.append(
+        h(
+          'p',
+          'force-reason',
+          this.target !== 'all' && memberState(this.climb, this.target).homeAt !== null
+            ? 'Back at the hut for today; cancel this request.'
+            : 'Out of earshot; cancel and walk to them.',
+        ),
+      );
     g.append(
       f('ask', 'ask', 'gently'),
       f('urge', 'urge', 'press them'),
-      f('insist', 'insist', has(this.disc, 'insist') ? 'costs trust' : 'not yet', has(this.disc, 'insist')),
+      f(
+        'insist',
+        'insist',
+        has(this.disc, 'insist') ? 'costs trust' : 'after a refusal',
+        has(this.disc, 'insist'),
+      ),
     );
     return g;
+  }
+
+  private requestName(act: string): string {
+    return (
+      (
+        {
+          climb: 'climb on',
+          descend: 'turn back',
+          rest: 'rest',
+          eat: 'eat',
+          wait: 'wait',
+          rope: 'rope up',
+          pack: 'take pack',
+          ahead: 'go ahead',
+          escort: 'go down together',
+        } as Record<string, string>
+      )[act] ?? act
+    );
+  }
+
+  /** Last recorded HF answer for each addressed person and this request. Never predicts a new verdict. */
+  private requestReplies(act: string, refusalsOnly = false): HTMLElement | null {
+    const latest = new Map<string, Line>();
+    for (const line of this.climb.lines) {
+      const input = this.climb.inputs[line.input];
+      if (
+        input?.t === 'say' &&
+        input.act === act &&
+        (act !== 'rope' || this.panel !== 'force' || input.with === this.partner) &&
+        (this.target === 'all' || line.who === this.target)
+      )
+        latest.set(line.who, line);
+    }
+    const answers = [...latest.values()];
+    const noes = answers.filter((l) => ['refused', 'deferred', 'modified'].includes(l.verdict));
+    const first = noes[0] ?? (!refusalsOnly ? answers[0] : undefined);
+    if (!first) return null;
+    const box = h('div', 'request-replies');
+    box.append(
+      h(
+        'p',
+        '',
+        `<b>${esc(this.requestName(act))} · ${esc(memberOf(first.who).name)}</b> (${clock(first.at)}): “${esc(first.says)}”`,
+      ),
+    );
+    if (answers.length > 1 && !refusalsOnly) {
+      const more = h('details', '', `<summary>All ${answers.length} recorded answers</summary>`);
+      for (const l of answers) more.append(h('p', '', `${esc(memberOf(l.who).name)}: “${esc(l.says)}”`));
+      box.append(more);
+    }
+    return box;
   }
 
   private tellRow(): HTMLElement {
@@ -1002,10 +1153,12 @@ export class Game {
     const done = sv?.season.history.length ?? 0;
     this.openPage(
       `<h1>The Rope</h1>
-      <p class="sub">Five people, three mountains. Every one of them can say no.</p>
+      <p class="sub">Five people, three mountains.</p>
       ${this.peaksSvg(cont ? done : 0)}
+      <p>Lead them up and bring them home. They can say no.</p>
+      <details><summary>More about the season</summary>
       <p>For eleven summers Ezra led them. This year they asked you.</p>
-      <p>You walk with them, carry what you can, and say what you think. They decide for themselves: tired legs, fear, trust and old promises all have a say. Coming down safe is a good day.</p>
+      <p>You walk with them, carry what you can, and say what you think. They decide for themselves: tired legs, fear, trust and old promises all have a say. Coming down safe is a good day.</p></details>
       <p>
         ${cont ? '<button class="btn go" data-a="continue">Continue the season</button>' : ''}
         <button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'Begin a new season' : 'Begin the season'}</button>
@@ -1032,12 +1185,13 @@ export class Game {
     this.openPage(
       `<h1>${esc(m?.name ?? '')}</h1>
       <p class="sub">Climb ${c.climbNo} of ${SEASON.length} · ${clock(c.minute)}, at the hut</p>
-      ${lines}
-      <p class="hand">They want to know one thing before the door opens: when do you turn back?</p>
+      <p class="hand">When do you turn back?</p>
+      <p>They remember whether you keep your word.</p>
       <p class="plan">${[12, 13, 14]
-        .map((hr) => `<button class="btn" data-hour="${hr}">We turn at ${hr}:00</button>`)
+        .map((hr) => `<button class="btn go" data-hour="${hr}">We turn at ${hr}:00</button>`)
         .join('')}<button class="btn go" data-a="go">We'll see</button></p>
-      <p class="sub">A promised hour holds them, and you: they will remember whether you kept it.</p>`,
+      <details><summary>At the hut</summary>${lines}
+      <p>A promised hour holds them, and you: they will remember whether you kept it.</p></details>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => {
           this.closePage();

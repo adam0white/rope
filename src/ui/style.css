@@ -197,7 +197,7 @@ a {
   /* A fixed strip, empty or not, so a note arriving never moves the map. Long notes scroll inside it. */
   height: 4.3em;
   overflow-y: auto;
-  border-left: 2px solid var(--rope);
+  border-left: 2px solid var(--ink-soft);
   /* Opaque enough that the weather's ink never runs through the words. */
   background: color-mix(in srgb, var(--paper) 97%, transparent);
   z-index: 2;
@@ -222,7 +222,7 @@ a {
 .sheet {
   position: relative;
   z-index: 2;
-  /* A fixed height (the bottom 42%, thumb reach): panels change inside it, so the scene and camera never jump. */
+  /* Reserve room for target, request, answers and commit at the 690px phone fixture. */
   flex: 0 0 46%;
   height: 46%;
   overflow-y: auto;
@@ -265,8 +265,8 @@ a {
   height: 22px;
 }
 .chip[aria-pressed="true"] {
-  border-color: var(--rope);
-  color: var(--rope);
+  border-color: var(--ink);
+  color: var(--ink);
   border-width: 2px;
 }
 .chip.far {
@@ -302,12 +302,29 @@ a {
   line-height: 1.1;
   text-align: center;
 }
+/* Reasons stay outside disabled buttons so they retain full contrast. */
+.verb-option {
+  min-width: 0;
+}
+.verb-option .verb {
+  width: 100%;
+  min-height: 48px;
+  font-size: 15px;
+}
+.verb-reason {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.2;
+}
 .verb svg {
   width: 22px;
   height: 22px;
 }
 .verb:disabled {
-  opacity: 0.35;
+  color: var(--ink-soft);
+  border-color: var(--ink-soft);
+  border-style: dashed;
   cursor: default;
 }
 .verb.lit {
@@ -323,8 +340,8 @@ a {
   gap: 6px;
 }
 .force {
-  border: 1.5px solid var(--rope);
-  color: var(--rope);
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
   background: var(--paper);
   border-radius: 10px;
   min-height: 48px;
@@ -333,12 +350,13 @@ a {
   cursor: pointer;
 }
 .force:disabled {
-  opacity: 0.3;
+  color: var(--ink-soft);
+  border-style: dashed;
 }
 .force small {
   display: block;
   font-family: var(--text);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--ink-soft);
 }
 .label {
@@ -535,7 +553,7 @@ a {
 .sent {
   margin: 4px 0;
   padding: 4px 8px;
-  border-left: 3px solid var(--rope);
+  border-left: 1px solid var(--ink-soft);
   font-style: italic;
 }
 .ask-bar {
@@ -545,7 +563,7 @@ a {
   align-items: center;
   margin: 6px 0;
   padding: 6px 8px;
-  border: 1.5px dashed var(--rope);
+  border: 1.5px dashed var(--ink-soft);
   border-radius: 9px;
 }
 .ask-bar span {
@@ -616,7 +634,7 @@ a {
 }
 .verbs:has(> :nth-child(6)) .verb {
   min-height: 46px;
-  font-size: 12px;
+  font-size: 15px;
 }
 .verbs:has(> :nth-child(6)) .verb svg {
   width: 19px;
@@ -641,4 +659,73 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.target-hint {
+  display: none;
+}
+.request-summary {
+  margin: 0;
+  font-size: 17px;
+}
+.request-replies {
+  font-size: 14px;
+  line-height: 1.3;
+  border-left: 1px solid var(--ink-soft);
+  padding-left: 8px;
+}
+.request-replies p {
+  margin: 0 0 4px;
+}
+.request-replies summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.force.task:not(:disabled),
+.ask-bar.hurt .force {
+  color: var(--rope);
+  border-color: var(--rope);
+  border-width: 2px;
+}
+.force-reason {
+  grid-column: 1 / -1;
+  font-size: 14px;
+  margin: 0;
+}
+.label button {
+  min-height: 44px;
+  padding: 4px 10px;
+  border: 1px solid var(--ink-soft);
+  border-radius: 8px;
+  font-size: 15px;
+}
+.page details > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  text-decoration: underline;
+}
+@media (max-width: 420px) {
+  .sheet {
+    flex-basis: calc(60% + var(--safe-b));
+    height: calc(60% + var(--safe-b));
+  }
+  .target-hint {
+    display: block;
+  }
+  .label:has(button) {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .label:has(button) .target-hint {
+    flex-basis: 100%;
+  }
+  .targets {
+    scrollbar-width: thin;
+    padding-bottom: 4px;
+  }
 }
