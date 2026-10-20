@@ -25,7 +25,8 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.pathname.startsWith('/api/')) return;
+  // The build stamp must always come from the network, or the lab would report an old build.
+  if (url.pathname.startsWith('/api/') || url.pathname === '/release.json') return;
   const isPage = req.mode === 'navigate';
   if (isPage) {
     e.respondWith(

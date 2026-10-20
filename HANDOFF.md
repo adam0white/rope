@@ -1,5 +1,10 @@
 # Handoff
 
+## Lab client (2026-10-19, not yet committed or deployed)
+- `@adam0white/lab-client` 0.1.0 (release tarball) is wired in: `src/ui/lab.ts` (`createLab({ game: 'rope' })`), names in `src/ui/labnames.ts` (screens `title`, `climb N <mountain>: hut|climb|debrief`, `season`; milestones `climb N done|summit|all home`, `season done`; no player text). "Send this run to the notebook" sits beside each Export button (journal and debrief) and sends `exportClimb` output. `connect-src` in `public/_headers` now includes https://human.adamwhite.work.
+- `/release.json` was 404 because nothing wrote it. `npm run build` now runs `scripts/stamp-release.ts` first, which writes `public/release.json` (gitignored, copied to dist). The Worker only runs first for `/api/*`, so assets serve the file; `public/sw.js` now skips `/release.json` (it was cache-first and would have frozen the build stamp).
+- Not yet done: deploy, then open the live game, send a run with the note "integration test" and the label "agent", and confirm the run count on https://human.adamwhite.work/lab/. Verify https://rope.adamwhite.work/release.json returns the deployed commit (note: `dirty` is true if built from an uncommitted tree).
+
 ## HF 2.8.0 (2026-10-19)
 - **Live:** https://rope.adamwhite.work, Worker version f3b1977b-3055-419f-8c9f-3c372ce73301, bundle `assets/index-B3bkadIs.js`; its sha256 matches dist. HF is pinned at 2.8.0 exactly.
 - Host rules 2 (`ClimbState.rules`): fullness on, no "step aside" offer, `alongside` and `reconsider` for roped partners. Numbers and the old-export rule are in docs/findings.md ("HF 2.8.0 and host rules 2"). Saves and exports from before this build replay under rules 1; both owner exports still match their saved answers (test/rules2.test.ts).

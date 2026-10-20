@@ -33,6 +33,8 @@ import { exportClimb, newSeason, nextClimb, type SeasonState } from '../sim/seas
 import { haltReason, hurtCall, namesOf, onlyWalkingLeft, promiseDue } from './calls.ts';
 import { type Disclosure, has, markSeen, type Note, newDisclosure, nextNote } from './disclosure.ts';
 import { icon } from './icons.ts';
+import { lab } from './lab.ts';
+import { climbMilestones, climbScreen } from './labnames.ts';
 import { moodWord } from './look.ts';
 import { PACE } from './pace.ts';
 import { Scene } from './scene.ts';
@@ -186,6 +188,7 @@ export class Game {
     const start = sv.start || sv.season.start || '';
     const c = replay(start, sv.inputs, sv.minute);
     this.begin(c, start, true);
+    lab.screen(climbScreen(c, 'climb'));
     if (c.over || sv.over) this.endClimb();
   }
 
@@ -993,6 +996,7 @@ export class Game {
   }
 
   private titlePage(): void {
+    lab.screen('title');
     const sv = this.load();
     const cont = sv && !sv.season.over;
     const done = sv?.season.history.length ?? 0;
@@ -1022,6 +1026,7 @@ export class Game {
 
   private climbIntro(): void {
     const c = this.climb;
+    lab.screen(climbScreen(c, 'hut'));
     const m = MOUNTAINS[c.mountain];
     const lines = c.journal.map((j) => `<p class="${j.story ? 'hand' : ''}">${esc(j.text)}</p>`).join('');
     this.openPage(
@@ -1034,10 +1039,14 @@ export class Game {
         .join('')}<button class="btn go" data-a="go">We'll see</button></p>
       <p class="sub">A promised hour holds them, and you: they will remember whether you kept it.</p>`,
       (el) => {
-        el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => this.closePage());
+        el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => {
+          this.closePage();
+          lab.screen(climbScreen(c, 'climb'));
+        });
         for (const b of el.querySelectorAll<HTMLElement>('[data-hour]'))
           b.addEventListener('click', () => {
             this.closePage();
+            lab.screen(climbScreen(c, 'climb'));
             // The first choice of the day, made at the hut where everyone hears it (owner playtest 2026-10-18).
             if (!this.disc.unlocked.includes('promise')) this.disc.unlocked.push('promise');
             this.send({ t: 'promise', hour: Number(b.dataset.hour) });
@@ -1057,12 +1066,19 @@ export class Game {
       .join('');
     this.openPage(
       `<button class="close" data-a="close">back</button><h2>Journal</h2>${rows}
-      <p><button class="btn" data-a="export">Export this climb (playtest)</button></p>`,
+      <p><button class="btn" data-a="export">Export this climb (playtest)</button>
+      <button class="btn" data-a="send">Send this run to the notebook</button></p>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="close"]')?.addEventListener('click', () => this.closePage());
         el.querySelector<HTMLElement>('[data-a="export"]')?.addEventListener('click', () => this.exportRun());
+        el.querySelector<HTMLElement>('[data-a="send"]')?.addEventListener('click', () => this.sendRun());
       },
     );
+  }
+
+  private sendRun(): void {
+    const { start, climb } = this;
+    lab.openSendDialog({ getRun: () => exportClimb(start, climb, FRAMEWORK_VERSION) });
   }
 
   private exportedAt = 0;
@@ -1095,6 +1111,8 @@ export class Game {
 
   private debriefPage(): void {
     const c = this.climb;
+    lab.screen(climbScreen(c, 'debrief'));
+    for (const name of climbMilestones(c)) lab.milestone(name);
     const m = MOUNTAINS[c.mountain];
     const outcomes = c.members
       .map((mem) => {
@@ -1119,6 +1137,7 @@ export class Game {
         <button class="btn go" data-a="next">${c.climbNo < SEASON.length ? `On to ${esc(SEASON[c.climbNo]?.name ?? '')}` : 'Close the season'}</button>
         <button class="btn" data-a="journal">Journal</button>
         <button class="btn" data-a="export">Export playtest</button>
+        <button class="btn" data-a="send">Send this run to the notebook</button>
       </p>
       ${this.footer()}`,
       (el) => {
@@ -1128,6 +1147,7 @@ export class Game {
           this.pageEl?.querySelector<HTMLElement>('[data-a="close"]')?.addEventListener('click', back);
         });
         el.querySelector<HTMLElement>('[data-a="export"]')?.addEventListener('click', () => this.exportRun());
+        el.querySelector<HTMLElement>('[data-a="send"]')?.addEventListener('click', () => this.sendRun());
         el.querySelector<HTMLElement>('[data-a="next"]')?.addEventListener('click', () => this.advance());
       },
     );
@@ -1195,6 +1215,8 @@ export class Game {
   }
 
   private seasonPage(): void {
+    lab.screen('season');
+    lab.milestone('season done');
     const hist = this.season.history
       .map((x) => {
         const m = MOUNTAINS[x.mountain];
