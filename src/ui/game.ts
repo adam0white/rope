@@ -58,7 +58,7 @@ interface Save {
   over: boolean;
 }
 
-type Panel = 'main' | 'force' | 'partner' | 'tell' | 'promise' | 'route' | 'scout';
+type Panel = 'main' | 'more' | 'calls' | 'force' | 'partner' | 'tell' | 'promise' | 'route' | 'scout';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] => {
   const el = document.createElement(tag);
@@ -564,13 +564,16 @@ export class Game {
       L.pos.leg,
       L.path.length,
       L.move !== null,
+      L.move?.dir,
       L.follow,
+      c.inputs.length,
       c.lines.length,
       L.fixing,
       L.scouting,
       L.rations,
       c.members.map((x) => [
         x.homeAt !== null,
+        x.move?.dir,
         canHear(c, x.id),
         x.ropedTo,
         x.pack,
@@ -583,6 +586,7 @@ export class Game {
     if (ifChanged && key === this.sheetKey) return;
     this.sheetKey = key;
     const sh = this.sheet;
+    sh.className = `sheet sheet-${this.panel}`;
     const targetScroll = sh.querySelector('.targets')?.scrollLeft ?? 0;
     sh.innerHTML = '';
     // Who you speak to.
@@ -621,13 +625,25 @@ export class Game {
       this.renderSheet();
     };
     if (this.panel !== 'main') label.append(cancel);
+    const targetControls = h('div', 'target-controls');
+    targetControls.append(chips);
+    if (this.panel === 'main') {
+      const more = h('button', 'more-actions', 'more actions');
+      if (this.note?.lit && !['lead', 'climb', 'with'].includes(this.note.lit)) more.classList.add('lit');
+      more.onclick = () => {
+        this.panel = 'more';
+        this.renderSheet();
+      };
+      targetControls.append(more);
+    }
     label.append(h('span', 'target-hint', 'swipe for people →'));
-    sh.append(label, chips);
+    sh.append(label, targetControls);
     chips.scrollLeft = targetScroll;
+    const calls = h('div', 'pending-calls');
     // Someone asks who will go down with them: the player's answer, as words to people.
     // Requests queue: one prompt at a time, the oldest first, labelled by its asker; the next replaces it.
     // A fresh hurt calls the leader: go to them, or (in earshot) turn them back.
-    const hurt = this.panel === 'main' ? hurtCall(c) : null;
+    const hurt = this.panel === 'main' || this.panel === 'calls' ? hurtCall(c) : null;
     if (hurt) {
       const nm = memberOf(hurt.who).name;
       const obj = memberOf(hurt.who).they === 'she' ? 'her' : 'him';
@@ -644,10 +660,10 @@ export class Game {
         back.onclick = () => this.send({ t: 'say', to: hurt.who, act: 'descend', force: 'urge' });
         bar.append(back);
       }
-      sh.append(bar);
+      calls.append(bar);
     }
     // The promised hour: who can hear the call to turn, and who is too far.
-    const due = this.panel === 'main' ? promiseDue(c) : null;
+    const due = this.panel === 'main' || this.panel === 'calls' ? promiseDue(c) : null;
     if (due) {
       const bar = h(
         'div',
@@ -658,7 +674,7 @@ export class Game {
       all.onclick = () =>
         this.send({ t: 'lead', dir: 'down' }, { t: 'say', to: 'all', act: 'descend', force: 'urge' });
       bar.append(all);
-      sh.append(bar);
+      calls.append(bar);
     }
     if (this.panel === 'main' && !hurt && onlyWalkingLeft(c) && !this.skipping) {
       const bar = h('div', 'ask-bar faint', '<span>Nothing left to decide but the walk down.</span>');
@@ -674,7 +690,7 @@ export class Game {
       .filter((x) => x.asks && x.homeAt === null)
       .sort((a, b) => (a.asks?.at ?? 0) - (b.asks?.at ?? 0));
     const asking = queue[0];
-    if (asking && this.panel === 'main') {
+    if (asking && (this.panel === 'main' || this.panel === 'calls')) {
       const nm = memberOf(asking.id).name;
       const near = canHear(c, asking.id);
       const below = posXY(c, asking.pos).alt < posXY(c, c.leader.pos).alt;
@@ -705,15 +721,27 @@ export class Game {
         back.onclick = () => this.send({ t: 'lead', dir: 'down' });
         bar.append(back);
       }
-      sh.append(bar);
+      calls.append(bar);
+    }
+
+    if (calls.children.length && this.panel === 'main') {
+      const call = h(
+        'button',
+        'calls-button',
+        hurt ? 'hurt call' : due ? 'turnback due' : `${queue.length} company calls`,
+      );
+      call.onclick = () => {
+        this.panel = 'calls';
+        this.renderSheet();
+      };
+      targetControls.append(call);
     }
 
     if (this.panel === 'main') {
-      const last = [...c.inputs].reverse().find((i) => i.t === 'say');
-      if (last?.t === 'say') {
-        const replies = this.requestReplies(last.act, true);
-        if (replies) sh.append(replies);
-      }
+      sh.append(this.peopleVerbs(), this.leaderRow(), this.requestResult());
+    } else if (this.panel === 'calls') {
+      sh.append(calls);
+    } else if (this.panel === 'more') {
       sh.append(this.peopleVerbs(), this.leaderRow());
     } else if (this.panel === 'partner') {
       sh.append(h('p', 'request-summary', `Choose a different partner for ${esc(tgt)}.`));
@@ -843,6 +871,8 @@ export class Game {
         ),
       );
     }
+    for (const el of [...g.children].slice(5)) el.classList.add('secondary-action');
+    g.classList.add('people-verbs');
     return g;
   }
 
@@ -965,7 +995,11 @@ export class Game {
       );
     }
     const wrap = h('div');
+    wrap.className = 'leader-controls';
+    g.classList.add('movement-verbs');
+    for (const el of [...g.children].slice(4)) el.classList.add('secondary-action');
     const lab = h('div', 'label', '<span>you</span>');
+    if (c.promise) lab.append(h('span', '', `Turnback promised at ${c.promise.hour}:00.`));
     wrap.append(lab, g);
     return wrap;
   }
@@ -1029,6 +1063,103 @@ export class Game {
         } as Record<string, string>
       )[act] ?? act
     );
+  }
+
+  /** Acknowledges the latest request, using only its own HF answers and observed movement. */
+  private requestResult(): HTMLElement {
+    const slot = h('div', 'request-feedback');
+    const c = this.climb;
+    const index = c.inputs.findLastIndex((input) => input.t === 'say');
+    const input = c.inputs[index];
+    if (input?.t !== 'say') return slot;
+    const latest = new Map<string, Line>();
+    for (const line of c.lines) if (line.input === index) latest.set(line.who, line);
+    const answers = [...latest.values()];
+    const box = h('div', 'request-replies request-result');
+    const previous = c.inputs[index - 1];
+    const collectiveTurn =
+      input.act === 'descend' &&
+      input.to === 'all' &&
+      input.force === 'urge' &&
+      previous?.t === 'lead' &&
+      previous.dir === 'down' &&
+      previous.at === input.at;
+    const label = this.requestName(input.act);
+    const action = (
+      {
+        climb: 'climbing on',
+        descend: 'turning back',
+        rest: 'resting',
+        eat: 'eating',
+        wait: 'waiting',
+        rope: 'roping up',
+        pack: 'taking the pack',
+        ahead: 'going ahead',
+        escort: 'going down together',
+      } as Record<string, string>
+    )[input.act];
+    const response = (line: Line): string => {
+      if (line.verdict === 'assented') return `agreed to ${label}`;
+      if (line.verdict === 'complied') return `complied with ${label}`;
+      if (line.verdict === 'deferred') return `put off ${action}`;
+      if (line.verdict === 'refused') return `refused ${action}`;
+      if (line.verdict === 'modified') return `offered another action instead of ${action}`;
+      return `heard ${label}`;
+    };
+    if (collectiveTurn) {
+      // The command requests a descent; it cannot guarantee that every person follows.
+      const turned = c.leader.move?.dir === 'down';
+      box.append(
+        h(
+          'p',
+          'request-acknowledgement',
+          turned
+            ? 'You turned downhill and urged everyone to turn back.'
+            : 'You called everyone downhill and urged them to turn back.',
+        ),
+      );
+      const descending = c.members.filter((member) => member.move?.dir === 'down').map((member) => member.id);
+      const names = [...(turned ? ['you'] : []), ...descending.map((id) => memberOf(id).name)];
+      box.append(
+        h('p', '', names.length ? `Descending: ${esc(names.join(', '))}.` : 'Nobody is descending yet.'),
+      );
+    } else {
+      const accepted = answers.filter((line) => ['assented', 'complied'].includes(line.verdict));
+      box.append(
+        h(
+          'p',
+          'request-acknowledgement',
+          accepted.length
+            ? `${esc(label[0]?.toUpperCase() + label.slice(1))} accepted: ${esc(namesOf(accepted.map((line) => line.who)))}.`
+            : `${esc(label[0]?.toUpperCase() + label.slice(1))} requested.`,
+        ),
+      );
+    }
+    const no = answers.find((line) => ['refused', 'deferred', 'modified'].includes(line.verdict));
+    if (no) {
+      const objection = h(
+        'p',
+        'request-objection',
+        `<b>${esc(memberOf(no.who).name)} ${esc(response(no))}</b>: “${esc(no.says)}”`,
+      );
+      if (collectiveTurn) box.append(objection);
+      else box.prepend(objection);
+    } else if (!answers.length)
+      box.append(
+        h('p', '', c.unheard.includes(index) ? 'Nobody heard the request.' : 'Awaiting their answers.'),
+      );
+    if (answers.length) {
+      const more = h('details', '', `<summary>All ${answers.length} recorded answers</summary>`);
+      const list = h('div', 'request-answer-list');
+      for (const line of answers)
+        list.append(
+          h('p', '', `<b>${esc(memberOf(line.who).name)} ${esc(response(line))}</b>: “${esc(line.says)}”`),
+        );
+      more.append(list);
+      box.append(more);
+    }
+    slot.append(box);
+    return slot;
   }
 
   /** Last recorded HF answer for each addressed person and this request. Never predicts a new verdict. */

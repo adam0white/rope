@@ -1,5 +1,11 @@
 # Handoff
 
+## F-230 phone and request results (2026-10-20)
+- Remaining: Adam accepts feel. A fresh source-unread retest remains unrun.
+- Help fits its full reserved strip at 360×690. An empty strip releases space to the mountain. Primary requests and movement stay on the main sheet; extra abilities live in “more actions”, with matching disclosure words and highlights. Outstanding company/hurt/turnback calls have a visible labelled button; opening it shows their original responses.
+- Latest-request results sit below controls. Rest names what was accepted. “We all turn” reports the leader’s descent and new urge, actual downhill movement, and the latest HF refusal with its reason. Recorded answers remain available on request; no simulation or replay changes.
+- Five new DOM regressions plus touch Chromium renders cover requests, movement, safe areas, pair selection, rest answers and renewed turnaround refusals. Report, screenshots, checks and live release identity: `/Users/abdul/code/human-framework/scratch/followups/rope-report.md`. No Workers AI calls were made.
+
 ## F-209 review follow-up (2026-10-20)
 - Remaining: Adam accepts feel. Cold-player understanding and the first-action timing protocol remain untested; Rope has no HF-character adapter.
 - Rope request feedback now retains both partners’ HF answers, including either refusal, for either pair orientation. A different pair does not inherit their answers. Empty rations no longer disable eating at the hut; the UI cache follows hut availability.

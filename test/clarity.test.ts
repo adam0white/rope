@@ -139,8 +139,9 @@ it('retains actual HF refusal words by request and refreshes them after another 
   button('cancel').click();
   button('everyone').click();
   const stillDeclines = driver.climb.lines.filter((l) => l.who === 'wren').at(-1) as Line;
-  expect(document.querySelector('.request-replies')?.textContent).toContain(stillDeclines.says);
-  expect(document.querySelector('.request-replies')?.textContent).not.toContain(latest.says);
+  // Main feedback belongs to the last request; changing selection does not mix in old answers.
+  expect(document.querySelector('.request-replies')?.textContent).not.toContain(stillDeclines.says);
+  expect(document.querySelector('.request-replies')?.textContent).toContain(latest.says);
 });
 
 it('updates an open request when the target leaves earshot and when they return', async () => {
@@ -265,4 +266,17 @@ it('shows the saved climb, mountain and time beside Continue without advancing t
   expect(document.querySelector('.continue-summary')?.textContent).toContain('Hollin');
   expect(document.querySelector('.continue-summary')?.textContent).toContain('05:13');
   expect(localStorage.getItem('rope.save.v1')).toBe(saved);
+});
+
+it('keeps extra abilities behind More actions and returns to the same person', async () => {
+  await boot(true);
+  button('Oskar').click();
+  button('more actions').click();
+  expect(document.querySelector('.sheet')?.classList.contains('sheet-more')).toBe(true);
+  expect(button('rope up').closest('.secondary-action')).not.toBeNull();
+  expect(button('scout').closest('.secondary-action')).not.toBeNull();
+  button('cancel').click();
+  expect(document.querySelector('.sheet')?.classList.contains('sheet-main')).toBe(true);
+  expect(button('Oskar').getAttribute('aria-pressed')).toBe('true');
+  expect(button('walk to Oskar').closest('.secondary-action')).toBeNull();
 });

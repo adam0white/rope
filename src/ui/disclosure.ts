@@ -44,14 +44,14 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
     return {
       id: 'insist',
       unlock: 'insist',
-      text: 'Someone said no. You can wait, offer rest, change your plan, or **insist**. Insisting turns a “not now” into a grudging yes, never a “won’t”, and it costs trust.',
+      text: 'Someone said no. Wait, offer rest, change your plan, or **insist**. Insisting can turn “not now” into a grudging yes. It cannot change “won’t”. It costs trust.',
     };
   if (s.climbNo === 1) {
     if (!seen('lead') && leaderInputs === 0)
       return {
         id: 'lead',
         lit: 'lead',
-        text: 'You lead. Tap **Lead on** to start the party up the path. You keep to their pace and wait for the last of them; they come if they want to.',
+        text: 'Tap **Lead on** to start walking. You keep to their pace. They come if they want to; ask them along.',
       };
     if (!seen('ask') && sayInputs === 0 && s.members.some((x) => x.homeAt === null && canHear(s, x.id)))
       return {
@@ -81,14 +81,14 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       id: 'tell',
       unlock: 'tell',
       lit: 'tell',
-      text: 'You can see things they cannot. **Scout** a way up, or send someone to **go ahead** and call down; then **tell** them: what they know changes what they want.',
+      text: '**Scout** a path, or ask someone to **go ahead** and call down. Then **tell** the others what you learned. Look in **more actions**.',
     };
   if (!has(d, 'promise') && mod >= 10 * 60 + 30)
     return {
       id: 'promise',
       unlock: 'promise',
       lit: 'promise',
-      text: 'The afternoon brings weather. You can **promise** a time to turn back. They will hold you to it.',
+      text: 'The afternoon brings weather. In **more actions**, **promise** a time to turn back. They will hold you to it.',
     };
   const exposed = s.members.some((x) => {
     const leg = x.pos.leg ? m.legs.find((l) => l.id === x.pos.leg) : null;
@@ -99,7 +99,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       id: 'rope',
       unlock: 'rope',
       lit: 'rope',
-      text: 'The ground is steeper now. Pick someone and **Rope up** to tie them to a partner; a partner can hold a slip.',
+      text: 'The ground is steeper now. Pick someone, open **more actions**, then **Rope up**. A partner can hold a slip.',
     };
   const fixable = s.leader.pos.place ? m.legs.some((l) => l.from === s.leader.pos.place && l.fixable) : false;
   if (!has(d, 'fix') && fixable && has(d, 'rope'))
@@ -107,14 +107,14 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       id: 'fix',
       unlock: 'fix',
       lit: 'fix',
-      text: 'The leg above can take a fixed rope. **Fix rope** costs you time but makes it safer for everyone after.',
+      text: 'The leg above can take a fixed rope. In **more actions**, **Fix rope** costs time but makes it safer for everyone after.',
     };
   const tired = s.members.some((x) => readPerson(personOf(s, x.id)).body.fatigue > 0.45 || x.rations === 0);
   if (!has(d, 'pack') && tired)
     return {
       id: 'pack',
       unlock: 'pack',
-      text: 'Someone is flagging. Pick them: you can **take their pack**, or **share food** from yours.',
+      text: 'Someone is flagging. Pick them, then open **more actions** to **take their pack** or **share food** from yours.',
     };
   return null;
 }

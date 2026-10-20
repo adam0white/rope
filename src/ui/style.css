@@ -196,8 +196,8 @@ a {
   margin: 0;
   padding: 5px 12px;
   border-bottom: 1px solid var(--ink-soft);
-  /* A fixed strip, empty or not, so a note arriving never moves the map. Long notes scroll inside it. */
-  height: 4.3em;
+  /* Reserve the full explanation before it arrives. */
+  height: 112px;
   overflow-y: auto;
   border-left: 2px solid var(--ink-soft);
   /* Opaque enough that the weather's ink never runs through the words. */
@@ -210,6 +210,9 @@ a {
   font-family: var(--hand);
   font-size: 18px;
   line-height: 1.1;
+}
+.note:empty {
+  display: none;
 }
 .note button {
   float: right;
@@ -245,6 +248,40 @@ a {
   scrollbar-width: none;
 }
 .row::-webkit-scrollbar {
+  display: none;
+}
+.target-controls {
+  display: flex;
+  gap: 8px;
+}
+.sheet-main .target-controls {
+  height: 64px;
+}
+.target-controls .targets {
+  flex: 1;
+  min-width: 0;
+}
+.more-actions,
+.calls-button {
+  flex: 0 0 80px;
+  min-height: 48px;
+  border: 1px solid var(--ink-soft);
+  border-radius: 8px;
+  background: var(--paper);
+  font-size: 14px;
+  cursor: pointer;
+}
+.more-actions.lit,
+.calls-button {
+  border: 2px solid var(--rope);
+  color: var(--rope);
+}
+.pending-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sheet-main .secondary-action {
   display: none;
 }
 .chip {
@@ -646,6 +683,12 @@ a {
   width: 19px;
   height: 19px;
 }
+.sheet-main .people-verbs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.sheet-main .movement-verbs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 .chip svg {
   width: 15px;
   height: 15px;
@@ -717,8 +760,24 @@ a {
 }
 @media (max-width: 420px) {
   .sheet {
-    flex-basis: calc(60% + var(--safe-b));
-    height: calc(60% + var(--safe-b));
+    flex-basis: calc(440px + var(--safe-b));
+    height: calc(440px + var(--safe-b));
+    gap: 5px;
+    padding-top: 4px;
+  }
+  .sheet-main .verb {
+    min-height: 48px;
+    font-size: 14px;
+  }
+  .sheet-main .verb svg {
+    width: 17px;
+    height: 17px;
+  }
+  .sheet-main .chip svg {
+    display: none;
+  }
+  .sheet-main > .label {
+    align-items: center;
   }
   .target-hint {
     display: block;
