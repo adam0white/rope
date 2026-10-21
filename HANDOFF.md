@@ -1,5 +1,10 @@
 # Handoff
 
+## F-414 / F-415: notebook reckoning (2026-10-21)
+- Remaining: Adam accepts feel. Turn-time promises, named mountains and terrain routes already use the fiction; their labels and all inputs stay unchanged. No difficulty presets exist.
+- Game menu offers “Count the day in the notebook”, off by default for each visit. It is UI state only. Finished-climb read-backs and the closed season show an optional total: twice the recorded home-by-dark count plus recorded summit visits. Each display gives the components and says this is the game’s reckoning, not a measure of people. No live totals or faith measures.
+- Focused DOM tests cover default-off, unchanged choices/state/save, immediate ending toggles, reopening, next-climb hiding and history-only season totals. Phone browser verification mocks camp networking. No HF, simulation, replay, lab-client or Worker changes.
+
 ## Round 4: readable replies and reaching people (2026-10-20)
 - Remaining: Adam accepts feel. A fresh source-unread retest of this round remains unrun. None of the three requested fixes is deferred.
 - Opening promises retain all five exact HF replies in the same readable result panel as later requests. Bubbles that cannot fit without overlap give way to those recorded answers. Expanded answers survive movement/status refreshes.

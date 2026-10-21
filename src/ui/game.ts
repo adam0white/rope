@@ -105,6 +105,9 @@ export class Game {
   private playing = false;
   private uiTick = 0;
   private lastSave = 0;
+  private showReckoning = false;
+  private menuEl: HTMLElement | null = null;
+  private reckoningFacts: ReturnType<typeof factsOf>[] = [];
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -115,6 +118,9 @@ export class Game {
     const mark = h('a', 'mark', '◇ human framework');
     (mark as HTMLAnchorElement).href = 'https://human.adamwhite.work';
     this.top.append(mark, this.whereEl, this.speedEl);
+    const menu = h('button', '', 'Game menu');
+    menu.onclick = () => this.gameMenu();
+    this.top.append(menu);
     for (const sp of ['slow', 'normal', 'fast'] as Speed[]) {
       const b = h('button', '', sp === 'slow' ? '◁' : sp === 'normal' ? '▷' : '▷▷');
       b.title = `${sp} speed`;
@@ -225,7 +231,7 @@ export class Game {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    if (this.playing && this.climb && !this.climb.over && !this.pageOpen()) {
+    if (this.playing && this.climb && !this.climb.over && !this.pageOpen() && !this.menuEl) {
       const slowed = now < this.slowUntil || this.panel !== 'main' || this.verb !== null;
       if (this.skipping && !onlyWalkingLeft(this.climb)) this.skipping = false;
       const rate = this.skipping ? 1200 : RATE[this.speed] * (slowed && this.speed !== 'slow' ? SLOW : 1);
@@ -1399,6 +1405,9 @@ export class Game {
     const el = h('div', 'page', `<div class="inner">${html}</div>`);
     this.root.append(el);
     this.pageEl = el;
+    const menu = h('button', 'btn', 'Game menu');
+    menu.onclick = () => this.gameMenu();
+    el.querySelector('.inner')?.append(menu);
     bind(el);
   }
 
@@ -1406,6 +1415,62 @@ export class Game {
     this.pageEl?.remove();
     this.pageEl = null;
     this.last = performance.now();
+  }
+
+  private gameMenu(): void {
+    if (this.menuEl) return;
+    const menu = h(
+      'div',
+      'page',
+      `<div class="inner"><h2>Game</h2>
+      <p><label><input type="checkbox" data-reckoning ${this.showReckoning ? 'checked' : ''}> Count the day in the notebook</label></p>
+      <p class="caption">Show a reckoning after a climb and at season’s end. For this visit only.</p>
+      <button class="btn" data-menu-close>Back</button></div>`,
+    );
+    menu.setAttribute('role', 'dialog');
+    menu.setAttribute('aria-modal', 'true');
+    menu.setAttribute('aria-label', 'Game menu');
+    menu.style.zIndex = '6';
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const close = () => {
+      menu.remove();
+      this.menuEl = null;
+      this.last = performance.now();
+      previousFocus?.focus();
+    };
+    menu.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close();
+      if (event.key === 'Tab') {
+        const controls = [...menu.querySelectorAll<HTMLElement>('input, button')];
+        const next = event.shiftKey ? controls.at(-1) : controls[0];
+        if (document.activeElement === (event.shiftKey ? controls[0] : controls.at(-1))) {
+          event.preventDefault();
+          next?.focus();
+        }
+      }
+    });
+    this.menuEl = menu;
+    this.root.append(menu);
+    menu.querySelector<HTMLInputElement>('input')?.focus();
+    menu.querySelector<HTMLInputElement>('[data-reckoning]')?.addEventListener('change', (event) => {
+      this.showReckoning = (event.target as HTMLInputElement).checked;
+      this.renderReckoning();
+    });
+    menu.querySelector('[data-menu-close]')?.addEventListener('click', close);
+  }
+
+  /** A game convention over recorded outcomes, never an estimate of a person's inner life. */
+  private renderReckoning(): void {
+    const box = this.pageEl?.querySelector<HTMLElement>('[data-reckoning-result]');
+    if (!box) return;
+    const facts = this.reckoningFacts.flatMap((day) => Object.values(day));
+    const home = facts.filter((f) => f.home).length;
+    const tops = facts.filter((f) => f.summit).length;
+    box.innerHTML =
+      this.showReckoning && this.reckoningFacts.length > 0
+        ? `<p><b>Notebook total: ${2 * home + tops}</b> = 2 × ${home} home by dark + summit visits: ${tops}.</p>
+        <p class="caption">This game’s reckoning for ${this.season.over ? 'the completed climbs this season' : 'this completed climb'}; not a measure of people.</p>`
+        : '';
   }
 
   private footer(): string {
@@ -1558,6 +1623,7 @@ export class Game {
     if (this.endTimer !== null) clearTimeout(this.endTimer);
     this.endTimer = null;
     const c = this.climb;
+    this.reckoningFacts = c.over ? [factsOf(c)] : [];
     lab.screen(climbScreen(c, 'debrief'));
     for (const name of climbMilestones(c)) lab.milestone(name);
     const m = MOUNTAINS[c.mountain];
@@ -1575,6 +1641,7 @@ export class Game {
       `<h1>${esc(m?.name ?? '')}</h1>
       <p class="sub">The day, read back</p>
       ${outcomes}
+      <div data-reckoning-result></div>
       ${story}
       <h2>That night at the hut</h2>
       <div class="camp" data-camp><p class="caption">They talk a little over the stove…</p></div>
@@ -1596,6 +1663,7 @@ export class Game {
         el.querySelector<HTMLElement>('[data-a="next"]')?.addEventListener('click', () => this.advance());
       },
     );
+    this.renderReckoning();
     this.runCamp(m?.name ?? '');
     this.runDebrief();
   }
@@ -1660,6 +1728,7 @@ export class Game {
   }
 
   private seasonPage(): void {
+    this.reckoningFacts = this.season.over ? this.season.history.map((day) => day.facts) : [];
     lab.screen('season');
     lab.milestone('season done');
     const hist = this.season.history
@@ -1679,11 +1748,13 @@ export class Game {
       `<h1>The season</h1>
       ${this.peaksSvg(this.season.history.length)}
       ${hist}
+      <div data-reckoning-result></div>
       <p><button class="btn go" data-a="new">Begin a new season</button></p>
       ${this.footer()}`,
       (el) =>
         el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () => this.newGame()),
     );
+    this.renderReckoning();
   }
 }
 
