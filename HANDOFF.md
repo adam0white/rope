@@ -1,5 +1,11 @@
 # Handoff
 
+## Owner automatic pacing update (2026-10-21)
+- Remaining: Adam accepts feel. Playback is automatic: brisk quiet travel, reading time for each new answer, injury, arrival, promise or tutorial, and slow response time for active calls. Choosing and menu/inspection pages hold time.
+- The former nightfall shortcut is “Until something happens”, available only after reading in a quiet walk down. Every unchanged simulation minute runs, and the first delivered event or new reading stops the batch and clears carry. Menu visits preserve reading, bubbles and presentation deadlines, including the ending transition.
+- The title and hut retain their background behind native information buttons. Recorded-answer disclosures remain. The menu has no tally preference; finished climbs and the closed season compute their recorded-outcome arithmetic and offer “See tally”.
+- No HF pin, simulation, save format, replay or scenario changes. Old owner/full-state replay and continuation controls remain in the suite. No Workers AI calls are needed for this change.
+
 ## F-414 / F-415: notebook reckoning (2026-10-21)
 - Remaining: Adam accepts feel. Turn-time promises, named mountains and terrain routes already use the fiction; their labels and all inputs stay unchanged. No difficulty presets exist.
 - Game menu offers “Count the day in the notebook”, off by default for each visit. It is UI state only. Finished-climb read-backs and the closed season show an optional total: twice the recorded home-by-dark count plus recorded summit visits. Each display gives the components and says this is the game’s reckoning, not a measure of people. No live totals or faith measures.

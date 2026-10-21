@@ -41,7 +41,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function atNight(speed: 'normal' | 'fast', skip: boolean) {
+async function atNight(skip: boolean) {
   const { season } = newSeason(ownerNight.seed);
   const game = new Game(document.querySelector<HTMLElement>('#app') as HTMLElement);
   await game.boot();
@@ -55,17 +55,18 @@ async function atNight(speed: 'normal' | 'fast', skip: boolean) {
     disclosure: { unlocked: ['insist', 'tell', 'promise', 'rope', 'fix', 'pack', 'share'], seen: [] },
     over: false,
   });
-  const speedButton = document.querySelector<HTMLButtonElement>(`[data-speed="${speed}"]`);
-  expect(speedButton).not.toBeNull();
-  speedButton?.click();
-  if (skip) {
+  expect(document.querySelector('[data-speed]')).toBeNull();
+  vi.advanceTimersByTime(7500);
+  driver.frame();
+  if (skip && !driver.climb.over) {
     const walk = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent === 'walk on to nightfall',
+      (b) => b.textContent === 'Until something happens',
     );
-    expect(walk).toBeDefined();
+    // A pending call can make the old nightfall shortcut unavailable.
     walk?.click();
   }
   for (let i = 0; i < 200 && !driver.climb.over; i++) {
+    vi.advanceTimersByTime(100);
     driver.last = performance.now() - 100;
     driver.frame();
   }
@@ -80,25 +81,26 @@ it('the owner replay still reproduces the full legacy state exactly', () => {
   expect(createHash('sha256').update(snapshot(played)).digest('hex')).toBe(ownerNight.stateHash);
 });
 
-it.each([
-  ['normal', false],
-  ['fast', false],
-  ['fast', true],
-] as const)('%s speed (skip=%s) ends the owner night and permits the next climb', async (speed, skip) => {
-  const driver = await atNight(speed, skip);
-  expect(driver.climb.over).toBe(true);
-  vi.advanceTimersByTime(2600);
-  const next = document.querySelector<HTMLButtonElement>('[data-a="next"]');
-  expect(next?.textContent).toBe('On to The Tooth');
-  next?.click();
-  expect(driver.climb.climbNo).toBe(2);
-});
+it.each([false, true])(
+  'automatic playback (until event=%s) ends the owner night and permits the next climb',
+  async (skip) => {
+    const driver = await atNight(skip);
+    expect(driver.climb.over).toBe(true);
+    vi.advanceTimersByTime(2600);
+    driver.frame();
+    const next = document.querySelector<HTMLButtonElement>('[data-a="next"]');
+    expect(next?.textContent).toBe('On to The Tooth');
+    next?.click();
+    expect(driver.climb.climbNo).toBe(2);
+  },
+);
 
 // The drawer remains keyboard-focusable under a page. Returning from its journal must
 // never reveal an ended map, whose stopped clock cannot run endClimb a second time.
 it('Back from the drawer journal after auto-ending returns to the next phase', async () => {
-  const driver = await atNight('fast', true);
+  const driver = await atNight(true);
   vi.advanceTimersByTime(2600);
+  driver.frame();
   document.querySelector<HTMLButtonElement>('.drawer-btn')?.click();
   expect(document.querySelector('.page h2')?.textContent).toBe('Journal');
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
@@ -108,22 +110,24 @@ it('Back from the drawer journal after auto-ending returns to the next phase', a
 });
 
 it('leaving the journal during the ending stamp cannot later reopen an obsolete debrief', async () => {
-  const driver = await atNight('fast', true);
+  const driver = await atNight(true);
   document.querySelector<HTMLButtonElement>('.drawer-btn')?.click();
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
   expect(document.querySelector<HTMLButtonElement>('[data-a="next"]')?.textContent).toBe('On to The Tooth');
   document.querySelector<HTMLButtonElement>('[data-a="next"]')?.click();
   expect(driver.climb.climbNo).toBe(2);
   vi.advanceTimersByTime(2600);
+  driver.frame();
   expect(document.querySelector('.page')?.textContent).toContain('When do you turn back?');
   expect(document.querySelector('[data-a="next"]')).toBeNull();
 });
 
 it('Back from the journal after closing the season keeps the season closed', async () => {
-  const driver = await atNight('fast', true);
+  const driver = await atNight(true);
   // Exercise the same page lifecycle at the last climb's end.
   driver.climb.climbNo = 3;
   vi.advanceTimersByTime(2600);
+  driver.frame();
   const close = document.querySelector<HTMLButtonElement>('[data-a="next"]');
   expect(close?.textContent).toBe('Close the season');
   close?.click();

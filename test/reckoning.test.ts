@@ -37,10 +37,8 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 const button = (text: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].findLast((b) => b.textContent === text);
-function toggle() {
-  button('Game menu')?.click();
-  document.querySelector<HTMLInputElement>('[data-reckoning]')?.click();
-  button('Back')?.click();
+function reveal() {
+  document.querySelector<HTMLButtonElement>('[data-see-tally]')?.click();
 }
 async function setup() {
   const game = new Game(document.querySelector<HTMLElement>('#app') as HTMLElement);
@@ -51,29 +49,26 @@ async function setup() {
   driver.begin(climb, season.start as string);
   return driver;
 }
-it('leaves real turn-time choices unchanged; preference starts off and never enters save or inputs', async () => {
+it('keeps real turn-time choices and offers no tally preference or live total', async () => {
   const d = await setup();
   expect([...document.querySelectorAll('[data-hour]')].map((b) => b.textContent)).toEqual([
     'We turn at 12:00',
     'We turn at 13:00',
     'We turn at 14:00',
   ]);
-  expect(button("We'll see")).toBeDefined();
   const before = snapshot(d.climb);
   const saved = localStorage.getItem('rope.save.v1');
   button('Game menu')?.click();
-  expect(document.querySelector<HTMLInputElement>('[data-reckoning]')?.checked).toBe(false);
-  expect(document.querySelector('label')?.textContent).toContain('Count the day in the notebook');
-  document.querySelector<HTMLInputElement>('[data-reckoning]')?.click();
+  expect(document.querySelector('[data-reckoning]')).toBeNull();
   button('Back')?.click();
   button("We'll see")?.click();
-  expect(document.body.textContent).not.toContain('Notebook total:');
+  expect(document.querySelector('[data-see-tally]')).toBeNull();
   d.journalPage();
-  expect(document.body.textContent).not.toContain('Notebook total:');
+  expect(document.querySelector('[data-see-tally]')).toBeNull();
   expect(snapshot(d.climb)).toBe(before);
   expect(localStorage.getItem('rope.save.v1')).toBe(saved);
 });
-it('shows the explicit total immediately at the ending, retains it on reopen, and clears it on next climb', async () => {
+it('computes the completed climb total and reveals it only on request without changing saves', async () => {
   const d = await setup();
   d.climb.over = true;
   const member = d.climb.members[0];
@@ -81,40 +76,32 @@ it('shows the explicit total immediately at the ending, retains it on reopen, an
   member.homeAt = d.climb.minute;
   member.summitAt = d.climb.minute;
   d.debriefPage();
-  expect(document.body.textContent).not.toContain('Notebook total:');
+  expect(document.querySelector('#reckoning-tally')?.hasAttribute('hidden')).toBe(true);
   const before = snapshot(d.climb);
-  toggle();
+  reveal();
+  expect(document.querySelector('#reckoning-tally')?.hasAttribute('hidden')).toBe(false);
   expect(document.querySelector('[data-reckoning-result]')?.textContent).toContain(
     'Notebook total: 3 = 2 × 1 home by dark + summit visits: 1.',
   );
-  expect(document.body.textContent).toContain('not a measure of people');
   expect(snapshot(d.climb)).toBe(before);
   d.journalPage();
-  expect(document.body.textContent).not.toContain('Notebook total:');
+  expect(document.querySelector('[data-see-tally]')).toBeNull();
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
-  expect(document.body.textContent).toContain('Notebook total: 3');
-  toggle();
-  expect(document.body.textContent).not.toContain('Notebook total:');
-  toggle();
+  expect(document.querySelector('#reckoning-tally')?.hasAttribute('hidden')).toBe(true);
   d.advance();
-  expect(document.body.textContent).not.toContain('Notebook total:');
+  expect(document.querySelector('[data-see-tally]')).toBeNull();
 });
-it('terminal season counts only recorded history, never its current or unplayed climbs; new instance defaults off', async () => {
+it('counts only recorded history at the closed season', async () => {
   const d = await setup();
   d.climb.over = true;
   d.climb.climbNo = 3;
   d.debriefPage();
-  toggle();
   d.advance();
   expect(d.season.history).toHaveLength(1);
+  expect(document.querySelector('#reckoning-tally')?.hasAttribute('hidden')).toBe(true);
+  reveal();
   expect(document.querySelector('[data-reckoning-result]')?.textContent).toContain(
     'Notebook total: 0 = 2 × 0 home by dark + summit visits: 0.',
   );
   expect(document.body.textContent).toContain('the completed climbs this season');
-  await new Game(document.querySelector<HTMLElement>('#app') as HTMLElement).boot();
-  const games = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
-    (b) => b.textContent === 'Game menu',
-  );
-  games.at(-1)?.click();
-  expect(document.querySelector<HTMLInputElement>('[data-reckoning]')?.checked).toBe(false);
 });

@@ -64,15 +64,16 @@ it('keeps mandatory opening story across title and hut below forty words, with c
   await boot();
   const words = (title = false) => {
     const copy = document.querySelector('.page .inner')?.cloneNode(true) as HTMLElement;
-    for (const el of copy.querySelectorAll('details, button, .footer, .caption, svg, h1')) el.remove();
+    for (const el of copy.querySelectorAll('details, [popover], button, .footer, .caption, svg, h1'))
+      el.remove();
     if (!title) copy.querySelector('.sub')?.remove();
     return (copy.textContent ?? '').trim().split(/\s+/).filter(Boolean).length;
   };
   const title = words(true);
-  expect(document.querySelector('.page details')?.textContent).toContain('eleven summers');
+  expect(document.querySelector('.page [popover]')?.textContent).toContain('eleven summers');
   button('Begin the season').click();
   expect(title + words()).toBeLessThanOrEqual(40);
-  expect(document.querySelector('.page details')?.textContent).toContain('Tamar checked');
+  expect(document.querySelector('.page [popover]')?.textContent).toContain('Tamar checked');
   expect(document.querySelectorAll('[data-hour]')).toHaveLength(3);
 });
 

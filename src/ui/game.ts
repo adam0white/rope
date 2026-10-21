@@ -38,14 +38,10 @@ import { lab } from './lab.ts';
 import { climbMilestones, climbScreen } from './labnames.ts';
 import { moodWord } from './look.ts';
 import { PACE } from './pace.ts';
+import { attentionNeeded, eventStamp, playbackRate } from './playback.ts';
 import { Scene } from './scene.ts';
 
 const SAVE_KEY = 'rope.save.v1';
-/** Sim minutes per real second. Normal makes a twelve-hour day about twenty minutes. */
-const RATE = { slow: PACE.slow, normal: PACE.normal, fast: PACE.fast } as const;
-type Speed = keyof typeof RATE;
-/** Tactical slowdown: how much and for how long (real ms) after a moment that needs you. */
-const SLOW = PACE.slowFactor;
 const SLOW_MS = PACE.slowMs;
 const BUBBLE_MS = 7500;
 
@@ -77,7 +73,7 @@ export class Game {
   private scene = new Scene();
   private top = h('div', 'top');
   private whereEl = h('div', 'where');
-  private speedEl = h('div', 'speed');
+  private paceEl = h('div', 'clock-rate');
   private sceneEl = h('div', 'scene');
   private bubblesEl = h('div', 'bubbles');
   private noteEl = h('div', 'note');
@@ -88,8 +84,11 @@ export class Game {
   private climb!: ClimbState;
   private start = '';
   private disc: Disclosure = newDisclosure();
-  private speed: Speed = 'normal';
   private slowUntil = 0;
+  private stampUntil = 0;
+  private noteUntil = 0;
+  private storyUntil = 0;
+  private endAt = 0;
   /** Walking the rest of the day quickly: on only while nothing is left to decide (`onlyWalkingLeft`). */
   private skipping = false;
   private acc = 0;
@@ -105,7 +104,6 @@ export class Game {
   private playing = false;
   private uiTick = 0;
   private lastSave = 0;
-  private showReckoning = false;
   private menuEl: HTMLElement | null = null;
   private reckoningFacts: ReturnType<typeof factsOf>[] = [];
 
@@ -117,22 +115,10 @@ export class Game {
     await document.fonts?.ready;
     const mark = h('a', 'mark', '◇ human framework');
     (mark as HTMLAnchorElement).href = 'https://human.adamwhite.work';
-    this.top.append(mark, this.whereEl, this.speedEl);
+    this.top.append(mark, this.whereEl, this.paceEl);
     const menu = h('button', '', 'Game menu');
     menu.onclick = () => this.gameMenu();
     this.top.append(menu);
-    for (const sp of ['slow', 'normal', 'fast'] as Speed[]) {
-      const b = h('button', '', sp === 'slow' ? '◁' : sp === 'normal' ? '▷' : '▷▷');
-      b.title = `${sp} speed`;
-      b.setAttribute('aria-label', `${sp} speed`);
-      b.onclick = () => {
-        this.speed = sp;
-        this.slowUntil = 0;
-        this.renderTop();
-      };
-      b.dataset.speed = sp;
-      this.speedEl.append(b);
-    }
     this.sceneEl.append(this.bubblesEl, this.stampEl);
     const jb = h('button', 'drawer-btn', 'journal');
     jb.onclick = () => this.journalPage();
@@ -212,10 +198,15 @@ export class Game {
     this.acc = 0;
     for (const b of this.bubbles.values()) b.el.remove();
     this.bubbles.clear();
-    // A new climb starts clean: no stamp from the last one, and the clock at normal speed.
+    // A new climb starts with fresh presentation deadlines.
+    this.slowUntil = 0;
+    this.stampUntil = 0;
+    this.noteUntil = 0;
+    this.storyUntil = 0;
+    this.endAt = 0;
     this.stampEl.classList.remove('on');
     this.stampEl.textContent = '';
-    if (!resumed) this.speed = 'normal';
+    this.slow();
     this.skipping = false;
     this.ending = false;
     this.closePage();
@@ -229,22 +220,64 @@ export class Game {
 
   private frame(): void {
     const now = performance.now();
-    const dt = Math.min(0.1, (now - this.last) / 1000);
+    const elapsed = Math.max(0, now - this.last);
+    const dt = Math.min(0.1, elapsed / 1000);
+    const held =
+      this.pageOpen() || !!this.menuEl || !!document.querySelector(':popover-open') || document.hidden;
+    if (held) {
+      for (const key of ['slowUntil', 'stampUntil', 'noteUntil', 'storyUntil', 'endAt'] as const)
+        if (this[key] > this.last) this[key] += elapsed;
+      for (const bubble of this.bubbles.values()) if (bubble.until > this.last) bubble.until += elapsed;
+    }
     this.last = now;
-    if (this.playing && this.climb && !this.climb.over && !this.pageOpen() && !this.menuEl) {
-      const slowed = now < this.slowUntil || this.panel !== 'main' || this.verb !== null;
-      if (this.skipping && !onlyWalkingLeft(this.climb)) this.skipping = false;
-      const rate = this.skipping ? 1200 : RATE[this.speed] * (slowed && this.speed !== 'slow' ? SLOW : 1);
+    if (!held) {
+      if (this.stampUntil && now >= this.stampUntil) {
+        this.stampEl.classList.remove('on');
+        this.stampUntil = 0;
+      }
+      if (this.noteUntil && now >= this.noteUntil) {
+        this.noteUntil = 0;
+        this.dismissNote();
+      }
+      if (this.storyUntil && now >= this.storyUntil) {
+        this.storyUntil = 0;
+        if (!this.note) this.noteEl.innerHTML = '';
+        else this.showNote(this.note);
+      }
+    }
+    if (this.playing && this.climb && !this.climb.over && !held) {
+      if (this.skipping && (!onlyWalkingLeft(this.climb) || attentionNeeded(this.climb)))
+        this.skipping = false;
+      const rate = playbackRate(
+        this.panel !== 'main' || this.verb !== null,
+        now < this.slowUntil,
+        attentionNeeded(this.climb),
+        this.skipping,
+      );
+      if (rate === 0) this.acc = 0;
       this.acc += dt * rate;
       let n = 0;
-      while (this.acc >= 1 && n < (this.skipping ? 40 : 30) && !this.climb.over) {
+      while (this.acc >= 1 && n < 40 && !this.climb.over) {
+        const before = eventStamp(this.climb);
+        const readBefore = this.slowUntil;
         step(this.climb);
         this.acc -= 1;
         n++;
         this.afterStep();
+        if (
+          eventStamp(this.climb) !== before ||
+          this.slowUntil > readBefore ||
+          (this.skipping && !onlyWalkingLeft(this.climb))
+        ) {
+          this.skipping = false;
+          this.acc = 0;
+          this.slow();
+          break;
+        }
       }
-    }
+    } else this.acc = 0;
     if (this.playing && this.climb?.over) this.endClimb();
+    if (!held && this.endAt && now >= this.endAt) this.debriefPage();
     if (this.climb) {
       this.scene.selected = this.target === 'all' ? null : this.target;
       this.scene.draw(this.climb, dt);
@@ -274,11 +307,6 @@ export class Game {
       if (!j) continue;
       if (/fell|slipped|turned for home|would not|put you off|summit\.|stood on the summit/.test(j.text))
         this.slow();
-      // A fall brings the clock back from fast: the player should be there for it, not past it.
-      if (/\bfell\b/.test(j.text) && j.who && this.speed === 'fast') {
-        this.speed = 'normal';
-        this.renderTop();
-      }
       if (j.text.includes('stood on the summit') && j.who)
         this.stamp(`Summit · ${memberOf(j.who).name} · ${clock(j.at)}`);
       if (j.story) this.showStory(j.text);
@@ -290,10 +318,6 @@ export class Game {
     const pr = c.promise;
     if (pr && pr.status === 'open' && c.minute === c.day * 1440 + pr.hour * 60) {
       this.slow();
-      if (this.speed === 'fast') {
-        this.speed = 'normal';
-        this.renderTop();
-      }
     }
     const objected =
       !has(this.disc, 'insist') &&
@@ -311,7 +335,7 @@ export class Game {
   private stamp(text: string): void {
     this.stampEl.textContent = text;
     this.stampEl.classList.add('on');
-    setTimeout(() => this.stampEl.classList.remove('on'), 4200);
+    this.stampUntil = performance.now() + 4200;
   }
 
   // ------------------------------------------------------------ input
@@ -336,6 +360,9 @@ export class Game {
     step(c);
     this.afterStep();
     this.saySelf(also ?? inp);
+    this.skipping = false;
+    this.acc = 0;
+    this.slow();
     if (this.note?.lit) {
       const lit = this.note.lit;
       const matched =
@@ -425,7 +452,7 @@ export class Game {
     this.trustSeen.set(l.who, trust);
     const turned = trust < was - 0.01 ? ` (${memberOf(l.who).they} looks away)` : '';
     this.bubble(l.who, l.says + turned, cls);
-    if (l.verdict !== 'assented' && l.verdict !== 'heard') this.slow();
+    this.slow();
   }
 
   /** A quiet stretch says so in the margin, with the way to walk it faster. Never over a real note or story. */
@@ -437,8 +464,8 @@ export class Game {
     const lastLine = c.lines[c.lines.length - 1]?.at ?? c.startMinute;
     const lastJournal = c.journal[c.journal.length - 1]?.at ?? c.startMinute;
     const halt = haltReason(c);
-    const quiet = c.minute - Math.max(lastLine, lastJournal) >= 20 && this.speed !== 'fast' && !c.over;
-    const text = halt ?? (quiet ? 'A quiet stretch. Tap <b>▷▷</b> to walk it faster.' : null);
+    const quiet = c.minute - Math.max(lastLine, lastJournal) >= 20 && !c.over;
+    const text = halt ?? (quiet ? 'A quiet stretch. The walk moves briskly until something happens.' : null);
     if (text && (!this.hinting || this.hintText !== text)) {
       this.noteEl.innerHTML = `<span class="quiet">${text}</span>`;
       this.hinting = true;
@@ -524,12 +551,13 @@ export class Game {
     if (n.unlock && !this.disc.unlocked.includes(n.unlock)) this.disc.unlocked.push(n.unlock);
     this.slow(PACE.noteSlowMs);
     this.renderSheet();
-    if (!n.lit) setTimeout(() => this.note?.id === n.id && this.dismissNote(), 16000);
+    this.noteUntil = n.lit ? 0 : performance.now() + 16000;
   }
 
   private dismissNote(): void {
     if (this.note) markSeen(this.disc, this.note);
     this.note = null;
+    this.noteUntil = 0;
     this.noteEl.innerHTML = '';
     this.renderSheet();
   }
@@ -538,10 +566,7 @@ export class Game {
     this.hinting = false;
     this.noteEl.innerHTML = `<span class="hand">${esc(text)}</span>`;
     this.slow(PACE.noteSlowMs);
-    setTimeout(() => {
-      if (!this.note) this.noteEl.innerHTML = '';
-      else this.showNote(this.note);
-    }, 9000);
+    this.storyUntil = performance.now() + 9000;
   }
 
   // ------------------------------------------------------------ rendering
@@ -557,11 +582,16 @@ export class Game {
     if (!c) return;
     const m = MOUNTAINS[c.mountain];
     this.whereEl.textContent = `${m?.name ?? ''} · ${clock(c.minute)}`;
-    const slowed = performance.now() < this.slowUntil || this.panel !== 'main' || this.verb !== null;
-    for (const b of this.speedEl.querySelectorAll('button')) {
-      b.setAttribute('aria-pressed', String(b.dataset.speed === this.speed));
-      b.classList.toggle('slowed', slowed && b.dataset.speed === this.speed && this.speed !== 'slow');
-    }
+    this.paceEl.textContent =
+      this.menuEl || this.pageOpen()
+        ? 'Time waits'
+        : this.panel !== 'main' || this.verb !== null
+          ? 'Choosing · time waits'
+          : performance.now() < this.slowUntil
+            ? 'Reading the latest word'
+            : attentionNeeded(c)
+              ? 'A call needs attention'
+              : 'Walking until something happens';
   }
 
   private sheetKey = '';
@@ -577,6 +607,8 @@ export class Game {
     );
     const key = JSON.stringify([
       this.panel,
+      this.skipping,
+      performance.now() < this.slowUntil,
       this.verb,
       this.target,
       this.partner,
@@ -713,11 +745,24 @@ export class Game {
       bar.append(all);
       calls.append(bar);
     }
-    if (this.panel === 'main' && !hurt && onlyWalkingLeft(c) && !this.skipping) {
-      const bar = h('div', 'ask-bar faint', '<span>Nothing left to decide but the walk down.</span>');
-      const b = h('button', 'force', 'walk on to nightfall');
+    if (
+      this.panel === 'main' &&
+      !hurt &&
+      onlyWalkingLeft(c) &&
+      !this.skipping &&
+      !attentionNeeded(c) &&
+      performance.now() >= this.slowUntil
+    ) {
+      const bar = h(
+        'div',
+        'ask-bar faint',
+        '<span>The party is walking down. Stop at the next event.</span>',
+      );
+      const b = h('button', 'force', 'Until something happens');
       b.onclick = () => {
+        if (attentionNeeded(c) || performance.now() < this.slowUntil || !onlyWalkingLeft(c)) return;
         this.skipping = true;
+        this.acc = 0;
         this.renderSheet();
       };
       bar.append(b);
@@ -1423,8 +1468,6 @@ export class Game {
       'div',
       'page',
       `<div class="inner"><h2>Game</h2>
-      <p><label><input type="checkbox" data-reckoning ${this.showReckoning ? 'checked' : ''}> Count the day in the notebook</label></p>
-      <p class="caption">Show a reckoning after a climb and at season’s end. For this visit only.</p>
       <button class="btn" data-menu-close>Back</button></div>`,
     );
     menu.setAttribute('role', 'dialog');
@@ -1439,7 +1482,7 @@ export class Game {
       previousFocus?.focus();
     };
     menu.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') close();
+      if (event.key === 'Escape' && !document.querySelector(':popover-open')) close();
       if (event.key === 'Tab') {
         const controls = [...menu.querySelectorAll<HTMLElement>('input, button')];
         const next = event.shiftKey ? controls.at(-1) : controls[0];
@@ -1451,11 +1494,7 @@ export class Game {
     });
     this.menuEl = menu;
     this.root.append(menu);
-    menu.querySelector<HTMLInputElement>('input')?.focus();
-    menu.querySelector<HTMLInputElement>('[data-reckoning]')?.addEventListener('change', (event) => {
-      this.showReckoning = (event.target as HTMLInputElement).checked;
-      this.renderReckoning();
-    });
+    menu.querySelector<HTMLButtonElement>('button')?.focus();
     menu.querySelector('[data-menu-close]')?.addEventListener('click', close);
   }
 
@@ -1467,10 +1506,15 @@ export class Game {
     const home = facts.filter((f) => f.home).length;
     const tops = facts.filter((f) => f.summit).length;
     box.innerHTML =
-      this.showReckoning && this.reckoningFacts.length > 0
-        ? `<p><b>Notebook total: ${2 * home + tops}</b> = 2 × ${home} home by dark + summit visits: ${tops}.</p>
-        <p class="caption">This game’s reckoning for ${this.season.over ? 'the completed climbs this season' : 'this completed climb'}; not a measure of people.</p>`
+      this.reckoningFacts.length > 0
+        ? `<button class="btn" data-see-tally aria-expanded="false" aria-controls="reckoning-tally">See tally</button><div id="reckoning-tally" hidden><p><b>Notebook total: ${2 * home + tops}</b> = 2 × ${home} home by dark + summit visits: ${tops}.</p><p class="caption">This game’s reckoning for ${this.season.over ? 'the completed climbs this season' : 'this completed climb'}; not a measure of people.</p></div>`
         : '';
+    box.querySelector('[data-see-tally]')?.addEventListener('click', (event) => {
+      const tally = box.querySelector<HTMLElement>('#reckoning-tally');
+      if (!tally) return;
+      tally.hidden = !tally.hidden;
+      (event.currentTarget as HTMLElement).setAttribute('aria-expanded', String(!tally.hidden));
+    });
   }
 
   private footer(): string {
@@ -1503,9 +1547,9 @@ export class Game {
       <p class="sub">Five people, three mountains.</p>
       ${this.peaksSvg(cont ? done : 0)}
       <p>Lead them up and bring them home. They can say no.</p>
-      <details><summary>More about the season</summary>
+      <button class="btn info" aria-label="More about the season" popovertarget="season-info">i</button><div id="season-info" class="info-popover" popover="auto"><h2>More about the season</h2>
       <p>For eleven summers Ezra led them. This year they asked you.</p>
-      <p>You walk with them, carry what you can, and say what you think. They decide for themselves: tired legs, fear, trust and old promises all have a say. Coming down safe is a good day.</p></details>
+      <p>You walk with them, carry what you can, and say what you think. They decide for themselves: tired legs, fear, trust and old promises all have a say. Coming down safe is a good day.</p></div>
       ${cont && sv ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}
       <p>
         ${cont ? '<button class="btn go" data-a="continue">Continue the season</button>' : ''}
@@ -1538,8 +1582,8 @@ export class Game {
       <p class="plan">${[12, 13, 14]
         .map((hr) => `<button class="btn go" data-hour="${hr}">We turn at ${hr}:00</button>`)
         .join('')}<button class="btn go" data-a="go">We'll see</button></p>
-      <details><summary>At the hut</summary>${lines}
-      <p>A promised hour holds them, and you: they will remember whether you kept it.</p></details>`,
+      <button class="btn info" aria-label="At the hut" popovertarget="hut-info">i</button><div id="hut-info" class="info-popover" popover="auto"><h2>At the hut</h2>${lines}
+      <p>A promised hour holds them, and you: they will remember whether you kept it.</p></div>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => {
           this.closePage();
@@ -1604,7 +1648,6 @@ export class Game {
   }
 
   private ending = false;
-  private endTimer: ReturnType<typeof setTimeout> | null = null;
 
   private endClimb(): void {
     if (this.ending) return;
@@ -1614,14 +1657,13 @@ export class Game {
     const c = this.climb;
     // The stamp reads the same day account as the journal's last line and the read-back.
     this.stamp(dayAccount(c).stamp);
-    this.endTimer = setTimeout(() => this.debriefPage(), 2600);
+    this.endAt = performance.now() + 2600;
   }
 
   private debriefPage(): void {
     // Back from the journal may reach the read-back before the ending stamp expires.
     // Cancel that transition before the player can start another climb.
-    if (this.endTimer !== null) clearTimeout(this.endTimer);
-    this.endTimer = null;
+    this.endAt = 0;
     const c = this.climb;
     this.reckoningFacts = c.over ? [factsOf(c)] : [];
     lab.screen(climbScreen(c, 'debrief'));
