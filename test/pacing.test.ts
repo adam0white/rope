@@ -1,4 +1,3 @@
-import { writeFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { type ClimbState, startClimb } from '../src/sim/climb.ts';
 import { markSeen, newDisclosure, nextNote } from '../src/ui/disclosure.ts';
@@ -54,8 +53,5 @@ it('a climb takes about 20 real minutes at normal speed', () => {
     expect(mean).toBeGreaterThan(14);
     expect(mean).toBeLessThan(28);
   }
-  writeFileSync(
-    '/private/tmp/claude-504/-Users-abdul-code-human-framework/675a9839-8299-4863-91be-017a92a76ff0/scratchpad/pace.txt',
-    out.join(', '),
-  );
+  console.log(out.join(', '));
 });
