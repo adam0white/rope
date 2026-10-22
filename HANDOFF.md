@@ -109,3 +109,6 @@
 - The model only voices text; the client keeps lines spoken by party names and never reads state from them.
 - Worst case, assumed from list pricing (about $0.045/M input, $0.384/M output for the 8B fp8-fast model) and not measured: about 1.2k in + 180 out ≈ $0.00012 per call, so $0.012 per isolate per day at the cap; about $0.12/day even if ten isolates each hit it.
 - Estimated spend to date: under $0.01 (a handful of test calls). Estimate per call, assumed from list pricing and not measured: about 1k input + 180 output tokens, well under $0.001. Even every isolate at the daily cap stays far inside the Workers AI free daily allocation. Check the dashboard (AI > Workers AI usage) to confirm actual spend.
+
+## Player speed controls (2026-10-22)
+Remaining: Adam accepts feel. Slow, normal and fast are available again. They change playback only; reading, choosing, menu and inspection holds remain. “Until something happens” still stops at the first delivered event. Native information popovers and end-only tallies remain. Simulation, HF pin, saves and replay are unchanged.

@@ -73,6 +73,8 @@ export class Game {
   private scene = new Scene();
   private top = h('div', 'top');
   private whereEl = h('div', 'where');
+  private speed: 'slow' | 'normal' | 'fast' = 'normal';
+  private speedEl = h('div', 'speed');
   private paceEl = h('div', 'clock-rate');
   private sceneEl = h('div', 'scene');
   private bubblesEl = h('div', 'bubbles');
@@ -115,7 +117,19 @@ export class Game {
     await document.fonts?.ready;
     const mark = h('a', 'mark', '◇ human framework');
     (mark as HTMLAnchorElement).href = 'https://human.adamwhite.work';
-    this.top.append(mark, this.whereEl, this.paceEl);
+    this.top.append(mark, this.whereEl, this.speedEl, this.paceEl);
+    for (const speed of ['slow', 'normal', 'fast'] as const) {
+      const button = h('button', '', speed === 'slow' ? '◁' : speed === 'normal' ? '▷' : '▷▷');
+      button.setAttribute('aria-label', `${speed} speed`);
+      button.dataset.speed = speed;
+      button.onclick = () => {
+        this.speed = speed;
+        this.skipping = false;
+        this.acc = 0;
+        this.renderTop();
+      };
+      this.speedEl.append(button);
+    }
     const menu = h('button', '', 'Game menu');
     menu.onclick = () => this.gameMenu();
     this.top.append(menu);
@@ -199,6 +213,7 @@ export class Game {
     for (const b of this.bubbles.values()) b.el.remove();
     this.bubbles.clear();
     // A new climb starts with fresh presentation deadlines.
+    if (!resumed) this.speed = 'normal';
     this.slowUntil = 0;
     this.stampUntil = 0;
     this.noteUntil = 0;
@@ -253,6 +268,7 @@ export class Game {
         now < this.slowUntil,
         attentionNeeded(this.climb),
         this.skipping,
+        this.speed,
       );
       if (rate === 0) this.acc = 0;
       this.acc += dt * rate;
@@ -582,6 +598,8 @@ export class Game {
     if (!c) return;
     const m = MOUNTAINS[c.mountain];
     this.whereEl.textContent = `${m?.name ?? ''} · ${clock(c.minute)}`;
+    for (const button of this.speedEl.querySelectorAll('button'))
+      button.setAttribute('aria-pressed', String(button.dataset.speed === this.speed));
     this.paceEl.textContent =
       this.menuEl || this.pageOpen()
         ? 'Time waits'
@@ -591,7 +609,7 @@ export class Game {
             ? 'Reading the latest word'
             : attentionNeeded(c)
               ? 'A call needs attention'
-              : 'Walking until something happens';
+              : `${this.speed} speed`;
   }
 
   private sheetKey = '';

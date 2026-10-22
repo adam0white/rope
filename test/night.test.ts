@@ -55,7 +55,7 @@ async function atNight(skip: boolean) {
     disclosure: { unlocked: ['insist', 'tell', 'promise', 'rope', 'fix', 'pack', 'share'], seen: [] },
     over: false,
   });
-  expect(document.querySelector('[data-speed]')).toBeNull();
+  expect(document.querySelectorAll('[data-speed]')).toHaveLength(3);
   vi.advanceTimersByTime(7500);
   driver.frame();
   if (skip && !driver.climb.over) {

@@ -64,7 +64,9 @@ it('waits for reading and choices and leaves response time for calls', () => {
   expect(playbackRate(true, false, false, true)).toBe(0);
   expect(playbackRate(false, true, false, true)).toBe(0);
   expect(playbackRate(false, false, true, true)).toBeLessThan(1);
-  expect(playbackRate(false, false, false, false)).toBe(8);
+  expect(playbackRate(false, false, false, false)).toBe(0.8);
+  expect(playbackRate(false, false, false, false, 'slow')).toBe(0.15);
+  expect(playbackRate(false, false, false, false, 'fast')).toBe(2.4);
 });
 it('stops a fast walk at its first delivered event, discards overshoot and preserves every stepped minute', async () => {
   const d = await setup();

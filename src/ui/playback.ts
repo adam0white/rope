@@ -30,8 +30,9 @@ export function playbackRate(
   reading: boolean,
   attention: boolean,
   untilEvent: boolean,
+  speed: 'slow' | 'normal' | 'fast' = 'normal',
 ): number {
   if (choosing || reading) return 0;
   if (attention) return PACE.attention;
-  return untilEvent ? PACE.untilEvent : PACE.travel;
+  return untilEvent ? PACE.untilEvent : { slow: 0.15, normal: 0.8, fast: 2.4 }[speed];
 }

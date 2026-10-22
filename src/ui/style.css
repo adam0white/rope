@@ -831,3 +831,18 @@ a {
   font-size: 0.75rem;
   color: var(--ink-soft);
 }
+@media (max-width: 420px) {
+  .top {
+    flex-wrap: wrap;
+  }
+  .where {
+    flex-basis: calc(100% - 100px);
+    text-align: left;
+  }
+  .clock-rate {
+    flex: 1;
+  }
+  .top > button {
+    min-height: 44px;
+  }
+}
