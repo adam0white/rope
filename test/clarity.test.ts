@@ -11,7 +11,18 @@ vi.mock('../src/ui/scene.ts', () => ({
     draw = () => {};
   },
 }));
-vi.mock('../src/ui/lab.ts', () => ({ lab: { screen() {}, milestone() {} } }));
+vi.mock('../src/ui/lab.ts', () => ({
+  lab: {
+    screen() {},
+    milestone() {},
+    trackRun() {
+      return () => {};
+    },
+    captureSave() {},
+    telemetryOn: false,
+    setTelemetryOff() {},
+  },
+}));
 
 interface Driver {
   climb: ClimbState;
@@ -64,7 +75,9 @@ it('keeps mandatory opening story across title and hut below forty words, with c
   await boot();
   const words = (title = false) => {
     const copy = document.querySelector('.page .inner')?.cloneNode(true) as HTMLElement;
-    for (const el of copy.querySelectorAll('details, [popover], button, .footer, .caption, svg, h1'))
+    for (const el of copy.querySelectorAll(
+      'details, [popover], button, .footer, .caption, svg, h1, .lk-telemetry-notice',
+    ))
       el.remove();
     if (!title) copy.querySelector('.sub')?.remove();
     return (copy.textContent ?? '').trim().split(/\s+/).filter(Boolean).length;

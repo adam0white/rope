@@ -5,6 +5,7 @@
  */
 
 import { FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
+import { telemetryNotice, telemetryToggle } from '@adam0white/lab-kit';
 import { campFacts, campFallback } from '../sim/camp.ts';
 import {
   approachEstimate,
@@ -149,6 +150,25 @@ export class Game {
     });
     window.addEventListener('pagehide', () => this.save());
     requestAnimationFrame(() => this.frame());
+    lab.trackRun(
+      () => {
+        if (!this.climb || !this.season) return null;
+        const saved = this.load();
+        if (saved?.season.seed === this.season.seed && saved.season.climbNo === this.season.climbNo)
+          lab.captureSave(saved);
+        return structuredClone(exportClimb(this.start, this.climb, FRAMEWORK_VERSION));
+      },
+      {
+        runKey: () => (this.climb ? `${this.climb.seed}:${this.climb.climbNo}` : 'title'),
+        getLogs: () =>
+          this.climb
+            ? [
+                ...this.climb.journal.slice(-20).map((line) => line.text),
+                ...this.climb.lines.slice(-20).map((line) => `${line.who}: ${line.says}`),
+              ]
+            : [],
+      },
+    );
     this.titlePage();
   }
 
@@ -176,7 +196,9 @@ export class Game {
       over: this.climb.over,
     };
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(s));
+      const text = JSON.stringify(s);
+      localStorage.setItem(SAVE_KEY, text);
+      lab.captureSave(JSON.parse(text));
     } catch {
       // Storage full or blocked: the game plays on without a save.
     }
@@ -1511,6 +1533,7 @@ export class Game {
       }
     });
     this.menuEl = menu;
+    menu.querySelector('.inner')?.append(telemetryToggle(lab));
     this.root.append(menu);
     menu.querySelector<HTMLButtonElement>('button')?.focus();
     menu.querySelector('[data-menu-close]')?.addEventListener('click', close);
@@ -1576,6 +1599,13 @@ export class Game {
       <p class="caption">Plays offline once loaded. Install it from your browser’s menu.</p>
       ${this.footer()}`,
       (el) => {
+        const notice = telemetryNotice();
+        if (notice) {
+          Object.assign(notice.style, { position: 'static', transform: 'none', margin: '0 auto' });
+          const slot = document.createElement('div');
+          slot.append(notice);
+          el.querySelector('.inner')?.prepend(slot);
+        }
         el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () => {
           if (!cont || confirm('Begin a new season? The season in your notebook will be lost.'))
             this.newGame();

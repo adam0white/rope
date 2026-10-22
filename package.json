@@ -18,15 +18,16 @@
     "format": "biome format --write .",
     "measure": "node scripts/measure.ts",
     "check": "npm run lint && npm run typecheck && npm test",
-    "deploy": "npm run check && npm run build && wrangler deploy"
+    "deploy": "npm run check && npm run build && wrangler deploy",
+    "check:lane": "npm run check"
   },
   "dependencies": {
     "@adam0white/human-framework": "2.8.0",
-    "@adam0white/lab-client": "https://github.com/adam0white/human-framework/releases/download/lab-client-v0.1.2/adam0white-lab-client-0.1.2.tgz",
+    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.2.0.tgz",
     "pixi.js": "8.22.0"
   },
   "devDependencies": {
-    "@adam0white/lab-kit": "https://github.com/adam0white/human-framework/releases/download/lab-kit-v0.2.0/adam0white-lab-kit-0.2.0.tgz",
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.3.0.tgz",
     "@biomejs/biome": "2.5.15",
     "@types/node": "26.6.5",
     "happy-dom": "21.0.4",

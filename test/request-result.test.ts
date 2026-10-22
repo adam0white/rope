@@ -11,7 +11,18 @@ vi.mock('../src/ui/scene.ts', () => ({
     draw = () => {};
   },
 }));
-vi.mock('../src/ui/lab.ts', () => ({ lab: { screen() {}, milestone() {} } }));
+vi.mock('../src/ui/lab.ts', () => ({
+  lab: {
+    screen() {},
+    milestone() {},
+    trackRun() {
+      return () => {};
+    },
+    captureSave() {},
+    telemetryOn: false,
+    setTelemetryOff() {},
+  },
+}));
 
 interface Driver {
   climb: ClimbState;
