@@ -5,6 +5,7 @@
 - Independent Codex review found and fixed journal return bypassing the unresolved hut decision and the optional name input missing its touch sizing. A new regression reproduced the journal issue before the fix.
 - Local production browser checks cover title, hut, climb, pressure, info, menu, feedback, turnback/company/hurt calls, read-back and season at 360×690 and 1280×800. No page scroll and no visible targets below 44×44 in those screens. Pressure, menu and info hold the clock for 3.1 seconds.
 - Phone sheet is 216 px rather than the diagram's 200 px to preserve the required 44 px All answers target; scene is 318 px. Pacing remains presentation only. Workers AI spend unchanged; QA intercepts camp requests and uses the labelled deterministic fallback.
+- The replay CLI now uses the existing replayExport reconstruction, so partial downloads stop at the saved minute and legacy narration is selected correctly. A focused CLI regression failed before the fix. All 99 tests pass.
 - Final delivery identity, CI, live browser acceptance and screenshots: `/Users/abdul/code/.lab-scratch/codex/build-rope.md` and `/Users/abdul/code/.lab-scratch/ui-sweep/built/rope/`.
 
 # Handoff

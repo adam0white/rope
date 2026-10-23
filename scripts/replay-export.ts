@@ -3,12 +3,12 @@
  * Run: `node scripts/replay-export.ts docs/playtests/<file>.json`.
  */
 import { readFileSync } from 'node:fs';
-import { replay } from '../src/sim/climb.ts';
+import { replayExport } from '../src/sim/season.ts';
 
 const file = process.argv[2];
 if (!file) throw new Error('usage: node scripts/replay-export.ts <export.json>');
 const e = JSON.parse(readFileSync(file, 'utf8'));
-const c = replay(e.start, e.inputs);
+const c = replayExport(e);
 const saved = JSON.parse(e.state);
 // Text can change across builds (added causes, voices); what people did must not: compare who, when and verdict.
 const key = (ls: { at: number; who: string; verdict: string }[]) =>
