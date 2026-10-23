@@ -5,7 +5,7 @@
  */
 
 import { FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
-import { telemetryNotice, telemetryToggle } from '@adam0white/lab-kit';
+import { telemetryToggle } from '@adam0white/lab-kit';
 import { campFacts, campFallback } from '../sim/camp.ts';
 import {
   approachEstimate,
@@ -32,14 +32,14 @@ import { ALTERNATIVE_CAPTION, type Branch, outcomeWords } from '../sim/debrief.t
 import { coldAt, legsUp, SEASON } from '../sim/mountain.ts';
 import { MEMBERS, memberOf } from '../sim/party.ts';
 import { exportClimb, newSeason, nextClimb, type SeasonState } from '../sim/season.ts';
-import { haltReason, hurtCall, namesOf, onlyWalkingLeft, promiseDue } from './calls.ts';
+import { haltReason, hurtCall, namesOf, promiseDue } from './calls.ts';
 import { type Disclosure, has, markSeen, type Note, newDisclosure, nextNote } from './disclosure.ts';
 import { icon } from './icons.ts';
 import { lab } from './lab.ts';
 import { climbMilestones, climbScreen } from './labnames.ts';
 import { moodWord } from './look.ts';
 import { PACE } from './pace.ts';
-import { attentionNeeded, eventStamp, playbackRate } from './playback.ts';
+import { attentionNeeded, eventStamp, playbackRate, skipEventStamp } from './playback.ts';
 import { Scene } from './scene.ts';
 
 const SAVE_KEY = 'rope.save.v1';
@@ -56,7 +56,18 @@ interface Save {
   over: boolean;
 }
 
-type Panel = 'main' | 'more' | 'calls' | 'force' | 'partner' | 'tell' | 'promise' | 'route' | 'scout';
+type Panel =
+  | 'main'
+  | 'more'
+  | 'calls'
+  | 'force'
+  | 'partner'
+  | 'tell'
+  | 'promise'
+  | 'route'
+  | 'scout'
+  | 'leader-more'
+  | 'answers';
 
 const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] => {
   const el = document.createElement(tag);
@@ -74,8 +85,15 @@ export class Game {
   private scene = new Scene();
   private top = h('div', 'top');
   private whereEl = h('div', 'where');
-  private speed: 'slow' | 'normal' | 'fast' = 'normal';
-  private speedEl = h('div', 'speed');
+  private speed: 'auto' | 'slow' | 'normal' | 'fast' = 'auto';
+  private dayStrip = h('div', 'day-strip');
+  private dayBar = h('div', 'day-bar');
+  private leaderBar = h('div', 'leader-bar');
+  private skipButton = h('button', 'skip-button', 'Skip ⏩');
+  private skipStarted = 0;
+  private infoEl: HTMLElement | null = null;
+  private pageKind = 'title';
+  private answersInput = -1;
   private paceEl = h('div', 'clock-rate');
   private sceneEl = h('div', 'scene');
   private bubblesEl = h('div', 'bubbles');
@@ -116,30 +134,41 @@ export class Game {
 
   async boot(): Promise<void> {
     await document.fonts?.ready;
-    const mark = h('a', 'mark', '◇ human framework');
-    (mark as HTMLAnchorElement).href = 'https://human.adamwhite.work';
-    this.top.append(mark, this.whereEl, this.speedEl, this.paceEl);
-    for (const speed of ['slow', 'normal', 'fast'] as const) {
-      const button = h('button', '', speed === 'slow' ? '◁' : speed === 'normal' ? '▷' : '▷▷');
-      button.setAttribute('aria-label', `${speed} speed`);
-      button.dataset.speed = speed;
-      button.onclick = () => {
-        this.speed = speed;
+    const info = h('button', 'top-info', 'i');
+    info.setAttribute('aria-label', 'About this part of the climb');
+    info.onclick = () => this.openInfo();
+    const menu = h('button', 'menu-trigger', '<span>Menu</span> ≡');
+    menu.setAttribute('aria-label', 'Game menu');
+    menu.onclick = () => this.gameMenu();
+    this.top.append(this.whereEl, info, menu);
+    this.dayStrip.append(this.dayBar, this.paceEl);
+    this.skipButton.hidden = true;
+    this.skipButton.setAttribute('aria-label', 'Skip to the next event');
+    this.skipButton.onclick = () => {
+      if (
+        !this.climb ||
+        attentionNeeded(this.climb) ||
+        this.panel !== 'main' ||
+        performance.now() < this.slowUntil
+      )
+        return;
+      this.skipping = true;
+      this.skipStarted = this.climb.minute;
+      this.acc = 0;
+      this.renderTop();
+      this.renderSheet();
+    };
+    this.sceneEl.append(this.bubblesEl, this.stampEl, this.noteEl, this.movementEl, this.skipButton);
+    const stopSkip = () => {
+      if (this.skipping) {
         this.skipping = false;
         this.acc = 0;
         this.renderTop();
-      };
-      this.speedEl.append(button);
-    }
-    const menu = h('button', '', 'Game menu');
-    menu.onclick = () => this.gameMenu();
-    this.top.append(menu);
-    this.sceneEl.append(this.bubblesEl, this.stampEl);
-    const jb = h('button', 'drawer-btn', 'journal');
-    jb.onclick = () => this.journalPage();
-    this.sceneEl.append(jb);
-    // The margin note is docked between the top bar and the map: it takes room from the map, never covers it.
-    this.root.append(this.top, this.noteEl, this.sceneEl, this.movementEl, this.sheet);
+      }
+    };
+    this.sceneEl.addEventListener('pointerdown', stopSkip);
+    this.sheet.addEventListener('pointerdown', stopSkip);
+    this.root.append(this.top, this.dayStrip, this.sceneEl, this.sheet, this.leaderBar);
     await this.scene.mount(this.sceneEl);
     this.scene.onTap = (id) => {
       if (id === 'leader') return;
@@ -228,6 +257,7 @@ export class Game {
     this.shownLines = resumed ? c.lines.length : 0;
     this.shownJournal = resumed ? c.journal.length : 0;
     this.target = 'all';
+    this.sentAt = -Infinity;
     this.verb = null;
     this.panel = 'main';
     this.note = null;
@@ -235,7 +265,7 @@ export class Game {
     for (const b of this.bubbles.values()) b.el.remove();
     this.bubbles.clear();
     // A new climb starts with fresh presentation deadlines.
-    if (!resumed) this.speed = 'normal';
+    if (!resumed) this.speed = 'auto';
     this.slowUntil = 0;
     this.stampUntil = 0;
     this.noteUntil = 0;
@@ -260,7 +290,11 @@ export class Game {
     const elapsed = Math.max(0, now - this.last);
     const dt = Math.min(0.1, elapsed / 1000);
     const held =
-      this.pageOpen() || !!this.menuEl || !!document.querySelector(':popover-open') || document.hidden;
+      this.pageOpen() ||
+      !!this.menuEl ||
+      !!this.infoEl ||
+      !!document.querySelector(':popover-open') ||
+      document.hidden;
     if (held) {
       for (const key of ['slowUntil', 'stampUntil', 'noteUntil', 'storyUntil', 'endAt'] as const)
         if (this[key] > this.last) this[key] += elapsed;
@@ -283,7 +317,7 @@ export class Game {
       }
     }
     if (this.playing && this.climb && !this.climb.over && !held) {
-      if (this.skipping && (!onlyWalkingLeft(this.climb) || attentionNeeded(this.climb)))
+      if (this.skipping && (attentionNeeded(this.climb) || this.climb.minute - this.skipStarted >= 120))
         this.skipping = false;
       const rate = playbackRate(
         this.panel !== 'main' || this.verb !== null,
@@ -296,16 +330,17 @@ export class Game {
       this.acc += dt * rate;
       let n = 0;
       while (this.acc >= 1 && n < 40 && !this.climb.over) {
-        const before = eventStamp(this.climb);
+        const wasSkipping = this.skipping;
+        const before = wasSkipping ? skipEventStamp(this.climb) : eventStamp(this.climb);
         const readBefore = this.slowUntil;
         step(this.climb);
         this.acc -= 1;
         n++;
         this.afterStep();
         if (
-          eventStamp(this.climb) !== before ||
+          (wasSkipping ? skipEventStamp(this.climb) : eventStamp(this.climb)) !== before ||
           this.slowUntil > readBefore ||
-          (this.skipping && !onlyWalkingLeft(this.climb))
+          (this.skipping && (attentionNeeded(this.climb) || this.climb.minute - this.skipStarted >= 120))
         ) {
           this.skipping = false;
           this.acc = 0;
@@ -338,7 +373,7 @@ export class Game {
     const c = this.climb;
     for (; this.shownLines < c.lines.length; this.shownLines++) {
       const l = c.lines[this.shownLines];
-      if (l) this.showLine(l);
+      if (l && (!this.skipping || l.input >= 0)) this.showLine(l);
     }
     for (; this.shownJournal < c.journal.length; this.shownJournal++) {
       const j = c.journal[this.shownJournal];
@@ -347,7 +382,7 @@ export class Game {
         this.slow();
       if (j.text.includes('stood on the summit') && j.who)
         this.stamp(`Summit · ${memberOf(j.who).name} · ${clock(j.at)}`);
-      if (j.story) this.showStory(j.text);
+      if (j.story && !this.skipping) this.showStory(j.text);
       // Key events far off still reach you as a margin note: you see it happen, but you cannot speak to them.
       else if (j.who && !canHear(c, j.who) && /fell|slipped|untied|stood on the summit/.test(j.text))
         this.showStory(`Far off: ${j.text}`);
@@ -379,7 +414,7 @@ export class Game {
   // ------------------------------------------------------------ input
 
   /** Taps right after a send are dropped: the sheet rebuilds under the finger, and a second tap would land elsewhere. */
-  private sentAt = 0;
+  private sentAt = -Infinity;
 
   private send(inp: NewInput, also?: NewInput): void {
     const c = this.climb;
@@ -582,7 +617,7 @@ export class Game {
   private showNote(n: Note): void {
     this.note = n;
     this.hinting = false;
-    this.noteEl.innerHTML = `<button aria-label="dismiss">got it</button>${bold(n.text)}`;
+    this.noteEl.innerHTML = `<button aria-label="dismiss">×</button><span class="note-copy">${bold(n.text)}</span>`;
     const btn = this.noteEl.querySelector('button');
     if (btn) btn.onclick = () => this.dismissNote();
     if (n.unlock) markSeen(this.disc, { ...n, id: `${n.id}:unlock` });
@@ -619,19 +654,38 @@ export class Game {
     const c = this.climb;
     if (!c) return;
     const m = MOUNTAINS[c.mountain];
-    this.whereEl.textContent = `${m?.name ?? ''} · ${clock(c.minute)}`;
-    for (const button of this.speedEl.querySelectorAll('button'))
-      button.setAttribute('aria-pressed', String(button.dataset.speed === this.speed));
+    if (!this.pageOpen()) this.root.dataset.screen = 'climb';
+    const phase = this.pageOpen() ? this.pageKind : 'climb';
+    this.whereEl.innerHTML =
+      phase === 'title'
+        ? '<a href="https://human.adamwhite.work/games/">All games</a>'
+        : esc(
+            `${m?.name ?? ''} · ${phase === 'debrief' ? 'read back' : phase === 'season' ? 'the season' : clock(c.minute)}${phase === 'hut' ? ' · at the hut' : c.promise ? ` · turn at ${c.promise.hour}` : ''}`,
+          );
+    const minute = c.minute % 1440;
+    this.dayBar.innerHTML = `<span class="day-dawn">04</span><span class="day-dusk"></span><span class="day-now" style="left:${Math.max(0, Math.min(100, ((minute - 240) / 1140) * 100))}%"></span>${c.promise ? `<span class="day-promise" aria-label="Turn at ${c.promise.hour}:00" style="left:${((c.promise.hour * 60 - 240) / 1140) * 100}%"></span>` : ''}`;
+    this.dayBar.setAttribute(
+      'aria-label',
+      `Daylight, ${clock(c.minute)}${c.promise ? `, promised turn ${c.promise.hour}:00` : ''}`,
+    );
     this.paceEl.textContent =
-      this.menuEl || this.pageOpen()
+      this.infoEl || this.menuEl || this.pageOpen()
         ? 'Time waits'
         : this.panel !== 'main' || this.verb !== null
           ? 'Choosing · time waits'
-          : performance.now() < this.slowUntil
-            ? 'Reading the latest word'
-            : attentionNeeded(c)
-              ? 'A call needs attention'
-              : `${this.speed} speed`;
+          : this.skipping
+            ? 'Skipping…'
+            : performance.now() < this.slowUntil
+              ? 'Reading the latest word'
+              : attentionNeeded(c)
+                ? 'A call needs attention'
+                : '';
+    this.skipButton.hidden =
+      this.pageOpen() ||
+      this.panel !== 'main' ||
+      attentionNeeded(c) ||
+      performance.now() < this.slowUntil ||
+      this.skipping;
   }
 
   private sheetKey = '';
@@ -711,7 +765,8 @@ export class Game {
       chips.append(b);
     };
     const anyNear = c.members.some((x) => x.homeAt === null && canHear(c, x.id));
-    mk('all', 'everyone', 'all', !anyNear);
+    mk('all', 'all', 'all', !anyNear);
+    chips.querySelector('button')?.setAttribute('aria-label', 'everyone');
     for (const x of MEMBERS) {
       const mem = memberState(c, x.id);
       const far = mem.homeAt === null && !canHear(c, x.id);
@@ -726,26 +781,20 @@ export class Game {
         : this.panel === 'force' && this.verb === 'rope' && this.partner
           ? `<span>rope ${esc(tgt)} to ${esc(memberOf(this.partner).name)}: how hard?</span>`
           : `<span>to ${esc(tgt)}</span><span>${c.members.some((x) => x.ropedTo) ? 'roped' : ''}</span>`;
-    const cancel = h('button', '', 'cancel');
+    if (this.panel === 'force')
+      label.innerHTML = `<span>${esc(tgt)}: ${esc(this.requestName(this.verb ?? 'climb'))}</span>`;
+    const cancel = h('button', 'sheet-back', '←');
+    cancel.setAttribute('aria-label', 'Back to requests');
     cancel.onclick = () => {
       this.verb = null;
       this.partner = null;
       this.panel = 'main';
       this.renderSheet();
     };
-    if (this.panel !== 'main') label.append(cancel);
+    if (this.panel !== 'main') label.prepend(cancel);
     const targetControls = h('div', 'target-controls');
-    targetControls.append(chips);
-    if (this.panel === 'main') {
-      const more = h('button', 'more-actions', 'more actions');
-      if (this.note?.lit && !['lead', 'climb', 'with'].includes(this.note.lit)) more.classList.add('lit');
-      more.onclick = () => {
-        this.panel = 'more';
-        this.renderSheet();
-      };
-      targetControls.append(more);
-    }
-    label.append(h('span', 'target-hint', 'swipe for people →'));
+    if (this.panel === 'main' || this.panel === 'more' || this.panel === 'partner')
+      targetControls.append(chips);
     sh.append(label, targetControls);
     chips.scrollLeft = targetScroll;
     const calls = h('div', 'pending-calls');
@@ -777,7 +826,7 @@ export class Game {
       const bar = h(
         'div',
         'ask-bar hurt',
-        `<span><b>${due.hour}:00</b>, the hour you promised.${due.near.length ? ` In earshot: ${esc(namesOf(due.near))}.` : ''}${due.far.length ? ` Too far to hear: ${esc(namesOf(due.far))}.` : ''}</span>`,
+        `<span><b>${due.hour}:00</b>, the hour you promised.</span><div class="call-names"><span>In earshot</span>${due.near.map((id) => `<span class="chip">${esc(memberOf(id).name)}</span>`).join('') || '<span>Nobody</span>'}</div><div class="call-names"><span>Too far to hear</span>${due.far.map((id) => `<span class="chip far">${esc(memberOf(id).name)}</span>`).join('') || '<span>Nobody</span>'}</div>`,
       );
       const all = h('button', 'force', 'we all turn');
       all.onclick = () =>
@@ -785,34 +834,11 @@ export class Game {
       bar.append(all);
       calls.append(bar);
     }
-    if (
-      this.panel === 'main' &&
-      !hurt &&
-      onlyWalkingLeft(c) &&
-      !this.skipping &&
-      !attentionNeeded(c) &&
-      performance.now() >= this.slowUntil
-    ) {
-      const bar = h(
-        'div',
-        'ask-bar faint',
-        '<span>The party is walking down. Stop at the next event.</span>',
-      );
-      const b = h('button', 'force', 'Until something happens');
-      b.onclick = () => {
-        if (attentionNeeded(c) || performance.now() < this.slowUntil || !onlyWalkingLeft(c)) return;
-        this.skipping = true;
-        this.acc = 0;
-        this.renderSheet();
-      };
-      bar.append(b);
-      sh.append(bar);
-    }
     const queue = c.members
       .filter((x) => x.asks && x.homeAt === null)
       .sort((a, b) => (a.asks?.at ?? 0) - (b.asks?.at ?? 0));
     const asking = queue[0];
-    if (asking && (this.panel === 'main' || this.panel === 'calls')) {
+    if (asking && !hurt && !due && (this.panel === 'main' || this.panel === 'calls')) {
       const nm = memberOf(asking.id).name;
       const near = canHear(c, asking.id);
       const below = posXY(c, asking.pos).alt < posXY(c, c.leader.pos).alt;
@@ -846,25 +872,30 @@ export class Game {
       calls.append(bar);
     }
 
-    if (calls.children.length && this.panel === 'main') {
-      const call = h(
-        'button',
-        'calls-button',
-        hurt ? 'hurt call' : due ? 'turnback due' : `${queue.length} company calls`,
-      );
-      call.onclick = () => {
+    if (asking && !hurt && !due && this.panel === 'main') {
+      const banner = h('button', 'company-banner', `${esc(memberOf(asking.id).name)} wants to go down ▸`);
+      banner.onclick = () => {
         this.panel = 'calls';
         this.renderSheet();
       };
-      targetControls.append(call);
+      label.replaceWith(banner);
     }
-
-    if (this.panel === 'main') {
-      sh.append(this.peopleVerbs(), this.leaderRow(), this.requestResult());
+    if ((hurt || due) && this.panel === 'main') {
+      sh.innerHTML = '';
+      calls.classList.add('call-takeover');
+      sh.append(calls);
+    } else if (this.panel === 'main') {
+      sh.append(this.peopleVerbs(), this.requestResult());
     } else if (this.panel === 'calls') {
       sh.append(calls);
     } else if (this.panel === 'more') {
-      sh.append(this.peopleVerbs(), this.leaderRow());
+      sh.append(this.peopleVerbs());
+    } else if (this.panel === 'leader-more') {
+      const extra = this.leaderRow();
+      for (const child of extra.querySelectorAll('.verb-option:not(.secondary-action)')) child.remove();
+      sh.append(extra);
+    } else if (this.panel === 'answers') {
+      sh.append(this.answersSheet());
     } else if (this.panel === 'partner') {
       sh.append(h('p', 'request-summary', `Choose a different partner for ${esc(tgt)}.`));
     } else if (this.panel === 'force') {
@@ -882,6 +913,8 @@ export class Game {
     else if (this.panel === 'promise') sh.append(this.promiseRow());
     else if (this.panel === 'route') sh.append(this.routeRow());
     else if (this.panel === 'scout') sh.append(this.routeRow(true));
+    this.leaderBar.replaceChildren(this.leaderRow());
+    this.renderTop();
     const currentResult = sh.querySelector<HTMLElement>('.request-result');
     const details = currentResult?.querySelector('details');
     if (details && currentResult?.dataset.input === answerInput) details.open = !!answersOpen;
@@ -905,7 +938,7 @@ export class Game {
       const why = h('small', 'verb-reason', esc(reason));
       why.id = `reason-${id}`;
       b.setAttribute('aria-describedby', why.id);
-      wrap.append(why);
+      b.append(why);
     }
     return wrap;
   }
@@ -997,6 +1030,12 @@ export class Game {
       );
     }
     for (const el of [...g.children].slice(5)) el.classList.add('secondary-action');
+    const more = h('button', 'verb more-actions', 'more ▾');
+    more.onclick = () => {
+      this.panel = this.panel === 'more' ? 'main' : 'more';
+      this.renderSheet();
+    };
+    g.insertBefore(more, g.children[5] ?? null);
     g.classList.add('people-verbs');
     return g;
   }
@@ -1124,7 +1163,13 @@ export class Game {
     g.classList.add('movement-verbs');
     for (const el of [...g.children].slice(4)) el.classList.add('secondary-action');
     const lab = h('div', 'label', '<span>you</span>');
-    if (c.promise) lab.append(h('span', '', `Turnback promised at ${c.promise.hour}:00.`));
+    lab.classList.add('you-label');
+    const more = h('button', 'verb more-actions', 'more ▾');
+    more.onclick = () => {
+      this.panel = 'leader-more';
+      this.renderSheet();
+    };
+    g.insertBefore(more, g.children[4] ?? null);
     wrap.append(lab, g);
     return wrap;
   }
@@ -1228,6 +1273,16 @@ export class Game {
   }
 
   /** Acknowledges the latest request, using only its own HF answers and observed movement. */
+  private answersButton(count: number, input: number): HTMLButtonElement {
+    const button = h('button', 'all-answers', `All ${count} answers ▸`);
+    button.onclick = () => {
+      this.answersInput = input;
+      this.panel = 'answers';
+      this.renderSheet();
+    };
+    return button;
+  }
+
   private requestResult(): HTMLElement {
     const slot = h('div', 'request-feedback');
     const c = this.climb;
@@ -1241,11 +1296,7 @@ export class Game {
     box.dataset.input = String(index);
     if (input.t === 'promise') {
       box.append(h('p', 'request-acknowledgement', `Turnback promised at ${input.hour}:00.`));
-      const more = h('details', '', `<summary>All ${answers.length} recorded answers</summary>`);
-      const list = h('div', 'request-answer-list');
-      for (const line of answers)
-        list.append(h('p', '', `<b>${esc(memberOf(line.who).name)}</b>: “${esc(line.says)}”`));
-      more.append(list);
+      const more = this.answersButton(answers.length, index);
       if (answers.length) box.append(more);
       else
         box.append(
@@ -1329,13 +1380,7 @@ export class Game {
         h('p', '', c.unheard.includes(index) ? 'Nobody heard the request.' : 'Awaiting their answers.'),
       );
     if (answers.length) {
-      const more = h('details', '', `<summary>All ${answers.length} recorded answers</summary>`);
-      const list = h('div', 'request-answer-list');
-      for (const line of answers)
-        list.append(
-          h('p', '', `<b>${esc(memberOf(line.who).name)} ${esc(response(line))}</b>: “${esc(line.says)}”`),
-        );
-      more.append(list);
+      const more = this.answersButton(answers.length, index);
       box.append(more);
     }
     if ((input.act === 'rope' || input.act === 'gather') && input.with) {
@@ -1485,35 +1530,74 @@ export class Game {
     return this.pageEl !== null;
   }
 
-  private openPage(html: string, bind: (el: HTMLElement) => void = () => {}): void {
+  private openPage(html: string, bind: (el: HTMLElement) => void = () => {}, kind = 'journal'): void {
+    this.infoEl?.remove();
+    this.infoEl = null;
     this.closePage();
-    const el = h('div', 'page', `<div class="inner">${html}</div>`);
+    this.pageKind = kind;
+    this.root.dataset.screen = kind;
+    const el = h('div', `page page-${kind}`, `<div class="inner">${html}</div>`);
     this.root.append(el);
     this.pageEl = el;
-    const menu = h('button', 'btn', 'Game menu');
-    menu.onclick = () => this.gameMenu();
-    el.querySelector('.inner')?.append(menu);
     bind(el);
+    if (this.climb) this.renderTop();
+    else this.whereEl.innerHTML = '<a href="https://human.adamwhite.work/games/">All games</a>';
   }
 
   private closePage(): void {
     this.pageEl?.remove();
     this.pageEl = null;
+    this.root.dataset.screen = 'climb';
+    if (this.climb) this.renderTop();
     this.last = performance.now();
+  }
+
+  private openInfo(): void {
+    if (this.infoEl) {
+      this.infoEl.remove();
+      this.infoEl = null;
+      return;
+    }
+    const copy =
+      this.pageKind === 'title' && this.pageOpen()
+        ? '<h2>The season</h2><p>For eleven summers Ezra led them. This year they asked you.</p><p>Three mountains, one season. They can say no.</p><p>Plays offline once loaded. Install it from your browser’s menu.</p>'
+        : this.pageKind === 'hut' && this.pageOpen()
+          ? '<h2>At the hut</h2><p>A promised hour holds them, and you.</p><p>Keeping it is remembered, and so is breaking it.</p><p>“We’ll see” promises nothing.</p>'
+          : this.pageOpen()
+            ? '<h2>The notebook</h2><p>The tally counts twice the people home by dark plus summit visits.</p><p>It is the game’s convention, not a measure of people.</p><p>The night at the hut is voiced from the journal and changes nothing.</p>'
+            : this.panel === 'calls' || (this.climb && (hurtCall(this.climb) || promiseDue(this.climb)))
+              ? '<h2>Calls</h2><p>A fall far off needs you to walk there.</p><p>Sending someone down with a friend only ties a rope if they are close.</p><p>People out of earshot cannot hear you.</p>'
+              : '<h2>Asking</h2><p>Your voice reaches only those in earshot. Dimmed names are too far.</p><p>Ask leaves it to them. Urge presses. Insist comes after a refusal and costs trust.</p><p>The bottom row is you: where you walk, they may follow.</p><p>Postures show tiredness and spirits. Nothing is counted.</p>';
+    const backdrop = h(
+      'div',
+      'info-backdrop',
+      `<section class="info-popover" role="dialog" aria-label="About this part of the climb"><button class="close" aria-label="Close information">×</button>${copy}</section>`,
+    );
+    const close = () => {
+      backdrop.remove();
+      this.infoEl = null;
+      this.last = performance.now();
+    };
+    backdrop.onclick = (e) => {
+      if (e.target === backdrop || (e.target as HTMLElement).closest('.close')) close();
+    };
+    backdrop.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+    this.infoEl = backdrop;
+    this.root.append(backdrop);
+    backdrop.querySelector<HTMLButtonElement>('button')?.focus();
   }
 
   private gameMenu(): void {
     if (this.menuEl) return;
+    this.infoEl?.remove();
+    this.infoEl = null;
     const menu = h(
       'div',
-      'page',
-      `<div class="inner"><h2>Game</h2>
-      <button class="btn" data-menu-close>Back</button></div>`,
+      'menu-backdrop',
+      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu${this.climb ? ` · ${esc(MOUNTAINS[this.climb.mountain]?.name ?? '')} · ${clock(this.climb.minute)}` : ''}</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">The mountain waits while it is open.</p><div class="menu-body">${this.climb ? '<button class="btn" data-menu-journal>The journal ▸</button>' : ''}<fieldset class="menu-pacing"><legend>Walking pace</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${{ auto: 'Automatic', slow: 'Slow', normal: 'Steady', fast: 'Fast' }[speed]}</button>`).join('')}</fieldset><button class="btn" data-menu-send>Send word ▸</button><button class="btn phone-only" data-menu-fullscreen>Full screen</button><button class="btn" data-menu-title>To the title page</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a></div><div class="menu-footer"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><button class="btn go menu-resume" data-menu-close>${this.pageOpen() ? 'Back' : 'Back to the climb'}</button></section>`,
     );
-    menu.setAttribute('role', 'dialog');
-    menu.setAttribute('aria-modal', 'true');
-    menu.setAttribute('aria-label', 'Game menu');
-    menu.style.zIndex = '6';
     const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => {
       menu.remove();
@@ -1522,21 +1606,184 @@ export class Game {
       previousFocus?.focus();
     };
     menu.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !document.querySelector(':popover-open')) close();
-      if (event.key === 'Tab') {
-        const controls = [...menu.querySelectorAll<HTMLElement>('input, button')];
-        const next = event.shiftKey ? controls.at(-1) : controls[0];
-        if (document.activeElement === (event.shiftKey ? controls[0] : controls.at(-1))) {
-          event.preventDefault();
-          next?.focus();
-        }
-      }
+      if (event.key === 'Escape') close();
     });
+    menu.onclick = (e) => {
+      if (e.target === menu) close();
+    };
     this.menuEl = menu;
-    menu.querySelector('.inner')?.append(telemetryToggle(lab));
+    menu.querySelector('.menu-footer')?.append(telemetryToggle(lab));
     this.root.append(menu);
+    menu.querySelectorAll('[data-menu-close]').forEach((button) => {
+      button.addEventListener('click', close);
+    });
+    menu.querySelector('[data-menu-journal]')?.addEventListener('click', () => {
+      close();
+      this.journalPage();
+    });
+    menu.querySelector('[data-menu-send]')?.addEventListener('click', () => {
+      close();
+      this.feedbackPage();
+    });
+    menu.querySelector('[data-menu-title]')?.addEventListener('click', () => {
+      close();
+      this.save();
+      this.titlePage();
+    });
+    menu.querySelector('[data-menu-fullscreen]')?.addEventListener('click', () => {
+      if (document.fullscreenElement) void document.exitFullscreen();
+      else void this.root.requestFullscreen?.();
+    });
+    menu.querySelectorAll<HTMLElement>('[data-pace]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.speed = button.dataset.pace as typeof this.speed;
+        this.skipping = false;
+        this.acc = 0;
+        menu.querySelectorAll<HTMLElement>('[data-pace]').forEach((item) => {
+          item.setAttribute('aria-pressed', String(item === button));
+        });
+      });
+    });
     menu.querySelector<HTMLButtonElement>('button')?.focus();
-    menu.querySelector('[data-menu-close]')?.addEventListener('click', close);
+  }
+
+  private answersSheet(): HTMLElement {
+    const box = h('div', 'answers-sheet request-answer-list');
+    box.append(h('h2', '', 'Recorded answers'));
+    const input = this.climb.inputs[this.answersInput];
+    const action =
+      input?.t === 'say'
+        ? this.requestName(input.act)
+        : input?.t === 'promise'
+          ? `turn at ${input.hour}:00`
+          : 'the request';
+    const verdicts: Record<string, string> = {
+      assented: 'agreed to',
+      complied: 'complied with',
+      refused: 'refused',
+      deferred: 'put off',
+      modified: 'offered another action instead of',
+      heard: 'heard',
+    };
+    for (const line of this.climb.lines.filter((line) => line.input === this.answersInput))
+      box.append(
+        h(
+          'p',
+          '',
+          `<b>${esc(memberOf(line.who).name)} ${esc(verdicts[line.verdict] ?? line.verdict)} ${esc(action)}</b> · ${clock(line.at)}: “${esc(line.says)}”`,
+        ),
+      );
+    return box;
+  }
+
+  private feedbackPage(): void {
+    const returnKind = this.pageOpen() ? this.pageKind : 'climb';
+    const back = () => {
+      if (returnKind === 'title') this.titlePage();
+      else if (returnKind === 'hut') this.climbIntro();
+      else if (returnKind === 'season') this.seasonPage();
+      else if (returnKind === 'debrief') this.debriefPage();
+      else if (returnKind === 'journal') this.journalPage(this.journalOrigin);
+      else this.closePage();
+    };
+    let remembered = '';
+    try {
+      remembered = localStorage.getItem('hf-lab-feedback-name') ?? '';
+    } catch {
+      /* storage unavailable */
+    }
+    this.openPage(
+      `<div class="page-body feedback-body"><button class="btn" data-feedback-back>← Back</button><h1>Send word</h1><p>Your run, saves and log reach us on their own. Tell us what they can't show.</p><div class="feedback-verdicts">${[
+        ['keep', "I'd keep playing"],
+        ['mixed', 'Not sure'],
+        ['quit', "I'd stop here"],
+      ]
+        .map(
+          ([value, label]) =>
+            `<button class="chip" data-verdict="${value}" aria-pressed="false">${label}</button>`,
+        )
+        .join(
+          '',
+        )}</div><label class="feedback-note">What happened on the mountain, what you wanted, what got in the way.<textarea rows="4" data-feedback-note></textarea></label><details class="feedback-name" ${remembered ? 'open' : ''}><summary>+ Add a name</summary><label>Your name or tester id<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to stay pseudonymous.</p></details><details><summary>What is sent</summary><p>Your note, optional verdict and name, and the current run when you consent to send it.</p><pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></details><div data-feedback-consent></div><p data-feedback-status role="status"></p><button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Keep a copy of this run</button></div><div class="page-actions"><button class="btn go" data-feedback-send>Send</button></div>`,
+      (el) => {
+        let verdict = '';
+        let sent = false;
+        const send = el.querySelector<HTMLButtonElement>('[data-feedback-send]');
+        const consent = el.querySelector<HTMLElement>('[data-feedback-consent]');
+        const status = el.querySelector<HTMLElement>('[data-feedback-status]');
+        if (!send || !consent || !status) return;
+        const off = () => {
+          try {
+            return localStorage.getItem('hf-lab-recording-off') !== null;
+          } catch {
+            return false;
+          }
+        };
+        const update = () => {
+          consent.replaceChildren();
+          if (off()) {
+            consent.append(h('p', '', 'Recording is off, so nothing is sent.'), telemetryToggle(lab));
+            consent.addEventListener('change', update, { once: true });
+            send.disabled = true;
+          } else if (lab.privacySignalOn && !lab.privacyOverride) {
+            consent.innerHTML =
+              '<label><input type="checkbox" data-feedback-run> Send this run with my note</label>';
+            send.disabled = true;
+            consent.querySelector('input')?.addEventListener('change', (event) => {
+              send.disabled = !(event.target as HTMLInputElement).checked || !this.climb;
+            });
+          } else send.disabled = false;
+        };
+        update();
+        el.querySelector('[data-feedback-back]')?.addEventListener('click', back);
+        el.querySelector('[data-feedback-copy]')?.addEventListener('click', () => this.exportRun());
+        el.querySelectorAll<HTMLElement>('[data-verdict]').forEach((button) => {
+          button.addEventListener('click', () => {
+            verdict = verdict === button.dataset.verdict ? '' : (button.dataset.verdict ?? '');
+            el.querySelectorAll<HTMLElement>('[data-verdict]').forEach((item) => {
+              item.setAttribute('aria-pressed', String(item.dataset.verdict === verdict));
+            });
+          });
+        });
+        send.addEventListener('click', async () => {
+          if (sent) {
+            back();
+            return;
+          }
+          const name =
+            el.querySelector<HTMLInputElement>('[data-feedback-name]')?.value.trim().slice(0, 60) ?? '';
+          const text = el.querySelector<HTMLTextAreaElement>('[data-feedback-note]')?.value.trim() ?? '';
+          const note = [verdict ? `Verdict: ${verdict}` : '', text].filter(Boolean).join('\n\n');
+          send.disabled = true;
+          try {
+            if (lab.privacySignalOn && !lab.privacyOverride) {
+              const run = exportClimb(this.start, this.climb, FRAMEWORK_VERSION);
+              try {
+                await lab.sendRun(run, { note, name });
+              } catch {
+                lab.openSendDialog({ getRun: () => run, name, note });
+                send.disabled = false;
+                return;
+              }
+            } else await lab.sendFeedback(note, { name });
+            try {
+              if (name) localStorage.setItem('hf-lab-feedback-name', name);
+              else localStorage.removeItem('hf-lab-feedback-name');
+            } catch {
+              /* storage unavailable */
+            }
+            status.textContent = 'Sent. Thank you.';
+            sent = true;
+            send.textContent = 'Back to the game';
+            send.disabled = false;
+          } catch (error) {
+            status.textContent = error instanceof Error ? error.message : 'Could not send. Try again.';
+            send.disabled = false;
+          }
+        });
+      },
+      'feedback',
+    );
   }
 
   /** A game convention over recorded outcomes, never an estimate of a person's inner life. */
@@ -1548,7 +1795,7 @@ export class Game {
     const tops = facts.filter((f) => f.summit).length;
     box.innerHTML =
       this.reckoningFacts.length > 0
-        ? `<button class="btn" data-see-tally aria-expanded="false" aria-controls="reckoning-tally">See tally</button><div id="reckoning-tally" hidden><p><b>Notebook total: ${2 * home + tops}</b> = 2 × ${home} home by dark + summit visits: ${tops}.</p><p class="caption">This game’s reckoning for ${this.season.over ? 'the completed climbs this season' : 'this completed climb'}; not a measure of people.</p></div>`
+        ? `<button class="btn" data-see-tally aria-expanded="false" aria-controls="reckoning-tally">See the tally</button><div id="reckoning-tally" hidden><p><b>Notebook total: ${2 * home + tops}</b> = 2 × ${home} home by dark + summit visits: ${tops}.</p><p class="caption">This game’s reckoning for ${this.season.over ? 'the completed climbs this season' : 'this completed climb'}; not a measure of people.</p></div>`
         : '';
     box.querySelector('[data-see-tally]')?.addEventListener('click', (event) => {
       const tally = box.querySelector<HTMLElement>('#reckoning-tally');
@@ -1559,7 +1806,7 @@ export class Game {
   }
 
   private footer(): string {
-    return `<div class="footer"><a href="https://human.adamwhite.work/games/">◇ all notebooks</a><br/>People by the Human Framework ${FRAMEWORK_VERSION}. Everything they say comes from it.</div>`;
+    return `<div class="footer">People by the Human Framework ${FRAMEWORK_VERSION}</div>`;
   }
 
   private peaksSvg(done: number): string {
@@ -1582,38 +1829,22 @@ export class Game {
     lab.screen('title');
     const sv = this.load();
     const cont = sv && !sv.season.over;
-    const done = sv?.season.history.length ?? 0;
     this.openPage(
-      `<h1>The Rope</h1>
-      <p class="sub">Five people, three mountains.</p>
-      ${this.peaksSvg(cont ? done : 0)}
-      <p>Lead them up and bring them home. They can say no.</p>
-      <button class="btn info" aria-label="More about the season" popovertarget="season-info">i</button><div id="season-info" class="info-popover" popover="auto"><h2>More about the season</h2>
-      <p>For eleven summers Ezra led them. This year they asked you.</p>
-      <p>You walk with them, carry what you can, and say what you think. They decide for themselves: tired legs, fear, trust and old promises all have a say. Coming down safe is a good day.</p></div>
-      ${cont && sv ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}
-      <p>
-        ${cont ? '<button class="btn go" data-a="continue">Continue the season</button>' : ''}
-        <button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'Begin a new season' : 'Begin the season'}</button>
-      </p>
-      <p class="caption">Plays offline once loaded. Install it from your browser’s menu.</p>
-      ${this.footer()}`,
+      `<div class="title-scene"><h1>The Rope</h1><p class="sub">Five people, three mountains.</p>${this.peaksSvg(cont ? sv.season.history.length : 0)}</div><div class="page-body"><p class="title-goal">Lead them up and bring them home. They can say no.</p>${cont ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}<div data-new-confirm hidden><p>The season in your notebook will be lost.</p><button class="btn" data-yes>Yes, begin</button><button class="btn" data-no>No</button></div></div><div class="page-actions">${cont ? '<button class="btn go" data-a="continue">Continue the season</button>' : ''}<button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'Begin a new season' : 'Begin the season'}</button>${this.footer()}</div>`,
       (el) => {
-        const notice = telemetryNotice();
-        if (notice) {
-          Object.assign(notice.style, { position: 'static', transform: 'none', margin: '0 auto' });
-          const slot = document.createElement('div');
-          slot.append(notice);
-          el.querySelector('.inner')?.prepend(slot);
-        }
-        el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () => {
-          if (!cont || confirm('Begin a new season? The season in your notebook will be lost.'))
-            this.newGame();
-        });
-        el.querySelector<HTMLElement>('[data-a="continue"]')?.addEventListener('click', () => {
+        el.querySelector('[data-a="continue"]')?.addEventListener('click', () => {
           if (sv) this.resume(sv);
         });
+        el.querySelector('[data-a="new"]')?.addEventListener('click', () => {
+          if (!cont) this.newGame();
+          else el.querySelector<HTMLElement>('[data-new-confirm]')?.removeAttribute('hidden');
+        });
+        el.querySelector('[data-yes]')?.addEventListener('click', () => this.newGame());
+        el.querySelector('[data-no]')?.addEventListener('click', () => {
+          el.querySelector<HTMLElement>('[data-new-confirm]')?.setAttribute('hidden', '');
+        });
       },
+      'title',
     );
   }
 
@@ -1623,15 +1854,14 @@ export class Game {
     const m = MOUNTAINS[c.mountain];
     const lines = c.journal.map((j) => `<p class="${j.story ? 'hand' : ''}">${esc(j.text)}</p>`).join('');
     this.openPage(
-      `<h1>${esc(m?.name ?? '')}</h1>
+      `<div class="page-body hut-sheet"><h1>${esc(m?.name ?? '')}</h1>
       <p class="sub">Climb ${c.climbNo} of ${SEASON.length} · ${clock(c.minute)}, at the hut</p>
       <p class="hand">When do you turn back?</p>
       <p>They remember whether you keep your word.</p>
       <p class="plan">${[12, 13, 14]
-        .map((hr) => `<button class="btn go" data-hour="${hr}">We turn at ${hr}:00</button>`)
-        .join('')}<button class="btn go" data-a="go">We'll see</button></p>
-      <button class="btn info" aria-label="At the hut" popovertarget="hut-info">i</button><div id="hut-info" class="info-popover" popover="auto"><h2>At the hut</h2>${lines}
-      <p>A promised hour holds them, and you: they will remember whether you kept it.</p></div>`,
+        .map((hr) => `<button class="btn" data-hour="${hr}">We turn at ${hr}:00</button>`)
+        .join('')}<button class="btn" data-a="go">We'll see</button></p>
+      ${c.climbNo > 1 ? `<details><summary>So far ▸</summary>${lines}</details>` : ''}</div>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => {
           this.closePage();
@@ -1646,10 +1876,15 @@ export class Game {
             this.send({ t: 'promise', hour: Number(b.dataset.hour) });
           });
       },
+      'hut',
     );
   }
 
-  private journalPage(): void {
+  private journalOrigin = 'climb';
+
+  private journalPage(origin = this.pageOpen() ? this.pageKind : 'climb'): void {
+    if (origin !== 'journal') this.journalOrigin = origin;
+    const returnKind = this.journalOrigin;
     const c = this.climb;
     if (!c) return;
     const rows = c.journal
@@ -1659,13 +1894,13 @@ export class Game {
       )
       .join('');
     this.openPage(
-      `<button class="close" data-a="close">back</button><h2>Journal</h2>${rows}
-      <p><button class="btn" data-a="export">Export this climb (playtest)</button>
-      <button class="btn" data-a="send">Send this run to the notebook</button></p>`,
+      `<div class="page-body"><button class="btn" data-a="close">← Back</button><h2>The journal</h2>${rows}</div>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="close"]')?.addEventListener('click', () => {
           // A finished climb has no running clock to reopen its read-back for us.
-          if (this.season.over) this.seasonPage();
+          if (returnKind === 'hut') this.climbIntro();
+          else if (returnKind === 'title') this.titlePage();
+          else if (this.season.over) this.seasonPage();
           else if (c.over) this.debriefPage();
           else this.closePage();
         });
@@ -1676,11 +1911,10 @@ export class Game {
   }
 
   private sendRun(): void {
-    const { start, climb } = this;
-    lab.openSendDialog({ getRun: () => exportClimb(start, climb, FRAMEWORK_VERSION) });
+    this.feedbackPage();
   }
 
-  private exportedAt = 0;
+  private exportedAt = -Infinity;
 
   private exportRun(): void {
     // One download per tap burst.
@@ -1728,7 +1962,7 @@ export class Game {
       .map((j) => `<p class="hand">${esc(j.text)}</p>`)
       .join('');
     this.openPage(
-      `<h1>${esc(m?.name ?? '')}</h1>
+      `<div class="page-body"><h1>${esc(m?.name ?? '')}</h1>
       <p class="sub">The day, read back</p>
       ${outcomes}
       <div data-reckoning-result></div>
@@ -1737,13 +1971,8 @@ export class Game {
       <div class="camp" data-camp><p class="caption">They talk a little over the stove…</p></div>
       <h2>One thing you said</h2>
       <div class="branch" data-branch><p class="caption">Climbing it again in the notebook, without each of your words in turn…</p></div>
-      <p>
-        <button class="btn go" data-a="next">${c.climbNo < SEASON.length ? `On to ${esc(SEASON[c.climbNo]?.name ?? '')}` : 'Close the season'}</button>
-        <button class="btn" data-a="journal">Journal</button>
-        <button class="btn" data-a="export">Export playtest</button>
-        <button class="btn" data-a="send">Send this run to the notebook</button>
-      </p>
-      ${this.footer()}`,
+      <button class="btn" data-a="journal">The journal ▸</button></div>
+      <div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Send word</button><button class="btn" data-a="export">Download this run</button></div><button class="btn go" data-a="next">${c.climbNo < SEASON.length ? `On to ${esc(SEASON[c.climbNo]?.name ?? '')}` : 'Close the season'}</button></div>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="journal"]')?.addEventListener('click', () => {
           this.journalPage();
@@ -1752,6 +1981,7 @@ export class Game {
         el.querySelector<HTMLElement>('[data-a="send"]')?.addEventListener('click', () => this.sendRun());
         el.querySelector<HTMLElement>('[data-a="next"]')?.addEventListener('click', () => this.advance());
       },
+      'debrief',
     );
     this.renderReckoning();
     this.runCamp(m?.name ?? '');
@@ -1835,14 +2065,17 @@ export class Game {
       })
       .join('');
     this.openPage(
-      `<h1>The season</h1>
+      `<div class="page-body"><h1>The season</h1>
       ${this.peaksSvg(this.season.history.length)}
       ${hist}
       <div data-reckoning-result></div>
-      <p><button class="btn go" data-a="new">Begin a new season</button></p>
-      ${this.footer()}`,
-      (el) =>
-        el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () => this.newGame()),
+      </div><div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Send word</button><button class="btn" data-a="export">Download this run</button></div><button class="btn go" data-a="new">Begin a new season</button></div>`,
+      (el) => {
+        el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () => this.newGame());
+        el.querySelector('[data-a="send"]')?.addEventListener('click', () => this.sendRun());
+        el.querySelector('[data-a="export"]')?.addEventListener('click', () => this.exportRun());
+      },
+      'season',
     );
     this.renderReckoning();
   }

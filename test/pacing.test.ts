@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type ClimbState, snapshot, step } from '../src/sim/climb.ts';
 import { newSeason, type SeasonState } from '../src/sim/season.ts';
 import { Game } from '../src/ui/game.ts';
-import { eventStamp, playbackRate } from '../src/ui/playback.ts';
+import { playbackRate, skipEventStamp } from '../src/ui/playback.ts';
 
 vi.mock('../src/ui/scene.ts', () => ({
   Scene: class {
@@ -89,21 +89,25 @@ it('stops a fast walk at its first delivered event, discards overshoot and prese
   d.slowUntil = performance.now() + 7500;
   d.renderSheet();
   expect(
-    [...document.querySelectorAll('button')].some((b) => b.textContent === 'Until something happens'),
+    [...document.querySelectorAll('button')].some(
+      (b) => b.getAttribute('aria-label') === 'Skip to the next event' && !b.hidden,
+    ),
   ).toBe(false);
   vi.advanceTimersByTime(7500);
   d.renderSheet();
   expect(
-    [...document.querySelectorAll('button')].some((b) => b.textContent === 'Until something happens'),
+    [...document.querySelectorAll('button')].some(
+      (b) => b.getAttribute('aria-label') === 'Skip to the next event' && !b.hidden,
+    ),
   ).toBe(true);
   const expected: ClimbState = JSON.parse(snapshot(d.climb));
-  const before = eventStamp(expected);
+  const before = skipEventStamp(expected);
   let count = 0;
   do {
     step(expected);
     count++;
-  } while (!expected.over && count < 40 && eventStamp(expected) === before);
-  d.skipping = true;
+  } while (!expected.over && count < 40 && skipEventStamp(expected) === before);
+  document.querySelector<HTMLButtonElement>('[aria-label="Skip to the next event"]')?.click();
   d.slowUntil = 0;
   d.acc = 0;
   vi.advanceTimersByTime(100);
@@ -112,7 +116,7 @@ it('stops a fast walk at its first delivered event, discards overshoot and prese
   expect(snapshot(d.climb)).toBe(snapshot(expected));
   expect(d.acc).toBe(0);
   expect(d.skipping).toBe(false);
-  expect(eventStamp(d.climb)).not.toBe(before);
+  expect(skipEventStamp(d.climb)).not.toBe(before);
 });
 it('holds the clock and retains reading and bubble time through a long menu visit', async () => {
   const d = await setup();
@@ -124,7 +128,7 @@ it('holds the clock and retains reading and bubble time through a long menu visi
   };
   d.bubbles.set('leader', bubble);
   [...document.querySelectorAll<HTMLButtonElement>('button')]
-    .find((b) => b.textContent === 'Game menu')
+    .find((b) => b.getAttribute('aria-label') === 'Game menu')
     ?.click();
   const before = snapshot(d.climb);
   vi.advanceTimersByTime(10000);
@@ -143,7 +147,7 @@ it('keeps the ending transition behind an open menu and resets transient deadlin
   d.climb.over = true;
   d.frame();
   [...document.querySelectorAll<HTMLButtonElement>('button')]
-    .find((b) => b.textContent === 'Game menu')
+    .find((b) => b.getAttribute('aria-label') === 'Game menu')
     ?.click();
   vi.advanceTimersByTime(10000);
   d.frame();

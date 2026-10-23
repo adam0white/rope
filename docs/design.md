@@ -34,3 +34,8 @@ The optional leader `near` and member `gather` fields arise only from these new 
 
 ## Owner automatic pacing update (2026-10-21)
 The speed chooser is removed. Quiet travel runs briskly, every delivered event stops the current batch for reading, and active calls run slowly. Composing a request or opening a page/menu holds time. “Until something happens” replaces the nightfall shortcut only when the descent is quiet and no reading or call is pending; it stops at the first new word, injury, arrival, promise or tutorial. Information buttons retain the season and hut background. Completed-climb and closed-season totals are always computed and hidden until “See tally”. Simulation inputs, saves and replay remain unchanged. Adam accepts feel.
+
+## Approved UI sweep (2026-10-22)
+The UI follows the lab layout grammar: a single top bar, daylight strip, mountain, internally scrolling sheet, and pinned leader actions. Pending hurt and promised-hour calls take over the sheet. Company requests appear as a banner. The menu contains the journal, pacing, Send word, full screen, title and lab links, recording control, and return action. Automatic pacing is the default; optional Slow, Steady and Fast overrides live in the menu. Skip ⏩ runs unchanged simulation minutes and stops for decisions, physical events, guidance, dusk, or two elapsed game hours. Ambient journal words do not stop it.
+
+Send word uses lab-client 0.2.1. It respects an explicit recording opt-out, requires consent for an unlinked run under a browser privacy signal, and remembers an optional submitted name under `hf-lab-feedback-name`. Downloads retain the existing playtest export. The simulation, HF 2.8.0 pin, save shape and replay rules remain unchanged. Adam accepts feel after retesting.

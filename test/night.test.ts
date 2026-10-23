@@ -66,12 +66,12 @@ async function atNight(skip: boolean) {
     disclosure: { unlocked: ['insist', 'tell', 'promise', 'rope', 'fix', 'pack', 'share'], seen: [] },
     over: false,
   });
-  expect(document.querySelectorAll('[data-speed]')).toHaveLength(3);
+  expect(document.querySelectorAll('[data-speed]')).toHaveLength(0);
   vi.advanceTimersByTime(7500);
   driver.frame();
   if (skip && !driver.climb.over) {
     const walk = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent === 'Until something happens',
+      (b) => b.getAttribute('aria-label') === 'Skip to the next event' && !b.hidden,
     );
     // A pending call can make the old nightfall shortcut unavailable.
     walk?.click();
@@ -112,8 +112,9 @@ it('Back from the drawer journal after auto-ending returns to the next phase', a
   const driver = await atNight(true);
   vi.advanceTimersByTime(2600);
   driver.frame();
-  document.querySelector<HTMLButtonElement>('.drawer-btn')?.click();
-  expect(document.querySelector('.page h2')?.textContent).toBe('Journal');
+  document.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+  document.querySelector<HTMLButtonElement>('[data-menu-journal]')?.click();
+  expect(document.querySelector('.page h2')?.textContent).toBe('The journal');
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
   expect(document.querySelector<HTMLButtonElement>('[data-a="next"]')?.textContent).toBe('On to The Tooth');
   document.querySelector<HTMLButtonElement>('[data-a="next"]')?.click();
@@ -122,7 +123,8 @@ it('Back from the drawer journal after auto-ending returns to the next phase', a
 
 it('leaving the journal during the ending stamp cannot later reopen an obsolete debrief', async () => {
   const driver = await atNight(true);
-  document.querySelector<HTMLButtonElement>('.drawer-btn')?.click();
+  document.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+  document.querySelector<HTMLButtonElement>('[data-menu-journal]')?.click();
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
   expect(document.querySelector<HTMLButtonElement>('[data-a="next"]')?.textContent).toBe('On to The Tooth');
   document.querySelector<HTMLButtonElement>('[data-a="next"]')?.click();
@@ -143,7 +145,8 @@ it('Back from the journal after closing the season keeps the season closed', asy
   expect(close?.textContent).toBe('Close the season');
   close?.click();
   expect(document.querySelector('.page h1')?.textContent).toBe('The season');
-  document.querySelector<HTMLButtonElement>('.drawer-btn')?.click();
+  document.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+  document.querySelector<HTMLButtonElement>('[data-menu-journal]')?.click();
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
   expect(document.querySelector('.page h1')?.textContent).toBe('The season');
   expect(document.querySelector('[data-a="next"]')).toBeNull();

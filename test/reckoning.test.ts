@@ -69,9 +69,9 @@ it('keeps real turn-time choices and offers no tally preference or live total', 
   ]);
   const before = snapshot(d.climb);
   const saved = localStorage.getItem('rope.save.v1');
-  button('Game menu')?.click();
+  document.querySelector<HTMLButtonElement>('[aria-label="Game menu"]')?.click();
   expect(document.querySelector('[data-reckoning]')).toBeNull();
-  button('Back')?.click();
+  document.querySelector<HTMLButtonElement>('[data-menu-close]')?.click();
   button("We'll see")?.click();
   expect(document.querySelector('[data-see-tally]')).toBeNull();
   d.journalPage();

@@ -1,4 +1,4 @@
-import type { ClimbState } from '../sim/climb.ts';
+import { type ClimbState, MOUNTAINS } from '../sim/climb.ts';
 import { haltReason, hurtCall, promiseDue } from './calls.ts';
 import { PACE } from './pace.ts';
 
@@ -12,6 +12,30 @@ export function eventStamp(c: ClimbState): string {
     promiseDue(c),
     hurtCall(c),
     haltReason(c),
+  ]);
+}
+
+/** Stops a skip for decisions and physical events, while ambient words remain in the journal. */
+export function skipEventStamp(c: ClimbState): string {
+  const m = MOUNTAINS[c.mountain];
+  return JSON.stringify([
+    c.lines.filter((line) => line.input >= 0),
+    c.journal.filter((entry) =>
+      /fell|slipped|turned for home|went down alone|stood on the summit|back at the hut/.test(entry.text),
+    ),
+    c.members.map((member) => [
+      member.id,
+      member.homeAt,
+      member.summitAt,
+      member.turnedAt,
+      member.asks,
+      member.injuries.length,
+    ]),
+    promiseDue(c),
+    hurtCall(c),
+    haltReason(c),
+    !!m && c.minute >= c.day * 1440 + m.duskMinuteOfDay,
+    c.over,
   ]);
 }
 
@@ -30,9 +54,9 @@ export function playbackRate(
   reading: boolean,
   attention: boolean,
   untilEvent: boolean,
-  speed: 'slow' | 'normal' | 'fast' = 'normal',
+  speed: 'auto' | 'slow' | 'normal' | 'fast' = 'auto',
 ): number {
   if (choosing || reading) return 0;
   if (attention) return PACE.attention;
-  return untilEvent ? PACE.untilEvent : { slow: 0.15, normal: 0.8, fast: 2.4 }[speed];
+  return untilEvent ? PACE.untilEvent : { auto: 0.8, slow: 0.15, normal: 0.8, fast: 2.4 }[speed];
 }

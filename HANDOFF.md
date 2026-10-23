@@ -1,3 +1,12 @@
+# UI sweep (2026-10-22)
+
+- Remaining: Adam accepts feel after retesting the approved UI. The implementation follows the lab spec and grammar addenda: automatic default, optional menu pacing, Skip ⏩, one top bar, daylight/promise bar, pinned leader actions, call takeovers, and named Send word.
+- Exact released tarballs: lab-client 0.2.1 and lab-kit 0.3.1, vendored with exact file pins. HF remains 2.8.0. No simulation, save format, replay fixture, or Worker changes.
+- Independent Codex review found and fixed journal return bypassing the unresolved hut decision and the optional name input missing its touch sizing. A new regression reproduced the journal issue before the fix.
+- Local production browser checks cover title, hut, climb, pressure, info, menu, feedback, turnback/company/hurt calls, read-back and season at 360×690 and 1280×800. No page scroll and no visible targets below 44×44 in those screens. Pressure, menu and info hold the clock for 3.1 seconds.
+- Phone sheet is 216 px rather than the diagram's 200 px to preserve the required 44 px All answers target; scene is 318 px. Pacing remains presentation only. Workers AI spend unchanged; QA intercepts camp requests and uses the labelled deterministic fallback.
+- Final delivery identity, CI, live browser acceptance and screenshots: `/Users/abdul/code/.lab-scratch/codex/build-rope.md` and `/Users/abdul/code/.lab-scratch/ui-sweep/built/rope/`.
+
 # Handoff
 
 ## Owner automatic pacing update (2026-10-21)

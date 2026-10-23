@@ -62,6 +62,13 @@ async function boot() {
 }
 
 const result = () => document.querySelector('.request-result');
+const openAnswers = () => {
+  const button = result()?.querySelector<HTMLButtonElement>('.all-answers');
+  if (!button) throw new Error('Missing All answers button');
+  button.click();
+  return document.querySelector('.answers-sheet');
+};
+const backToRequests = () => document.querySelector<HTMLButtonElement>('.sheet-back')?.click();
 
 it('labels accepted rest as rest and retains each authentic HF answer', async () => {
   const driver = await boot();
@@ -69,9 +76,10 @@ it('labels accepted rest as rest and retains each authentic HF answer', async ()
   const answers = driver.climb.lines.filter((line) => line.input === 0);
   expect(answers.some((line) => line.verdict === 'assented')).toBe(true);
   expect(result()?.textContent).toContain('Rest accepted:');
-  const details = result()?.querySelector('details');
+  const details = openAnswers();
   for (const line of answers) expect(details?.textContent).toContain(line.says);
   expect(details?.textContent).toContain('agreed to rest');
+  backToRequests();
   vi.advanceTimersByTime(8500);
   driver.renderSheet(true);
   expect(result()?.textContent).toContain('Rest accepted:');
@@ -86,10 +94,10 @@ it('explains we all turn as your descent plus a new urge with renewed HF objecti
   for (const member of c.members) member.pos = { place: null, leg: leg.id, t: 0.6 };
   driver.send({ t: 'say', to: 'all', act: 'descend', force: 'insist' });
   expect(c.members.some((member) => member.asks)).toBe(true);
-  expect(document.querySelector('.calls-button')?.textContent).toContain('company calls');
+  expect(document.querySelector('.company-banner')?.textContent).toContain('wants to go down');
   expect(document.querySelector('.ask-bar')).toBeNull();
   vi.advanceTimersByTime(500);
-  document.querySelector<HTMLButtonElement>('.calls-button')?.click();
+  document.querySelector<HTMLButtonElement>('.company-banner')?.click();
   const turn = [...document.querySelectorAll<HTMLButtonElement>('.ask-bar button')].find(
     (button) => button.textContent === 'we all turn',
   );
@@ -105,7 +113,10 @@ it('explains we all turn as your descent plus a new urge with renewed HF objecti
   expect(result()?.textContent).toContain('Oskar put off turning back');
   expect(result()?.textContent).toContain(objection?.says);
   expect(result()?.textContent).toContain('Descending:');
-  expect(result()?.querySelector('details')?.textContent).toContain('agreed to turn back');
+  const accepted = c.lines.filter((line) => line.input === latest && line.verdict === 'assented');
+  const answers = openAnswers();
+  for (const line of accepted) expect(answers?.textContent).toContain(line.says);
+  expect(answers?.textContent).toContain('agreed to turn back');
 });
 
 it('does not attribute an earlier answer to a new request for the same action', async () => {
@@ -131,12 +142,14 @@ it('keeps every opening promise answer readable after speech expires', async () 
   const answers = driver.climb.lines.filter((line) => line.input === 0);
   expect(answers).toHaveLength(5);
   expect(result()?.textContent).toContain('Turnback promised at 12:00.');
-  const details = result()?.querySelector('details');
-  expect(details?.querySelector('summary')?.textContent).toBe('All 5 recorded answers');
+  const details = openAnswers();
+  expect(document.querySelectorAll('.answers-sheet p')).toHaveLength(5);
   for (const line of answers) expect(details?.textContent).toContain(line.says);
   vi.advanceTimersByTime(8500);
   driver.renderSheet(true);
-  for (const line of answers) expect(result()?.textContent).toContain(line.says);
+  for (const line of answers)
+    expect(document.querySelector('.answers-sheet')?.textContent).toContain(line.says);
+  backToRequests();
   vi.advanceTimersByTime(500);
   driver.send({ t: 'say', to: 'tamar', act: 'rest', force: 'ask' });
   expect(result()?.textContent).not.toContain('Turnback promised at 12:00.');
@@ -204,19 +217,21 @@ it('offers a real pair gathering request after distance blocks roping', async ()
   });
   const answers = c.lines.filter((l) => l.input === c.inputs.length - 1);
   expect(answers).toHaveLength(2);
-  for (const line of answers) expect(result()?.textContent).toContain(line.says);
   expect(result()?.textContent).toContain('Close up');
+  const recorded = openAnswers();
+  for (const line of answers) expect(recorded?.textContent).toContain(line.says);
 });
 
 it('keeps recorded answers open when walking progress rebuilds the sheet', async () => {
   const driver = await boot();
   driver.send({ t: 'promise', hour: 12 });
-  const details = result()?.querySelector('details');
+  const details = openAnswers();
   if (!details) throw new Error('Missing answers');
-  details.open = true;
   driver.climb.leader.near = 'tamar';
   driver.renderSheet(true);
-  expect(result()?.querySelector('details')?.open).toBe(true);
+  expect(document.querySelector('.sheet-answers')).not.toBeNull();
+  for (const line of driver.climb.lines)
+    expect(document.querySelector('.answers-sheet')?.textContent).toContain(line.says);
 });
 
 it('removes a distance gathering response as soon as the pair reaches one another', async () => {

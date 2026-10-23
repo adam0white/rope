@@ -47,6 +47,7 @@ const button = (text: string) => {
   const found = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (b) =>
       b.textContent === text ||
+      b.getAttribute('aria-label') === text ||
       b.querySelector('span')?.textContent === text ||
       (b.classList.contains('chip') && b.textContent?.startsWith(text)),
   );
@@ -83,10 +84,14 @@ it('keeps mandatory opening story across title and hut below forty words, with c
     return (copy.textContent ?? '').trim().split(/\s+/).filter(Boolean).length;
   };
   const title = words(true);
-  expect(document.querySelector('.page [popover]')?.textContent).toContain('eleven summers');
+  button('About this part of the climb').click();
+  expect(document.querySelector('.info-popover')?.textContent).toContain('eleven summers');
+  button('Close information').click();
   button('Begin the season').click();
   expect(title + words()).toBeLessThanOrEqual(40);
-  expect(document.querySelector('.page [popover]')?.textContent).toContain('Tamar checked');
+  button('About this part of the climb').click();
+  expect(document.querySelector('.info-popover')?.textContent).toContain('Keeping it is remembered');
+  button('Close information').click();
   expect(document.querySelectorAll('[data-hour]')).toHaveLength(3);
 });
 
@@ -95,7 +100,7 @@ it('gives every unavailable verb an adjacent readable reason and updates changed
   for (const b of document.querySelectorAll<HTMLButtonElement>('.sheet .verb:disabled')) {
     const reason = document.getElementById(b.getAttribute('aria-describedby') ?? '');
     expect(reason?.textContent?.trim(), b.textContent ?? '').toBeTruthy();
-    expect(reason?.parentElement).toBe(b.parentElement);
+    expect(reason?.parentElement).toBe(b);
   }
   expect(button('go down').parentElement?.textContent).toContain('hut');
   button('Nell').click();
@@ -117,11 +122,12 @@ it('shows target, selected request and commit without repeating unrelated verb g
   expect(document.querySelector('.request-summary')?.textContent).toContain('rest');
   expect(document.querySelectorAll('.sheet .verbs')).toHaveLength(0);
   expect(document.querySelectorAll('.forces button')).toHaveLength(3);
-  expect(document.querySelector('.target-hint')?.textContent).toContain('swipe');
+  expect(document.querySelector('.target-hint')).toBeNull();
+  expect(document.querySelectorAll('.targets .chip')).toHaveLength(0);
   const insist = document.querySelector<HTMLButtonElement>('.forces button:disabled');
   expect(insist?.textContent).toContain('after a refusal');
   expect(document.querySelector('.force:not(:disabled)')?.classList.contains('task')).toBe(true);
-  expect(document.querySelector('.chip[aria-pressed="true"]')?.classList.contains('task')).toBe(false);
+  expect(document.querySelector('.chip[aria-pressed="true"]')).toBeNull();
 });
 
 it('retains actual HF refusal words by request and refreshes them after another answer', async () => {
@@ -150,12 +156,13 @@ it('retains actual HF refusal words by request and refreshes them after another 
   expect(latest.says).not.toBe(refusal.says);
   expect(document.querySelector('.request-replies')?.textContent).toContain(latest.says);
   expect(document.querySelector('.request-replies')?.textContent).not.toContain(refusal.says);
-  button('cancel').click();
+  button('Back to requests').click();
   button('everyone').click();
   const stillDeclines = driver.climb.lines.filter((l) => l.who === 'wren').at(-1) as Line;
   // Main feedback belongs to the last request; changing selection does not mix in old answers.
   expect(document.querySelector('.request-replies')?.textContent).not.toContain(stillDeclines.says);
-  expect(document.querySelector('.request-replies')?.textContent).toContain(latest.says);
+  document.querySelector<HTMLButtonElement>('.all-answers')?.click();
+  expect(document.querySelector('.answers-sheet')?.textContent).toContain(latest.says);
 });
 
 it('updates an open request when the target leaves earshot and when they return', async () => {
@@ -244,19 +251,21 @@ it('retains both rope partners’ HF answers after bubble expiry and when the pa
   driver.renderSheet(true);
   const replies = () => document.querySelector('.request-replies');
   expect(replies()?.querySelector('p')?.textContent).toContain(oskar.says);
-  expect(replies()?.textContent).toContain(nell.says);
+  document.querySelector<HTMLButtonElement>('.all-answers')?.click();
+  expect(document.querySelector('.answers-sheet')?.textContent).toContain(nell.says);
+  button('Back to requests').click();
   button('rope up').click();
   button('Oskar').click();
   expect(replies()?.querySelector('p')?.textContent).toContain(oskar.says);
   expect(replies()?.textContent).toContain(nell.says);
-  button('cancel').click();
+  button('Back to requests').click();
   button('Oskar').click();
   button('rope up').click();
   button('Nell').click();
   expect(replies()?.querySelector('p')?.textContent).toContain(oskar.says);
   expect(replies()?.textContent).toContain(nell.says);
   // Another pair must not inherit the Nell/Oskar answer.
-  button('cancel').click();
+  button('Back to requests').click();
   button('rope up').click();
   button('Tamar').click();
   expect(replies()).toBeNull();
@@ -285,11 +294,11 @@ it('shows the saved climb, mountain and time beside Continue without advancing t
 it('keeps extra abilities behind More actions and returns to the same person', async () => {
   await boot(true);
   button('Oskar').click();
-  button('more actions').click();
+  button('more ▾').click();
   expect(document.querySelector('.sheet')?.classList.contains('sheet-more')).toBe(true);
   expect(button('rope up').closest('.secondary-action')).not.toBeNull();
   expect(button('scout').closest('.secondary-action')).not.toBeNull();
-  button('cancel').click();
+  button('Back to requests').click();
   expect(document.querySelector('.sheet')?.classList.contains('sheet-main')).toBe(true);
   expect(button('Oskar').getAttribute('aria-pressed')).toBe('true');
   expect(button('walk to Oskar').closest('.secondary-action')).toBeNull();

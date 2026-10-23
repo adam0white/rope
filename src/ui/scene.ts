@@ -105,7 +105,7 @@ export class Scene {
   /** Gentle zoom-out (down to 0.6) so a spread party fits; eased, never snapping. */
   private zoom = 1;
   private ppu(): number {
-    return (this.w / SPAN) * this.zoom;
+    return (this.w / (this.w < 600 ? 750 : SPAN)) * this.zoom;
   }
 
   private sx(x: number): number {
@@ -153,7 +153,7 @@ export class Scene {
     }
     const k = Math.min(1, dt * 1.5);
     // Fit the spread: the zoom that puts everyone within 80% of the width and 55% of the height.
-    const base = this.w / SPAN;
+    const base = this.w / (this.w < 600 ? 750 : SPAN);
     const wx = Math.max(...all.map((p) => p.x)) - Math.min(...all.map((p) => p.x));
     const wa = Math.max(...all.map((p) => p.alt)) - Math.min(...all.map((p) => p.alt));
     const fit = Math.min(
@@ -367,25 +367,34 @@ export class Scene {
     const g = this.figures;
     g.clear();
     const P = this.pal;
-    const slots = new Map<string, number>();
-    const spot = (key: string): number => {
-      const k = slots.get(key) ?? 0;
-      slots.set(key, k + 1);
-      return k;
-    };
-    // Ropes between partners first, under the figures.
+    // Start at real trail positions, then separate overlapping drawings. This is
+    // presentation spacing only: hearing and proximity still use simulation positions.
     const pos = new Map<string, ScreenPoint>();
-    const slotOf = new Map<string, number>();
-    const place2screen = (p: { x: number; alt: number }, key: string, id = ''): ScreenPoint => {
-      const k = spot(key);
-      slotOf.set(id, k);
-      return { x: this.sx(p.x) + (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2) * 14, y: this.sy(p.alt) };
-    };
-    const lp = s.leader.pos;
-    pos.set('leader', place2screen(posXY(s, lp), lp.place ?? `${lp.leg}:${lp.t.toFixed(2)}`));
+    const lp = posXY(s, s.leader.pos);
+    pos.set('leader', { x: this.sx(lp.x), y: this.sy(lp.alt) });
     for (const mem of s.members) {
-      const key = mem.pos.place ?? `${mem.pos.leg}:${mem.pos.t.toFixed(2)}`;
-      pos.set(mem.id, place2screen(posXY(s, mem.pos), key, mem.id));
+      const p = posXY(s, mem.pos);
+      pos.set(mem.id, { x: this.sx(p.x), y: this.sy(p.alt) });
+    }
+    const spacing = this.w < 600 ? 42 : 34;
+    const groups: { id: string; point: ScreenPoint }[][] = [];
+    for (const [id, point] of [...pos.entries()].sort((a, b) => a[1].x - b[1].x)) {
+      const last = groups.at(-1);
+      const tail = last?.at(-1);
+      if (last && tail && point.x - tail.point.x < spacing && Math.abs(point.y - tail.point.y) < 36) {
+        last.push({ id, point });
+      } else {
+        groups.push([{ id, point }]);
+      }
+    }
+    for (const group of groups) {
+      if (group.length < 2) continue;
+      const center = group.reduce((sum, p) => sum + p.point.x, 0) / group.length;
+      const half = ((group.length - 1) * spacing) / 2;
+      const cx = Math.max(24 + half, Math.min(this.w - 24 - half, center));
+      group.forEach(({ point }, i) => {
+        point.x = cx + (i - (group.length - 1) / 2) * spacing;
+      });
     }
     for (const mem of s.members) {
       if (!mem.ropedTo || mem.id > mem.ropedTo) continue;
