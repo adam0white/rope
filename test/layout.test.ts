@@ -79,6 +79,7 @@ it('uses one top menu and information trigger, with the promise and all six reci
   tap('[data-hour="12"]');
   expect(query('.where').textContent).toContain('turn at 12');
   expect(query('.day-promise').getAttribute('aria-label')).toContain('12:00');
+  expect(query('.day-bar').style.getPropertyValue('--dusk')).toBe(`${((1170 - 240) / 1140) * 100}%`);
   expect(document.querySelectorAll('.targets .chip')).toHaveLength(6);
 });
 

@@ -169,8 +169,8 @@ summary:focus-visible {
   border: 1px solid var(--ink-soft);
   background: linear-gradient(
     to right,
-    var(--paper-2) 0 78%,
-    color-mix(in srgb, var(--sky) 28%, var(--paper)) 78%
+    var(--paper-2) 0 var(--dusk),
+    color-mix(in srgb, var(--sky) 28%, var(--paper)) var(--dusk)
   );
 }
 .day-now {

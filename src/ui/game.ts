@@ -663,6 +663,7 @@ export class Game {
             `${m?.name ?? ''} · ${phase === 'debrief' ? 'read back' : phase === 'season' ? 'the season' : clock(c.minute)}${phase === 'hut' ? ' · at the hut' : c.promise ? ` · turn at ${c.promise.hour}` : ''}`,
           );
     const minute = c.minute % 1440;
+    this.dayBar.style.setProperty('--dusk', `${(((m?.duskMinuteOfDay ?? 1170) - 240) / 1140) * 100}%`);
     this.dayBar.innerHTML = `<span class="day-dawn">04</span><span class="day-dusk"></span><span class="day-now" style="left:${Math.max(0, Math.min(100, ((minute - 240) / 1140) * 100))}%"></span>${c.promise ? `<span class="day-promise" aria-label="Turn at ${c.promise.hour}:00" style="left:${((c.promise.hour * 60 - 240) / 1140) * 100}%"></span>` : ''}`;
     this.dayBar.setAttribute(
       'aria-label',
