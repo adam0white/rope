@@ -10,6 +10,11 @@
 
 # Handoff
 
+## Hint clipping bug hunt (2026-10-23)
+- Remaining: fixed-case browser screenshot and two-minute live play/menu/save/reload smoke at 360×690 and 1280×800. Existing Chrome disconnected after the before screenshot; no isolated browser fallback was launched. Adam still accepts feel.
+- The flagging tutorial was cut by a two-line clamp and a 60 px note height cap. Both constraints are removed so the full instruction wraps. Hint wording, simulation, difficulty, cast and HF remain unchanged.
+- `test/notes.test.ts` first failed on the 60 px cap, then passed. `npm run check:lane` passed: 26 files, 100 tests. Before screenshot and red/green/check/review/delivery receipts are in `~/code/.lab-scratch/bugs/rope-receipts/` and `~/code/.lab-scratch/bugs/rope.md`. The browser reproduction used live CSS in a dedicated localhost test origin with ingestion blocked; no feedback was sent.
+
 ## Owner automatic pacing update (2026-10-21)
 - Remaining: Adam accepts feel. Playback is automatic: brisk quiet travel, reading time for each new answer, injury, arrival, promise or tutorial, and slow response time for active calls. Choosing and menu/inspection pages hold time.
 - The former nightfall shortcut is “Until something happens”, available only after reading in a quiet walk down. Every unchanged simulation minute runs, and the first delivered event or new reading stops the batch and clears carry. Menu visits preserve reading, bubbles and presentation deadlines, including the ending transition.
