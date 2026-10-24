@@ -209,10 +209,8 @@ export class Game {
     watchPersonaCheckpoint(() => {
       if (this.climb?.over) void this.continuity.checkpointAll().then(() => this.save());
     });
-    window.addEventListener('hf-lab-preference', () => this.continuity.invalidate());
     window.addEventListener('storage', (event) => {
-      if (!event.key || ['hf-lab-recording-off', 'hf-lab-player', 'hf-lab-identity'].includes(event.key))
-        this.continuity.invalidate();
+      if (event.key === null) this.continuity.invalidate();
     });
     this.titlePage();
   }

@@ -1,7 +1,15 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type ClimbState, MOUNTAINS, snapshot } from '../src/sim/climb.ts';
+import type { Continuity } from '../src/ui/continuity.ts';
 import { Game } from '../src/ui/game.ts';
+
+const shelf = vi.hoisted(() => ({
+  ready: Promise.resolve(true),
+  enabled: false,
+  setEnabled() {},
+  request: vi.fn(),
+}));
 
 const lab = vi.hoisted(() => ({
   setPersonaRecording() {},
@@ -23,7 +31,7 @@ const lab = vi.hoisted(() => ({
 }));
 vi.mock('@adam0white/lab-client', async (original) => ({
   ...(await original<typeof import('@adam0white/lab-client')>()),
-  personaChannel: () => ({ ready: Promise.resolve(true), enabled: false, setEnabled() {}, request: vi.fn() }),
+  personaChannel: () => shelf,
   watchPersonaCheckpoint: () => () => {},
 }));
 vi.mock('../src/ui/lab.ts', () => ({ lab }));
@@ -35,6 +43,7 @@ vi.mock('../src/ui/scene.ts', () => ({
   },
 }));
 interface Driver {
+  continuity: Continuity;
   climb: ClimbState;
   frame(): void;
   renderSheet(): void;
@@ -50,6 +59,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] });
   vi.stubGlobal('requestAnimationFrame', () => 0);
   localStorage.clear();
+  shelf.ready = Promise.resolve(true);
   lab.telemetryOn = true;
   lab.privacySignalOn = false;
   lab.privacyOverride = false;
@@ -215,4 +225,17 @@ it('returns from the journal to the unresolved hut or title page', async () => {
   tap('[data-menu-journal]');
   tap('[data-a="close"]');
   expect(document.querySelector('.page-title')).not.toBeNull();
+});
+
+it('does not cancel a pending season when recording identity acknowledges', async () => {
+  const game = await boot(false);
+  let release!: (value: boolean) => void;
+  shelf.ready = new Promise<boolean>((resolve) => {
+    release = resolve;
+  });
+  const pending = game.continuity.fresh(42, true);
+  window.dispatchEvent(new Event('hf-lab-preference'));
+  window.dispatchEvent(new StorageEvent('storage', { key: 'hf-lab-player' }));
+  release(true);
+  await expect(pending).resolves.toHaveProperty('season');
 });

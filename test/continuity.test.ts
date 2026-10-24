@@ -52,13 +52,13 @@ it('title construction performs no claim; Begin preflights all five expected abs
   const { continuity, requests } = control(true);
   expect(requests).toEqual([]);
   const state = await continuity.fresh(8);
-  expect(requests.map((r) => r.action)).toEqual(['recording', 'prepareBatch', 'putBatch']);
-  const prepare = requests[1];
+  expect(requests.map((r) => r.action)).toEqual(['prepareBatch', 'putBatch']);
+  const prepare = requests[0];
   if (prepare?.action !== 'prepareBatch') throw new Error('prepare');
   expect(prepare.castIds).toHaveLength(5);
   expect(state.climb.people).toHaveLength(5);
 });
-it('local reload keeps pinned actors and performs no latest-shelf read; file saves stay gated', async () => {
+it('local reload keeps pinned actors and performs no latest-shelf read; file saves retain nonownership', async () => {
   const { continuity, requests, lab } = control();
   const state = newSeason(42);
   await continuity.restoreOwnership(
@@ -69,7 +69,7 @@ it('local reload keeps pinned actors and performs no latest-shelf read; file sav
   expect(requests).toEqual([]);
   expect(continuity.ownership().fileOrigin).toBe(true);
   await continuity.recording();
-  expect(lab.allowPersonaRecording).not.toHaveBeenCalledWith(true);
+  expect(lab.allowPersonaRecording).toHaveBeenCalledWith(true);
   const saved = continuity.ownership();
   await continuity.restoreOwnership(state, saved);
   expect(continuity.fileOrigin).toBe(true);
@@ -79,7 +79,7 @@ it('local reload keeps pinned actors and performs no latest-shelf read; file sav
   continuity.invalidate();
   lab.allowPersonaRecording.mockClear();
   await continuity.recording();
-  expect(lab.allowPersonaRecording).not.toHaveBeenCalledWith(true);
+  expect(lab.allowPersonaRecording).toHaveBeenCalledWith(true);
 });
 it('a cancelled batch cannot install a late game', async () => {
   const { continuity, shelf } = control(true);
@@ -92,7 +92,7 @@ it('a cancelled batch cannot install a late game', async () => {
   await expect(continuity.fresh(8)).rejects.toThrow('changed');
 });
 
-it('never auto-associates a fresh actor after identity or consent invalidation', async () => {
+it('publishes a released actor without a recording permission service', async () => {
   const { continuity, requests } = control(true);
   const state = await continuity.fresh(13);
   queueInput(state.climb, { t: 'lead', dir: 'up' });
@@ -102,7 +102,9 @@ it('never auto-associates a fresh actor after identity or consent invalidation',
   continuity.invalidate();
   await continuity.checkpoint('hf.cast.oskar.rope');
   const put = requests.find((r) => r.action === 'put');
-  expect(put?.authored).toBe(false);
+  expect(put).toBeDefined();
+  expect(requests.some((r) => r.action === 'recording' || r.action === 'recordingBatch')).toBe(false);
+  expect(put?.recordingEpoch).toBeUndefined();
   expect(continuity.sources).toHaveLength(1);
   expect(continuity.heads).toHaveLength(1);
 });
@@ -121,17 +123,17 @@ it('recording-off Continue never depends on the shelf permission service', async
   };
   await expect(continuity.recording()).resolves.toBeUndefined();
   expect(requests).toEqual([]);
-  expect(lab.allowPersonaRecording).not.toHaveBeenCalledWith(true);
+  expect(lab.allowPersonaRecording).toHaveBeenCalledWith(true);
   Object.assign(lab, { telemetryOn: true });
   shelf.enabled = true;
   continuity.heads = [{ castId: 'test', branchId: 'test', revision: 'test' } as never];
   await expect(continuity.recording(true)).resolves.toBeUndefined();
-  expect(continuity.status).toContain('local chapter stays pinned');
-  expect(lab.allowPersonaRecording).not.toHaveBeenCalledWith(true);
+  expect(requests).toEqual([]);
+  expect(lab.allowPersonaRecording).toHaveBeenCalledWith(true);
 });
 
-it('service failure closes a previously approved key and keeps the installed run local', async () => {
-  const { continuity, shelf, lab } = control(true);
+it('recording linkage survives permission-service failure', async () => {
+  const { continuity, shelf, lab, requests } = control(true);
   await continuity.restoreOwnership(newSeason(42));
   continuity.heads = [
     { castId: 'hf.cast.oskar.rope', branchId: 'control', revision: 'a'.repeat(64) } as never,
@@ -144,6 +146,6 @@ it('service failure closes a previously approved key and keeps the installed run
     throw new Error('bridge unavailable');
   };
   await continuity.recording();
-  expect(lab.personaRecordingAllowed).toBe(false);
-  expect(continuity.status).toContain('local chapter stays pinned');
+  expect(lab.personaRecordingAllowed).toBe(true);
+  expect(requests).toEqual([]);
 });
