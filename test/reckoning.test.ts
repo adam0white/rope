@@ -9,8 +9,18 @@ vi.mock('../src/ui/scene.ts', () => ({
     mount = async () => {};
   },
 }));
+vi.mock('@adam0white/lab-client', async (original) => ({
+  ...(await original<typeof import('@adam0white/lab-client')>()),
+  personaChannel: () => ({ ready: Promise.resolve(true), enabled: false, setEnabled() {}, request: vi.fn() }),
+  watchPersonaCheckpoint: () => () => {},
+}));
 vi.mock('../src/ui/lab.ts', () => ({
   lab: {
+    setPersonaRecording() {},
+    allowPersonaRecording() {},
+    build() {
+      return { c: 'test' };
+    },
     screen() {},
     milestone() {},
     trackRun() {

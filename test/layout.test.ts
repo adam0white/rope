@@ -4,6 +4,11 @@ import { type ClimbState, MOUNTAINS, snapshot } from '../src/sim/climb.ts';
 import { Game } from '../src/ui/game.ts';
 
 const lab = vi.hoisted(() => ({
+  setPersonaRecording() {},
+  allowPersonaRecording() {},
+  build() {
+    return { c: 'test' };
+  },
   screen: vi.fn(),
   milestone: vi.fn(),
   captureSave: vi.fn(),
@@ -15,6 +20,11 @@ const lab = vi.hoisted(() => ({
   sendFeedback: vi.fn(async () => ({})),
   sendRun: vi.fn(async () => ({})),
   openSendDialog: vi.fn(),
+}));
+vi.mock('@adam0white/lab-client', async (original) => ({
+  ...(await original<typeof import('@adam0white/lab-client')>()),
+  personaChannel: () => ({ ready: Promise.resolve(true), enabled: false, setEnabled() {}, request: vi.fn() }),
+  watchPersonaCheckpoint: () => () => {},
 }));
 vi.mock('../src/ui/lab.ts', () => ({ lab }));
 vi.mock('../src/ui/scene.ts', () => ({
@@ -60,6 +70,9 @@ async function boot(play = true) {
   await game.boot();
   if (play) {
     tap('[data-a="new"]');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
     tap('[data-hour="12"]');
   }
   return game as unknown as Driver;
@@ -76,6 +89,9 @@ it('uses one top menu and information trigger, with the promise and all six reci
   expect(document.querySelectorAll('[data-speed]')).toHaveLength(0);
   expect(document.querySelector('.drawer-btn')).toBeNull();
   tap('[data-a="new"]');
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
   tap('[data-hour="12"]');
   expect(query('.where').textContent).toContain('turn at 12');
   expect(query('.day-promise').getAttribute('aria-label')).toContain('12:00');
@@ -183,6 +199,9 @@ it.each(['off', 'privacy'])('sends feedback in the same sheet when %s', async (c
 it('returns from the journal to the unresolved hut or title page', async () => {
   await boot(false);
   tap('[data-a="new"]');
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
   tap('.menu-trigger');
   tap('[data-menu-journal]');
   tap('[data-a="close"]');

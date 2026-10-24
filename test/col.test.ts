@@ -41,9 +41,12 @@ it('control: insisting again and again on the way up wears trust down, through H
   const s = toCol(2);
   const wren = s.people.find((p) => p.id === 'wren');
   if (!wren) throw new Error('no wren');
+  // This is a voice-pressure control, so keep the leader in actual earshot as Wren moves.
   const before = voiceOf(wren, 'leader')?.trust ?? 0;
   for (let k = 0; k < 4; k++) {
-    queueInput(s, { t: 'say', to: 'wren', act: 'rest', force: 'insist' });
+    s.leader.move = null;
+    s.leader.pos = structuredClone(s.members.find((m) => m.id === 'wren')!.pos);
+    queueInput(s, { t: 'say', to: 'wren', act: 'descend', force: 'insist' });
     for (let i = 0; i < 8; i++) step(s);
   }
   expect(voiceOf(wren, 'leader')?.trust ?? 0).toBeLessThan(before);

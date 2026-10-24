@@ -90,7 +90,7 @@ it('an unversioned nearby escort tied to someone else replays narrator 3 exactly
   ];
   const played = replay(start, inputs, s.minute + 2, 3);
   expect(played.lines[0]?.verdict).toBe('assented');
-  expect(played.journal.some((j) => j.text === 'Tamar went down with Nell.')).toBe(true);
+  expect(played.journal.some((j) => j.text === 'Tamar Vale went down with Nell.')).toBe(true);
   expect(played.members.find((m) => m.id === 'tamar')?.ropedTo).toBe('oskar');
   const e = exportClimb(start, played, '2.6.0');
   expect(snapshot(replayExport(e))).toBe(e.state);

@@ -108,6 +108,10 @@ export function inputPhrase(inp: Input): string {
         ? `${verb} ${who} ${what[inp.act]}`
         : `${verb} ${who} to ${what[inp.act]}`;
     }
+    case 'release-person':
+      return `asked ${memberOf(inp.to).name} to end their mountain chapter`;
+    case 'ask-life':
+      return `asked ${memberOf(inp.to).name} about their life`;
     case 'promise':
       return `promised to turn back at ${String(inp.hour).padStart(2, '0')}:00`;
     case 'tell':

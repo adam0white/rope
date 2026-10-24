@@ -22,14 +22,14 @@ function fixture() {
   return s;
 }
 
-it('preserves the exact pre-change rules-2 pursuit state for old inputs', () => {
+it('pins the current-cast pursuit state for old input verbs', () => {
   const s = startClimb(31, 3);
   queueInput(s, { t: 'lead', dir: 'up' });
   for (let i = 0; i < 80; i++) step(s);
   queueInput(s, { t: 'lead', dir: 'with', who: 'tamar' });
   for (let i = 0; i < 100; i++) step(s);
   expect(createHash('sha256').update(snapshot(s)).digest('hex')).toBe(
-    '945459720bc601fe31873d02db79c4a1bb2defafaf64c537d8f09d7a1341cdcc',
+    '140dd337eccadc0e60acef2b76bc5cb62f44b0b8ce370eeb8ffaa0f584380e9a',
   );
 });
 
@@ -204,7 +204,7 @@ it('gathering at a real summit records the ascent without recording an interior 
 
 it('names the new inputs in the debrief', () => {
   expect(inputPhrase({ t: 'say', at: 1, act: 'gather', to: 'tamar', with: 'nell', force: 'ask' })).toBe(
-    'asked Tamar to meet Nell and wait together',
+    'asked Tamar Vale to meet Nell and wait together',
   );
-  expect(inputPhrase({ t: 'lead', at: 1, dir: 'near', who: 'tamar' })).toBe('walked close to Tamar');
+  expect(inputPhrase({ t: 'lead', at: 1, dir: 'near', who: 'tamar' })).toBe('walked close to Tamar Vale');
 });

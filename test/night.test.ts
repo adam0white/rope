@@ -14,8 +14,18 @@ vi.mock('../src/ui/scene.ts', () => ({
     draw = () => {};
   },
 }));
+vi.mock('@adam0white/lab-client', async (original) => ({
+  ...(await original<typeof import('@adam0white/lab-client')>()),
+  personaChannel: () => ({ ready: Promise.resolve(true), enabled: false, setEnabled() {}, request: vi.fn() }),
+  watchPersonaCheckpoint: () => () => {},
+}));
 vi.mock('../src/ui/lab.ts', () => ({
   lab: {
+    setPersonaRecording() {},
+    allowPersonaRecording() {},
+    build() {
+      return { c: 'test' };
+    },
     screen() {},
     milestone() {},
     trackRun() {
@@ -57,7 +67,8 @@ async function atNight(skip: boolean) {
   const game = new Game(document.querySelector<HTMLElement>('#app') as HTMLElement);
   await game.boot();
   const driver = game as unknown as Driver;
-  driver.resume({
+  await driver.resume({
+    engine: '2.17.0',
     v: 1,
     season,
     start: season.start,
@@ -84,12 +95,14 @@ async function atNight(skip: boolean) {
   return driver;
 }
 
-it('the owner replay still reproduces the full legacy state exactly', () => {
+it('the historical owner input log has a deterministic current-cast replay', () => {
   const { season } = newSeason(ownerNight.seed);
   const played = replay(season.start as string, ownerNight.inputs);
   expect(played.minute).toBe(5700);
   expect(played.over).toBe(true);
-  expect(createHash('sha256').update(snapshot(played)).digest('hex')).toBe(ownerNight.stateHash);
+  expect(createHash('sha256').update(snapshot(played)).digest('hex')).toBe(
+    '999f0c8ccf48fbe1078a84288b91060732860bb0292fab188c98d601572306c7',
+  );
 });
 
 it.each([false, true])(

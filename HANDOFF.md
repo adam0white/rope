@@ -1,3 +1,19 @@
+# Canonical cast and browser continuity (2026-10-24)
+
+Remaining: Adam accepts feel. Technical delivery evidence and any live journey limitations are in `/Users/abdul/code/.lab-scratch/cast/rope.md` and `rope-ledger.md`.
+
+The five foreground people are Tamar Vale52, Oskar34, Nell23, Bilal41 and Wren29, constructed from the released canonical cast artifact. HF is exactly2.18.0 (engine2.17.0); lab-client0.4.2 and lab-kit0.5.2 remain the current immutable feedback artifacts. Ezra remains absent remembered background; Nell’s mother remains incidental family. Tamar Vale is not Tamar of the Wall.
+
+Begin alone prepares and atomically claims every applicable allocated browser history. Local continuity is optional and separate from recording. Fresh local play preserves shelf histories. Loaded runs retain initial admitted actors, life clocks and exact last accepted heads; file imports acquire no ownership and stay file-origin. Current exports replay and carry the played season prefix. Older local saves are left untouched under their old key and are not loaded by this edition. The two historical owner-export fixtures still replay exactly; current-cast hash controls use new hashes.
+
+The People menu offers five private, choice-dependent subjects. HF can refuse. Revealed clues and bounded local outcomes are journalled; larger biography outcomes are not automatically granted. Carried coarse assignments/public notes affect hut preparation timing and journal context without awarding competence or friendship. Supported receiving dialects are native Rope and native Commonstead Oskar; other sources refuse with an explicit fresh-local option.
+
+After a finished climb with everyone at the hut, ask a person to end the mountain chapter. The logged wait lives bounded hut rest/eating before HF resolves release. Source capture still refuses injury/illness, active projects, unsupported obligations and non-boundaries. Save a checkpoint using the last accepted parent; conflicts require export or an explicit fresh branch. Whole source snapshots stay in bounded local saves/exports, outside telemetry copies. An owned death closes its branch. Original authored recording eligibility is captured at fresh-run generation/epoch and revoked on identity/preference/load changes; carried/file histories need the current scoped choice. Explicit feedback still sends under the owner’s newer rule: recording-on may include an unlinked run despite unanswered/declined linkage; recording-off/privacy sends the note only.
+
+Workers AI behavior, caps, fallback and spend are unchanged; no model calls made during this increment. Existing spend estimate remains below.
+
+---
+
 # UI sweep (2026-10-22)
 
 - Remaining: Adam accepts feel after retesting the approved UI. The implementation follows the lab spec and grammar addenda: automatic default, optional menu pacing, Skip ⏩, one top bar, daylight/promise bar, pinned leader actions, call takeovers, and named Send word.

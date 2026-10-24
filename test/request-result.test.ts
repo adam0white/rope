@@ -11,8 +11,18 @@ vi.mock('../src/ui/scene.ts', () => ({
     draw = () => {};
   },
 }));
+vi.mock('@adam0white/lab-client', async (original) => ({
+  ...(await original<typeof import('@adam0white/lab-client')>()),
+  personaChannel: () => ({ ready: Promise.resolve(true), enabled: false, setEnabled() {}, request: vi.fn() }),
+  watchPersonaCheckpoint: () => () => {},
+}));
 vi.mock('../src/ui/lab.ts', () => ({
   lab: {
+    setPersonaRecording() {},
+    allowPersonaRecording() {},
+    build() {
+      return { c: 'test' };
+    },
     screen() {},
     milestone() {},
     trackRun() {
@@ -49,7 +59,8 @@ async function boot() {
   await game.boot();
   const driver = game as unknown as Driver;
   const { season, climb } = newSeason(20261018);
-  driver.resume({
+  await driver.resume({
+    engine: '2.17.0',
     season,
     start: season.start,
     inputs: [],
@@ -177,10 +188,10 @@ it('distinguishes an old earshot follow from an active close approach and arriva
   }
   c.leader.pos = { place: null, leg: 'meadow', t: 0.43 };
   c.leader.follow = 'tamar';
-  tap('Tamar');
+  tap('Tamar Vale');
   expect(document.querySelector('.movement-status')?.textContent).toContain('earshot');
   expect(document.querySelector('.movement-status')?.textContent).toContain('too far to help');
-  tap('walk to Tamar');
+  tap('walk to Tamar Vale');
   expect(document.querySelector('.movement-status')?.textContent).toContain('Walking to Tamar');
   expect(document.querySelector('.movement-status')?.textContent).toContain('metres');
   expect(document.querySelector('.movement-status')?.textContent).toContain('if she stays');
@@ -205,9 +216,9 @@ it('offers a real pair gathering request after distance blocks roping', async ()
   c.leader.pos = { place: null, leg: 'meadow', t: 0.55 };
   driver.send({ t: 'say', to: 'tamar', act: 'rope', with: 'oskar', force: 'ask' });
   expect(result()?.textContent).toContain('too far');
-  expect(document.querySelector('.gather-pair')?.textContent).toBe('Close up: Tamar + Oskar');
+  expect(document.querySelector('.gather-pair')?.textContent).toBe('Close up: Tamar Vale + Oskar');
   vi.advanceTimersByTime(500);
-  tap('Close up: Tamar + Oskar');
+  tap('Close up: Tamar Vale + Oskar');
   expect(c.inputs.at(-1)).toMatchObject({
     t: 'say',
     to: 'tamar',

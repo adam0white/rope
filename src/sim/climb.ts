@@ -8,6 +8,7 @@
  */
 import {
   type Affordance,
+  abandonGoal,
   adoptGoal,
   adoptVoiceTrust,
   answerNow,
@@ -35,6 +36,7 @@ import {
   voiceOf,
 } from '@adam0white/human-framework';
 import { type GatherPlan, type Segment, segmentMove, trailRoute } from './approach.ts';
+import { DISCOVERIES } from './discoveries.ts';
 import {
   type Beat,
   coldAt,
@@ -55,6 +57,11 @@ import {
 import { createParty, LEADER, MEMBERS, memberOf } from './party.ts';
 import { DRAW, hashUnit } from './rng.ts';
 import { voiced } from './voice.ts';
+
+function memberIn(s: ClimbState, id: string) {
+  const member = memberOf(id);
+  return !s.castEdition && id === 'tamar' ? { ...member, name: 'Tamar' } : member;
+}
 
 export const MOUNTAINS: Record<string, Mountain> = Object.fromEntries(SEASON.map((x) => [x.id, x]));
 
@@ -148,7 +155,9 @@ export type Input =
   | { t: 'lead'; at: number; dir: 'up' | 'down' | 'stop' | 'with' | 'near'; via?: string; who?: string }
   | { t: 'fix'; at: number }
   | { t: 'scout'; at: number; via?: string }
-  | { t: 'share'; at: number; to: string };
+  | { t: 'share'; at: number; to: string }
+  | { t: 'ask-life'; at: number; to: string }
+  | { t: 'release-person'; at: number; to: string };
 
 /** An input before it is stamped with its minute. */
 export type NewInput = Input extends infer I
@@ -182,6 +191,7 @@ export interface JournalEntry {
 export type NarrationVersion = 1 | 2 | 3;
 
 export interface ClimbState {
+  castEdition?: 'rope-cast-1';
   v: 1;
   /** Host rules version. Absent (1): climbs saved before HF 2.8.0. 2: fullness on, alongside, reconsider. */
   rules?: 2;
@@ -256,6 +266,7 @@ export function startClimb(
   }
   const s: ClimbState = {
     v: 1,
+    castEdition: 'rope-cast-1',
     rules: 2,
     seed,
     day,
@@ -594,7 +605,7 @@ export function offersFor(s: ClimbState, id: string, asking?: string): Affordanc
       out.push({
         id: `rope:${other.id}`,
         action: 'rope',
-        label: `rope up with ${memberOf(other.id).name}`,
+        label: `rope up with ${memberIn(s, other.id).name}`,
         targetId: other.id,
         with: [other.id],
         duration: 5,
@@ -640,7 +651,8 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
     reason: r.reason,
     says,
   });
-  if (r.verdict !== 'assented') s.journal.push({ at: s.minute, who, text: journalFor(who, { ...r, says }) });
+  if (r.verdict !== 'assented')
+    s.journal.push({ at: s.minute, who, text: journalFor(s, who, { ...r, says }) });
 }
 
 /**
@@ -684,7 +696,7 @@ function withCause(s: ClimbState, who: string, input: number, r: SuggestionResol
     const other = inp.to === who ? inp.with : inp.to;
     if (!other || other === who) return says;
     const o = memberState(s, other);
-    const name = memberOf(other).name;
+    const name = memberIn(s, other).name;
     if (o.ropedTo !== null || mem.ropedTo !== null) return `${says} One of us is tied in already.`;
     if (distance(s, mem.pos, o.pos) >= 40) return `${says} ${name}'s too far off to tie to.`;
     return says;
@@ -704,8 +716,8 @@ function withPromise(s: ClimbState, who: string, r: SuggestionResolution): strin
   return c?.label ? `${r.says} I promised: ${c.label}.` : r.says;
 }
 
-function journalFor(who: string, r: SuggestionResolution): string {
-  const n = memberOf(who).name;
+function journalFor(s: ClimbState, who: string, r: SuggestionResolution): string {
+  const n = memberIn(s, who).name;
   switch (r.verdict) {
     case 'refused':
       return `${n} would not. “${r.says}”`;
@@ -852,6 +864,114 @@ function applyInput(s: ClimbState, idx: number): void {
       if (heard === 0) s.unheard.push(idx);
       return;
     }
+    case 'release-person': {
+      const p = personOf(s, inp.to),
+        mem = memberState(s, inp.to);
+      if (
+        !s.over ||
+        mem.pos.place !== m.hut ||
+        p.projects?.currentGoalId ||
+        s.members.some((member) => member.pos.place !== m.hut) ||
+        (p.activity &&
+          (!['rest', 'eat', 'drink', 'relieve', 'wait'].includes(p.activity.action) ||
+            p.activity.endsAt > s.minute + 120))
+      ) {
+        s.journal.push({
+          at: s.minute,
+          who: inp.to,
+          text: `${p.name}'s chapter cannot release them: return to the hut and finish active work first.`,
+        });
+        return;
+      }
+      if (p.activity) {
+        const until = p.activity.endsAt;
+        s.journal.push({
+          at: s.minute,
+          who: inp.to,
+          text: `You waited at the hut for ${p.name} to finish ${p.activity.action} before asking about departure.`,
+        });
+        while (s.minute < until) {
+          s.minute++;
+          for (const actor of s.people) tick(actor, s.minute);
+          for (const member of s.members) {
+            const actor = personOf(s, member.id);
+            if (actor.activity && actor.activity.endsAt <= s.minute)
+              complete(s, m, member, actor, 'completed');
+          }
+        }
+      }
+      const offer: Affordance = {
+        id: 'end-chapter',
+        action: 'rest',
+        label: 'end this mountain chapter at the hut',
+        duration: 5,
+        effort: 0,
+        advertises: { rest: 0.6, safety: 0.5, leisure: 0.3 },
+      };
+      const r = predict(p, [offer], { voiceId: LEADER, affordanceId: offer.id, strength: 0.35 });
+      s.lines.push({
+        at: s.minute,
+        who: inp.to,
+        input: idx,
+        verdict: r.verdict,
+        reason: 'chapter-release',
+        says: r.says,
+      });
+      if (r.verdict === 'assented' || r.verdict === 'complied') {
+        for (const goal of p.agenda.goals.filter(
+          (g) =>
+            g.status === 'active' &&
+            (g.id === 'summit' || g.label === 'get down safely' || g.label === 'leave the tin on the top'),
+        ))
+          abandonGoal(p, goal.id);
+        s.journal.push({
+          at: s.minute,
+          who: inp.to,
+          text: `${p.name} agreed to end this mountain chapter. Mountain aims are set aside; promises, debts and health remain.`,
+        });
+      }
+      return;
+    }
+    case 'ask-life': {
+      const clue = DISCOVERIES[inp.to];
+      if (!clue || !canHear(s, inp.to)) {
+        s.unheard.push(idx);
+        return;
+      }
+      const p = personOf(s, inp.to);
+      const offer: Affordance = {
+        id: 'private-talk',
+        action: 'talk',
+        label: `talk about ${clue.topic}`,
+        duration: 5,
+        effort: 0.02,
+        advertises: { belonging: 0.6, leisure: 0.4, meaning: 0.2 },
+        tags: ['social'],
+        with: [LEADER],
+      };
+      const r = predict(p, [...offersFor(s, inp.to), offer], {
+        voiceId: LEADER,
+        affordanceId: offer.id,
+        strength: 0.35,
+      });
+      const yes = r.verdict === 'assented' || r.verdict === 'complied';
+      s.lines.push({
+        at: s.minute,
+        who: inp.to,
+        input: idx,
+        verdict: r.verdict,
+        reason: 'private-conversation',
+        says: yes ? `${r.says} ${clue.clue}` : r.says,
+      });
+      s.journal.push({
+        at: s.minute,
+        who: inp.to,
+        text: `You asked ${p.name} about ${clue.topic}. ${yes ? clue.outcome : 'They kept it private this time.'}`,
+        story: true,
+      });
+      if (yes) s.journal.push({ at: s.minute, who: inp.to, text: `${p.name}: “${clue.clue}”`, story: true });
+      return;
+    }
     case 'promise': {
       const hearers = s.members.filter((x) => x.homeAt === null && canHear(s, x.id)).map((x) => x.id);
       if (hearers.length === 0) {
@@ -916,7 +1036,7 @@ function applyInput(s: ClimbState, idx: number): void {
         leaderGo(s, m, 'stop');
         s.leader.follow = null;
         s.leader.near = inp.who;
-        s.journal.push({ at: s.minute, text: `You started walking close to ${memberOf(inp.who).name}.` });
+        s.journal.push({ at: s.minute, text: `You started walking close to ${memberIn(s, inp.who).name}.` });
         return;
       }
       if (s.leader.near) delete s.leader.near;
@@ -928,7 +1048,7 @@ function applyInput(s: ClimbState, idx: number): void {
           text:
             s.leader.follow === 'party'
               ? 'You kept with the party.'
-              : `You went to ${memberOf(s.leader.follow).name}.`,
+              : `You went to ${memberIn(s, s.leader.follow).name}.`,
         });
         return;
       }
@@ -942,7 +1062,7 @@ function applyInput(s: ClimbState, idx: number): void {
             s.journal.push({
               at: s.minute,
               who: x.id,
-              text: `You turned for home, and ${memberOf(x.id).name} had company down.`,
+              text: `You turned for home, and ${memberIn(s, x.id).name} had company down.`,
             });
           }
       return;
@@ -999,7 +1119,7 @@ function applyInput(s: ClimbState, idx: number): void {
         },
       ]);
       reaction(s, inp.to, idx, 'eat', 'gift');
-      s.journal.push({ at: s.minute, text: `You gave ${memberOf(inp.to).name} some of your food.` });
+      s.journal.push({ at: s.minute, text: `You gave ${memberIn(s, inp.to).name} some of your food.` });
       return;
     }
   }
@@ -1168,7 +1288,16 @@ export function clock(minute: number): string {
 
 /** Advance one minute. Deterministic in the state and the input log. */
 export function step(s: ClimbState): void {
-  if (s.over) return;
+  if (s.over) {
+    const releases = s.inputs
+      .map((input, index) => ({ input, index }))
+      .filter(({ input }) => input.t === 'release-person' && input.at === s.minute + 1);
+    if (releases.length) {
+      s.minute++;
+      for (const { index } of releases) applyInput(s, index);
+    }
+    return;
+  }
   const m = mountainOf(s);
   s.minute += 1;
   for (const p of s.people) tick(p, s.minute);
@@ -1209,7 +1338,7 @@ export function dayAccount(s: ClimbState): {
   const late = s.members.filter((x) => x.homeAt !== null && x.homeAt > dusk).map((x) => x.id);
   const names = (ids: string[]) =>
     ids
-      .map((id) => memberOf(id).name)
+      .map((id) => memberIn(s, id).name)
       .join(', ')
       .replace(/, ([^,]*)$/, ' and $1');
   const line =
@@ -1328,7 +1457,7 @@ function gatherOffer(s: ClimbState, mem: MemberState, plan: GatherPlan): Afforda
     id: `gather:${plan.with}`,
     action: 'gather',
     targetId: plan.with,
-    label: `meet ${memberOf(plan.with).name} ${plan.point.place ? `at ${placeOf(m, plan.point.place).name}` : `on ${legOf(m, plan.point.leg ?? '').name}`} and wait until ${clock(plan.until)}`,
+    label: `meet ${memberIn(s, plan.with).name} ${plan.point.place ? `at ${placeOf(m, plan.point.place).name}` : `on ${legOf(m, plan.point.leg ?? '').name}`} and wait until ${clock(plan.until)}`,
     duration,
     effort,
     advertises: { belonging: 0.3, safety: -risk - 0.3 * exposed, autonomy: -0.04 },
@@ -1365,12 +1494,12 @@ function gatherArrival(s: ClimbState, m: Mountain, mem: MemberState, mv: Move): 
     if (lg.to === m.summit && mem.summitAt === null) {
       mem.summitAt = s.minute;
       wantHome(s, p, mem.path.length);
-      s.journal.push({ at: s.minute, who: mem.id, text: `${memberOf(mem.id).name} stood on the summit.` });
-      witness(s, mem.id, 'summit', `${memberOf(mem.id).name} reached the top`, 0.3, null);
+      s.journal.push({ at: s.minute, who: mem.id, text: `${memberIn(s, mem.id).name} stood on the summit.` });
+      witness(s, mem.id, 'summit', `${memberIn(s, mem.id).name} reached the top`, 0.3, null);
     }
   } else if (mv.toT === 0 && lg.from === m.hut && mem.homeAt === null) {
     mem.homeAt = s.minute;
-    s.journal.push({ at: s.minute, who: mem.id, text: `${memberOf(mem.id).name} was back at the hut.` });
+    s.journal.push({ at: s.minute, who: mem.id, text: `${memberIn(s, mem.id).name} was back at the hut.` });
   }
 }
 
@@ -1442,7 +1571,7 @@ function followStep(s: ClimbState, m: Mountain): void {
     if (L.follow && L.follow !== 'party')
       s.journal.push({
         at: s.minute,
-        text: `${memberOf(L.follow).name} was down; you stopped where you were.`,
+        text: `${memberIn(s, L.follow).name} was down; you stopped where you were.`,
       });
     L.follow = null;
     return;
@@ -1620,7 +1749,7 @@ function needsCompany(s: ClimbState, mem: MemberState): boolean {
 const ASK_WAIT = 45;
 
 function askCompany(s: ClimbState, mem: MemberState): void {
-  const name = memberOf(mem.id).name;
+  const name = memberIn(s, mem.id).name;
   if (!mem.asks) {
     mem.asks = { at: s.minute };
     s.lines.push({
@@ -1666,13 +1795,13 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
       s.journal.push({
         at: s.minute,
         who: mem.id,
-        text: `${memberOf(mem.id).name} changed their mind and went up again.`,
+        text: `${memberIn(s, mem.id).name} changed their mind and went up again.`,
       });
     }
     if (!up && mem.escortFor) {
       const o = memberState(s, mem.escortFor);
-      const nm = memberOf(mem.id).name;
-      const on = memberOf(o.id).name;
+      const nm = memberIn(s, mem.id).name;
+      const on = memberIn(s, o.id).name;
       // The ask counts as answered either way (kept so saved runs replay exactly); only the words and the rope are honest.
       if (o.asks) o.asks = null;
       if (distance(s, mem.pos, o.pos) < 60) {
@@ -1706,7 +1835,7 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
       s.journal.push({
         at: s.minute,
         who: mem.id,
-        text: `${memberOf(mem.id).name} turned for home from ${here(m, mem)}.`,
+        text: `${memberIn(s, mem.id).name} turned for home from ${here(m, mem)}.`,
       });
     }
     // Set the move before the tug, so the partner's decision always sees it.
@@ -1847,7 +1976,7 @@ function complete(
             s.journal.push({
               at: s.minute,
               who: mem.id,
-              text: `${memberOf(mem.id).name} called down from ${placeOf(m, lg.to).name}: ${legReport(s, next)}.`,
+              text: `${memberIn(s, mem.id).name} called down from ${placeOf(m, lg.to).name}: ${legReport(s, next)}.`,
             });
             learnLeg(s, next);
           }
@@ -1861,9 +1990,9 @@ function complete(
           s.journal.push({
             at: s.minute,
             who: mem.id,
-            text: `${memberOf(mem.id).name} stood on the summit.`,
+            text: `${memberIn(s, mem.id).name} stood on the summit.`,
           });
-          witness(s, mem.id, 'summit', `${memberOf(mem.id).name} reached the top`, 0.3, null);
+          witness(s, mem.id, 'summit', `${memberIn(s, mem.id).name} reached the top`, 0.3, null);
         }
       } else {
         mem.pos = at(lg.from);
@@ -1874,7 +2003,7 @@ function complete(
           s.journal.push({
             at: s.minute,
             who: mem.id,
-            text: `${memberOf(mem.id).name} was back at the hut.`,
+            text: `${memberIn(s, mem.id).name} was back at the hut.`,
           });
         }
       }
@@ -1889,7 +2018,11 @@ function complete(
     else if (a.action === 'pack') {
       mem.pack = false;
       s.leader.carrying.push(mem.id);
-      s.journal.push({ at: s.minute, who: mem.id, text: `${memberOf(mem.id).name} let you take the pack.` });
+      s.journal.push({
+        at: s.minute,
+        who: mem.id,
+        text: `${memberIn(s, mem.id).name} let you take the pack.`,
+      });
     } else if (a.action === 'rope' && a.targetId) {
       const other = memberState(s, a.targetId);
       if (other.ropeReady?.with === mem.id && s.minute - other.ropeReady.at <= 15 && other.ropedTo === null) {
@@ -1899,7 +2032,7 @@ function complete(
         s.journal.push({
           at: s.minute,
           who: mem.id,
-          text: `${memberOf(mem.id).name} and ${memberOf(other.id).name} tied in together.`,
+          text: `${memberIn(s, mem.id).name} and ${memberIn(s, other.id).name} tied in together.`,
         });
       } else mem.ropeReady = { with: other.id, at: s.minute };
     }
@@ -1907,11 +2040,11 @@ function complete(
   finish(p, out);
 }
 
-function ropeOffText(a: MemberState, b: MemberState): string {
-  const [na, nb] = [memberOf(a.id).name, memberOf(b.id).name];
+function ropeOffText(s: ClimbState, a: MemberState, b: MemberState): string {
+  const [na, nb] = [memberIn(s, a.id).name, memberIn(s, b.id).name];
   const goer = a.move && !b.move ? [na, nb] : b.move && !a.move ? [nb, na] : null;
   if (goer)
-    return `${goer[1]} stayed where ${memberOf(goer[1] === na ? a.id : b.id).they} was; ${goer[0]} untied and went on.`;
+    return `${goer[1]} stayed where ${memberIn(s, goer[1] === na ? a.id : b.id).they} was; ${goer[0]} untied and went on.`;
   return `The rope between ${na} and ${nb} came off as they went different ways.`;
 }
 
@@ -1924,7 +2057,7 @@ function ropeCheck(s: ClimbState): void {
       s.journal.push({
         at: s.minute,
         who: mem.id,
-        text: ropeOffText(mem, other),
+        text: ropeOffText(s, mem, other),
       });
       mem.ropedTo = null;
       other.ropedTo = null;
@@ -1952,7 +2085,7 @@ function slips(s: ClimbState, m: Mountain): void {
     const partner = mem.ropedTo ? memberState(s, mem.ropedTo) : null;
     const caught = partner !== null && distance(s, mem.pos, partner.pos) < 60;
     if (caught) sev *= 0.25;
-    const name = memberOf(mem.id).name;
+    const name = memberIn(s, mem.id).name;
     mem.injuries.push({ at: s.minute, severity: sev, leg: lg.id, caught });
     const part =
       ['leg', 'arm', 'head'][Math.floor(hashUnit(s.seed, DRAW.slipPart, s.day, li, s.minute, idx) * 3)] ??
@@ -1961,7 +2094,7 @@ function slips(s: ClimbState, m: Mountain): void {
       s.journal.push({
         at: s.minute,
         who: mem.id,
-        text: `${name} slipped on ${lg.name}; ${memberOf(partner.id).name} held the rope.`,
+        text: `${name} slipped on ${lg.name}; ${memberIn(s, partner.id).name} held the rope.`,
       });
       perceive(p, [
         {
@@ -1972,7 +2105,7 @@ function slips(s: ClimbState, m: Mountain): void {
           targetId: mem.id,
           salience: 0.9,
           valence: 0.6,
-          summary: `${memberOf(partner.id).name} held me on the rope`,
+          summary: `${memberIn(s, partner.id).name} held me on the rope`,
         },
       ]);
     } else {
@@ -2160,7 +2293,11 @@ export function replay(
   const savedNarration = s.narration;
   if (narration !== undefined) s.narration = narration;
   s.inputs = inputs.map((x) => ({ ...x }));
-  while (!s.over && (until === undefined || s.minute < until)) step(s);
+  while (
+    (!s.over || s.inputs.some((i) => i.t === 'release-person' && i.at === s.minute + 1)) &&
+    (until === undefined || s.minute < until)
+  )
+    step(s);
   // The compatibility override does not rewrite the original saved state's metadata.
   if (savedNarration === undefined) delete s.narration;
   else s.narration = savedNarration;

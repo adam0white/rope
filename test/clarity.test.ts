@@ -11,8 +11,18 @@ vi.mock('../src/ui/scene.ts', () => ({
     draw = () => {};
   },
 }));
+vi.mock('@adam0white/lab-client', async (original) => ({
+  ...(await original<typeof import('@adam0white/lab-client')>()),
+  personaChannel: () => ({ ready: Promise.resolve(true), enabled: false, setEnabled() {}, request: vi.fn() }),
+  watchPersonaCheckpoint: () => () => {},
+}));
 vi.mock('../src/ui/lab.ts', () => ({
   lab: {
+    setPersonaRecording() {},
+    allowPersonaRecording() {},
+    build() {
+      return { c: 'test' };
+    },
     screen() {},
     milestone() {},
     trackRun() {
@@ -60,7 +70,8 @@ async function boot(all = false, seed = 20261018) {
   await game.boot();
   if (all) {
     const { season, climb } = newSeason(seed);
-    (game as unknown as Driver).resume({
+    await (game as unknown as Driver).resume({
+      engine: '2.17.0',
       season,
       start: season.start,
       inputs: [],
@@ -88,6 +99,9 @@ it('keeps mandatory opening story across title and hut below forty words, with c
   expect(document.querySelector('.info-popover')?.textContent).toContain('eleven summers');
   button('Close information').click();
   button('Begin the season').click();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
   expect(title + words()).toBeLessThanOrEqual(40);
   button('About this part of the climb').click();
   expect(document.querySelector('.info-popover')?.textContent).toContain('Keeping it is remembered');
@@ -117,6 +131,9 @@ it('gives every unavailable verb an adjacent readable reason and updates changed
 it('shows target, selected request and commit without repeating unrelated verb grids', async () => {
   await boot();
   button('Begin the season').click();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
   button("We'll see").click();
   button('rest').click();
   expect(document.querySelector('.request-summary')?.textContent).toContain('rest');
@@ -133,6 +150,9 @@ it('shows target, selected request and commit without repeating unrelated verb g
 it('retains actual HF refusal words by request and refreshes them after another answer', async () => {
   const driver = await boot();
   button('Begin the season').click();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
   button("We'll see").click();
   vi.advanceTimersByTime(500);
   button('rest').click();
@@ -275,6 +295,7 @@ it('shows the saved climb, mountain and time beside Continue without advancing t
   const { season, climb } = newSeason(23);
   const saved = JSON.stringify({
     v: 1,
+    engine: '2.17.0',
     season,
     start: '',
     inputs: [],
@@ -282,13 +303,13 @@ it('shows the saved climb, mountain and time beside Continue without advancing t
     over: false,
     disclosure: { unlocked: [], seen: [] },
   });
-  localStorage.setItem('rope.save.v1', saved);
+  localStorage.setItem('rope.save.cast.v1', saved);
   await boot();
   expect(button('Continue the season')).toBeTruthy();
   expect(document.querySelector('.continue-summary')?.textContent).toContain('Climb 1 of 3');
   expect(document.querySelector('.continue-summary')?.textContent).toContain('Hollin');
   expect(document.querySelector('.continue-summary')?.textContent).toContain('05:13');
-  expect(localStorage.getItem('rope.save.v1')).toBe(saved);
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe(saved);
 });
 
 it('keeps extra abilities behind More actions and returns to the same person', async () => {

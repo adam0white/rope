@@ -3,6 +3,7 @@
  * player, voice id `leader`). The game never decides for them: it only offers what the mountain affords.
  */
 import { createPerson, type Person, type PersonSpec } from '@adam0white/human-framework';
+import { castForGame } from '@adam0white/lab-client';
 import { hashUnit } from './rng.ts';
 
 export const LEADER = 'leader';
@@ -19,13 +20,21 @@ export interface Member {
   mark: number;
 }
 
+export const FAMILY: Record<string, string> = {
+  tamar: 'Nell is her student, not her daughter.',
+  oskar: 'He has a younger sister.',
+  nell: 'Her mother stays in touch. Tamar Vale is her mentor.',
+  bilal: 'He is married and has a stepchild. This climb is a bounded trip from family life.',
+  wren: 'She has one older sibling. Her work and her climbing remain her own choices.',
+};
+
 export const MEMBERS: Member[] = [
   {
     id: 'tamar',
-    name: 'Tamar',
+    name: 'Tamar Vale',
     they: 'she',
     mark: 0,
-    first: 'Tamar checked everyone’s boots by torchlight before she checked her own.',
+    first: 'Tamar Vale checked everyone’s boots by torchlight before she checked her own.',
   },
   {
     id: 'oskar',
@@ -188,6 +197,18 @@ function spec(seed: number, now: number, id: string): PersonSpec {
   }
 }
 
+export const CAST = castForGame('rope');
+export const castIdOf = (id: string): string => `hf.cast.${id}.rope`;
 export function createParty(seed: number, now: number): Person[] {
-  return MEMBERS.map((m, i) => createPerson(spec(seed * 31 + i, now, m.id)));
+  return MEMBERS.map((m, i) => {
+    const canonical = CAST.find((c) => c.castId === castIdOf(m.id));
+    if (!canonical) throw new Error('Missing canonical Rope person');
+    return createPerson({
+      ...spec(seed * 31 + i, now, m.id),
+      name: canonical.name,
+      bornAt: now - canonical.age * YEAR,
+      traits: structuredClone(canonical.traits),
+      values: structuredClone(canonical.values),
+    });
+  });
 }

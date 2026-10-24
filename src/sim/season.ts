@@ -14,6 +14,7 @@ import {
   tick,
   voiceOf,
 } from '@adam0white/human-framework';
+import { canonicalPersona, lifeAdmission } from '@adam0white/lab-client';
 import {
   type ClimbState,
   hurtLevel,
@@ -26,6 +27,7 @@ import {
 import { type Branch, type Facts, factsOf } from './debrief.ts';
 import { SEASON } from './mountain.ts';
 import { createParty, LEADER, MEMBERS } from './party.ts';
+import { admitClimber, type Chapter, checkChapter } from './passport.ts';
 
 export interface ClimbSummary {
   climbNo: number;
@@ -34,6 +36,13 @@ export interface ClimbSummary {
   branch: Branch | null;
   /** Story and person lines kept for the season's notebook. */
   notes: string[];
+}
+
+export interface PastClimb {
+  start: string;
+  inputs: ClimbState['inputs'];
+  state: string;
+  branch: Branch | null;
 }
 
 export interface SeasonState {
@@ -45,6 +54,8 @@ export interface SeasonState {
   /** The climb under way: its start (the replay substrate) and its live state. */
   start: string | null;
   over: boolean;
+  chapter?: Chapter;
+  past?: PastClimb[];
 }
 
 /** First climb day of a season; each climb is four days after the last. */
@@ -53,10 +64,50 @@ export const DAYS_BETWEEN = 4;
 
 export const dayOfClimb = (climbNo: number): number => FIRST_DAY + DAYS_BETWEEN * (climbNo - 1);
 
-export function newSeason(seed: number): { season: SeasonState; climb: ClimbState } {
+export function openingParty(seed: number): Person[] {
+  return createParty(seed, dayOfClimb(1) * 1440 + (SEASON[0]?.startMinuteOfDay ?? 300) - 30);
+}
+export function newSeason(seed: number, chapter?: Chapter): { season: SeasonState; climb: ClimbState } {
   const day = dayOfClimb(1);
-  const people = createParty(seed, day * 1440 + (SEASON[0]?.startMinuteOfDay ?? 300) - 30);
+  if (chapter) {
+    checkChapter(chapter);
+    const expected = Object.fromEntries(openingParty(seed).map((p) => [p.id, p]));
+    for (const input of chapter.inputs) {
+      const id = input.parent.castId.split('.')[2] ?? '';
+      const opening = expected[id];
+      if (!opening) throw new Error('Unallocated initial person');
+      expected[id] = admitClimber(input, opening);
+    }
+    if (canonicalPersona(expected) !== canonicalPersona(chapter.initial))
+      throw new Error('Initial cast differs from its pinned semantic admission.');
+  }
+  const people = chapter
+    ? MEMBERS.map((m) => {
+        const p = chapter.initial[m.id];
+        if (!p) throw new Error('Incomplete initial cast');
+        return structuredClone(p);
+      })
+    : openingParty(seed);
   const climb = startClimb(seed, day, people, SEASON[0]?.id ?? 'hollin', 1);
+  if (chapter)
+    for (const input of chapter.inputs) {
+      const life = lifeAdmission(input, 'rope');
+      const id = input.parent.castId.split('.')[2];
+      const member = climb.members.find((m) => m.id === id);
+      // A carried routine consumes preparation time at the hut; it grants no skill or work completion.
+      if (member && !life.availableForExtraWork)
+        member.idleUntil = climb.minute + (life.startsAtHome ? 8 : 4);
+      climb.journal.push({
+        at: climb.minute,
+        who: id,
+        text:
+          life.line +
+          (!life.availableForExtraWork
+            ? ' They take a few minutes at the hut to check their own gear.'
+            : ' They have time to help with preparations.'),
+        story: true,
+      });
+    }
   const season: SeasonState = {
     v: 1,
     seed,
@@ -65,12 +116,20 @@ export function newSeason(seed: number): { season: SeasonState; climb: ClimbStat
     history: [],
     start: snapshot(climb),
     over: false,
+    ...(chapter ? { chapter: structuredClone(chapter) } : {}),
   };
   return { season, climb };
 }
 
 /** Close a played climb into the season, then live the valley days and start the next climb (or end). */
 export function nextClimb(season: SeasonState, played: ClimbState, branch: Branch | null): ClimbState | null {
+  season.past ??= [];
+  season.past.push({
+    start: season.start ?? '',
+    inputs: structuredClone(played.inputs),
+    state: snapshot(played),
+    branch,
+  });
   season.history.push({
     climbNo: played.climbNo,
     mountain: played.mountain,
@@ -249,6 +308,28 @@ export function valley(people: Person[], from: number, to: number): void {
   }
 }
 
+/** Reconstruct every prior played climb and valley interval before trusting a later initial state. */
+export function validateSeasonStart(
+  seed: number,
+  chapter: Chapter | undefined,
+  past: PastClimb[],
+  start: string,
+): SeasonState {
+  if (!Array.isArray(past) || past.length > 2) throw new Error('Unsupported season prefix.');
+  const opening = newSeason(seed, chapter);
+  const season = opening.season;
+  for (const entry of past) {
+    if (entry.start !== season.start) throw new Error('Season prefix start differs.');
+    const saved = restore(entry.state);
+    const played = replay(entry.start, entry.inputs, saved.minute);
+    if (!played.over || snapshot(played) !== entry.state) throw new Error('Season prefix replay differs.');
+    if (!nextClimb(season, played, entry.branch)) throw new Error('Closed season has no next climb.');
+  }
+  if (season.start !== start)
+    throw new Error('Run start differs from its admitted cast and played season prefix.');
+  return season;
+}
+
 /** Playtest export (AGENTS.md): seed, start state, input log and final state replay the player's climb. */
 export interface PlaytestExport {
   game: 'rope';
@@ -262,9 +343,17 @@ export interface PlaytestExport {
   start: string;
   inputs: ClimbState['inputs'];
   state: string;
+  chapter?: Chapter;
+  past?: PastClimb[];
 }
 
-export function exportClimb(start: string, s: ClimbState, engine: string): PlaytestExport {
+export function exportClimb(
+  start: string,
+  s: ClimbState,
+  engine: string,
+  chapter?: Chapter,
+  past?: PastClimb[],
+): PlaytestExport {
   return {
     game: 'rope',
     v: 1,
@@ -276,6 +365,8 @@ export function exportClimb(start: string, s: ClimbState, engine: string): Playt
     start,
     inputs: s.inputs,
     state: snapshot(s),
+    ...(chapter ? { chapter: structuredClone(chapter) } : {}),
+    ...(past ? { past: structuredClone(past) } : {}),
   };
 }
 

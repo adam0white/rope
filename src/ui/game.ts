@@ -4,7 +4,8 @@
  * state and the input log, and the export replays exactly.
  */
 
-import { FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
+import { ENGINE_VERSION, FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
+import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
 import { feedbackPersonaControl, telemetryToggle } from '@adam0white/lab-kit';
 import { campFacts, campFallback } from '../sim/camp.ts';
 import {
@@ -29,10 +30,13 @@ import {
   step,
 } from '../sim/climb.ts';
 import { ALTERNATIVE_CAPTION, type Branch, outcomeWords } from '../sim/debrief.ts';
+import { DISCOVERIES } from '../sim/discoveries.ts';
 import { coldAt, legsUp, SEASON } from '../sim/mountain.ts';
-import { MEMBERS, memberOf } from '../sim/party.ts';
-import { exportClimb, newSeason, nextClimb, type SeasonState } from '../sim/season.ts';
+import { CAST, FAMILY, MEMBERS, memberOf } from '../sim/party.ts';
+import { checkChapter } from '../sim/passport.ts';
+import { exportClimb, nextClimb, type SeasonState, validateSeasonStart } from '../sim/season.ts';
 import { haltReason, hurtCall, namesOf, promiseDue } from './calls.ts';
+import { Continuity, type Ownership } from './continuity.ts';
 import { type Disclosure, has, markSeen, type Note, newDisclosure, nextNote } from './disclosure.ts';
 import { icon } from './icons.ts';
 import { lab } from './lab.ts';
@@ -42,7 +46,7 @@ import { PACE } from './pace.ts';
 import { attentionNeeded, eventStamp, playbackRate, skipEventStamp } from './playback.ts';
 import { Scene } from './scene.ts';
 
-const SAVE_KEY = 'rope.save.v1';
+const SAVE_KEY = 'rope.save.cast.v1';
 const SLOW_MS = PACE.slowMs;
 const BUBBLE_MS = 7500;
 
@@ -54,6 +58,8 @@ interface Save {
   minute: number;
   disclosure: Disclosure;
   over: boolean;
+  engine?: string;
+  ownership?: Ownership;
 }
 
 type Panel =
@@ -81,6 +87,8 @@ const esc = (t: string): string =>
 const bold = (t: string): string => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 
 export class Game {
+  private continuity = new Continuity(lab, personaChannel());
+  private starting = false;
   private root: HTMLElement;
   private scene = new Scene();
   private top = h('div', 'top');
@@ -184,8 +192,8 @@ export class Game {
         if (!this.climb || !this.season) return null;
         const saved = this.load();
         if (saved?.season.seed === this.season.seed && saved.season.climbNo === this.season.climbNo)
-          lab.captureSave(saved);
-        return structuredClone(exportClimb(this.start, this.climb, FRAMEWORK_VERSION));
+          lab.captureSave(this.recordingSave(saved));
+        return structuredClone(this.recordingExport());
       },
       {
         runKey: () => (this.climb ? `${this.climb.seed}:${this.climb.climbNo}` : 'title'),
@@ -198,6 +206,14 @@ export class Game {
             : [],
       },
     );
+    watchPersonaCheckpoint(() => {
+      if (this.climb?.over) void this.continuity.checkpointAll().then(() => this.save());
+    });
+    window.addEventListener('hf-lab-preference', () => this.continuity.invalidate());
+    window.addEventListener('storage', (event) => {
+      if (!event.key || ['hf-lab-recording-off', 'hf-lab-player', 'hf-lab-identity'].includes(event.key))
+        this.continuity.invalidate();
+    });
     this.titlePage();
   }
 
@@ -206,7 +222,8 @@ export class Game {
   private load(): Save | null {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
-      return raw ? (JSON.parse(raw) as Save) : null;
+      const saved = raw ? (JSON.parse(raw) as Save) : null;
+      return saved?.engine === ENGINE_VERSION ? saved : null;
     } catch {
       return null;
     }
@@ -216,6 +233,8 @@ export class Game {
     if (!this.climb || !this.season) return;
     const s: Save = {
       v: 1,
+      engine: ENGINE_VERSION,
+      ownership: this.continuity.ownership(),
       season: this.season,
       // The season already holds this climb's start: write it once, not twice (halves the save).
       start: this.start === this.season.start ? '' : this.start,
@@ -227,33 +246,61 @@ export class Game {
     try {
       const text = JSON.stringify(s);
       localStorage.setItem(SAVE_KEY, text);
-      lab.captureSave(JSON.parse(text));
+      lab.captureSave(this.recordingSave(JSON.parse(text)));
     } catch {
       // Storage full or blocked: the game plays on without a save.
     }
   }
 
-  private newGame(): void {
-    const seed = (Date.now() % 1_000_000_007) | 0;
-    const { season, climb } = newSeason(seed);
-    this.season = season;
-    this.disc = newDisclosure();
-    this.begin(climb, season.start ?? snapshot(climb));
+  private async newGame(localOnly = false): Promise<void> {
+    if (this.starting) return;
+    this.starting = true;
+    try {
+      const seed = (Date.now() % 1_000_000_007) | 0;
+      const { season, climb } = await this.continuity.fresh(seed, localOnly);
+      this.season = season;
+      this.disc = newDisclosure();
+      this.begin(climb, season.start ?? snapshot(climb));
+      await this.continuity.recording();
+    } catch (error) {
+      this.openPage(
+        `<div class="page-body"><h1>The season has not begun</h1><p>${esc(String(error))}</p><p>Your existing notebook and browser histories are unchanged. Export the source, keep its chapter, or choose a fresh local season.</p></div><div class="page-actions"><button class="btn" data-local>Begin fresh locally</button><button class="btn" data-back>Back</button><button class="btn" data-word>Send word</button></div>`,
+        (el) => {
+          el.querySelector('[data-local]')?.addEventListener('click', () => void this.newGame(true));
+          el.querySelector('[data-back]')?.addEventListener('click', () => this.titlePage());
+          el.querySelector('[data-word]')?.addEventListener('click', () => this.feedbackPage());
+        },
+        'title',
+      );
+    } finally {
+      this.starting = false;
+    }
   }
 
-  private resume(sv: Save): void {
-    this.season = sv.season;
-    this.disc = sv.disclosure;
-    const start = sv.start || sv.season.start || '';
-    const c = replay(start, sv.inputs, sv.minute);
-    this.begin(c, start, true);
-    lab.screen(climbScreen(c, 'climb'));
-    if (c.over || sv.over) this.endClimb();
+  private async resume(sv: Save): Promise<void> {
+    try {
+      if (sv.engine !== ENGINE_VERSION) throw new Error('Older edition. Start fresh.');
+      if (sv.season.chapter) checkChapter(sv.season.chapter);
+      const start = sv.start || sv.season.start || '';
+      validateSeasonStart(sv.season.seed, sv.season.chapter, sv.season.past ?? [], start);
+      const c = replay(start, sv.inputs, sv.minute);
+      await this.continuity.restoreOwnership({ season: sv.season, climb: c }, sv.ownership);
+      this.season = sv.season;
+      this.disc = sv.disclosure;
+      this.begin(c, start, true);
+      await this.continuity.recording();
+      lab.screen(climbScreen(c, 'climb'));
+      if (c.over || sv.over) this.endClimb();
+    } catch (error) {
+      this.continuity.status = String(error);
+      this.continuityPage();
+    }
   }
 
   private begin(c: ClimbState, start: string, resumed = false): void {
     this.climb = c;
     this.start = start;
+    this.continuity.attach({ season: this.season, climb: c });
     this.shownLines = resumed ? c.lines.length : 0;
     this.shownJournal = resumed ? c.journal.length : 0;
     this.target = 'all';
@@ -370,6 +417,7 @@ export class Game {
   }
 
   private afterStep(): void {
+    this.continuity.closeDeaths();
     const c = this.climb;
     for (; this.shownLines < c.lines.length; this.shownLines++) {
       const l = c.lines[this.shownLines];
@@ -1616,7 +1664,7 @@ export class Game {
     const menu = h(
       'div',
       'menu-backdrop',
-      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu${this.climb ? ` · ${esc(MOUNTAINS[this.climb.mountain]?.name ?? '')} · ${clock(this.climb.minute)}` : ''}</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">The mountain waits while it is open.</p><div class="menu-body">${this.climb ? '<button class="btn" data-menu-journal>The journal ▸</button>' : ''}<fieldset class="menu-pacing"><legend>Walking pace</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${{ auto: 'Automatic', slow: 'Slow', normal: 'Steady', fast: 'Fast' }[speed]}</button>`).join('')}</fieldset><button class="btn" data-menu-send>Send word ▸</button><button class="btn phone-only" data-menu-fullscreen>Full screen</button><button class="btn" data-menu-title>To the title page</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a></div><div class="menu-footer"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><button class="btn go menu-resume" data-menu-close>${this.pageOpen() ? 'Back' : 'Back to the climb'}</button></section>`,
+      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu${this.climb ? ` · ${esc(MOUNTAINS[this.climb.mountain]?.name ?? '')} · ${clock(this.climb.minute)}` : ''}</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">The mountain waits while it is open.</p><div class="menu-body">${this.climb ? '<button class="btn" data-menu-journal>The journal ▸</button>' : ''}<fieldset class="menu-pacing"><legend>Walking pace</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${{ auto: 'Automatic', slow: 'Slow', normal: 'Steady', fast: 'Fast' }[speed]}</button>`).join('')}</fieldset><button class="btn" data-menu-people>People and browser continuity</button><button class="btn" data-menu-send>Send word ▸</button><button class="btn phone-only" data-menu-fullscreen>Full screen</button><button class="btn" data-menu-title>To the title page</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a></div><div class="menu-footer"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><button class="btn go menu-resume" data-menu-close>${this.pageOpen() ? 'Back' : 'Back to the climb'}</button></section>`,
     );
     const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => {
@@ -1640,6 +1688,10 @@ export class Game {
     menu.querySelector('[data-menu-journal]')?.addEventListener('click', () => {
       close();
       this.journalPage();
+    });
+    menu.querySelector('[data-menu-people]')?.addEventListener('click', () => {
+      close();
+      this.continuityPage();
     });
     menu.querySelector('[data-menu-send]')?.addEventListener('click', () => {
       close();
@@ -1732,13 +1784,6 @@ export class Game {
         const consent = el.querySelector<HTMLElement>('[data-feedback-consent]');
         const status = el.querySelector<HTMLElement>('[data-feedback-status]');
         if (!send || !consent || !status) return;
-        const off = () => {
-          try {
-            return localStorage.getItem('hf-lab-recording-off') !== null;
-          } catch {
-            return false;
-          }
-        };
         const update = () => {
           consent.replaceChildren();
           consent.append(
@@ -1750,7 +1795,21 @@ export class Game {
                 : 'Send includes your note. An available run may also include continuing character state without linking recorded history unless you approve linkage.',
             ),
           );
-          const choice = feedbackPersonaControl(lab);
+          const choice = feedbackPersonaControl({
+            get personaRecordingRequired() {
+              return lab.personaRecordingRequired;
+            },
+            get personaRecordingAllowed() {
+              return lab.personaRecordingAllowed;
+            },
+            allowPersonaRecording: (allow) => {
+              void (allow ? this.continuity.recording(true) : this.continuity.deny())
+                .then(update)
+                .catch((error) => {
+                  status.textContent = String(error);
+                });
+            },
+          });
           if (choice) consent.append(choice);
           send.disabled = false;
         };
@@ -1778,7 +1837,7 @@ export class Game {
           try {
             let run: unknown;
             try {
-              run = this.climb ? exportClimb(this.start, this.climb, FRAMEWORK_VERSION) : undefined;
+              run = this.climb ? this.recordingExport() : undefined;
             } catch {
               /* A broken export must not block feedback. */
             }
@@ -1843,6 +1902,92 @@ export class Game {
       d += `<text x="${p.x}" y="158" text-anchor="middle" font-family="Caveat" font-size="17" fill="currentColor">${esc(SEASON[i]?.name ?? '')}</text>`;
     });
     return `<svg class="peaks" viewBox="0 0 350 165" role="img" aria-label="The season's three mountains">${d}</svg>`;
+  }
+
+  private recordingSave(save: Save) {
+    const { ownership: _localOwnership, ...copy } = save;
+    return copy;
+  }
+  private recordingExport() {
+    return exportClimb(this.start, this.climb, FRAMEWORK_VERSION, this.season.chapter, this.season.past);
+  }
+
+  private runExport() {
+    return {
+      ...exportClimb(this.start, this.climb, FRAMEWORK_VERSION, this.season.chapter, this.season.past),
+      castSources: structuredClone(this.continuity.sources),
+    };
+  }
+
+  private continuityPage(): void {
+    const back = () => (this.climb ? this.closePage() : this.titlePage());
+    this.openPage(
+      `<div class="page-body"><h1>The people</h1><p>${esc(this.continuity.status)}</p><p>Continuity stays in this browser. It is separate from lab recording. A loaded season keeps its pinned people.</p><label><input type="checkbox" data-continuity ${this.continuity.shelf.enabled ? 'checked' : ''}> Use continuing people in a new season</label><p><a href="https://human.adamwhite.work/lab/people/">Inspect or export browser histories</a></p>${CAST.map((c) => `<p><b>${esc(c.name)}</b> · ${c.age} · ${esc(c.work)} ${esc(FAMILY[c.castId.split('.')[2] ?? ''] ?? '')}</p>`).join('')}${this.climb ? `<h2>Ask in private</h2><p>Only people in earshot can answer. They may keep a subject private.</p>${MEMBERS.map((m) => `<button class="btn" data-life="${m.id}" ${canHear(this.climb, m.id) ? '' : 'disabled'}>${esc(m.name)}: ${esc(DISCOVERIES[m.id]?.topic ?? 'talk')}</button>`).join('')}<h2>Leave this chapter</h2><p>Finish this climb before saving a person for another chapter. Injuries, active tasks and obligations can still refuse departure. A fresh branch is an explicit alternative; it does not continue an old branch.</p><select data-person>${CAST.map((c) => `<option value="${c.castId}">${esc(c.name)}</option>`).join('')}</select><button class="btn" data-release>Ask to end this person’s mountain chapter</button><button class="btn" data-checkpoint>Save this person at the finished climb</button><button class="btn" data-fork>Save an explicit fresh branch</button><button class="btn" data-export>Download this run</button>` : ''}<p><label>Load a current Rope run<input type="file" accept="application/json" data-import></label></p><p data-person-status role="status"></p><p>Loaded files remain file-origin through local save/reload. Their embedded ownership receipts are never acquired.</p></div><div class="page-actions"><button class="btn go" data-back>Back</button></div>`,
+      (el) => {
+        const status = el.querySelector<HTMLElement>('[data-person-status]');
+        if (!status) return;
+        el.querySelector('[data-back]')?.addEventListener('click', back);
+        el.querySelector<HTMLInputElement>('[data-continuity]')?.addEventListener('change', (event) => {
+          void this.continuity.setEnabled((event.target as HTMLInputElement).checked).then(() => {
+            status.textContent = this.continuity.status;
+          });
+        });
+        el.querySelectorAll<HTMLElement>('[data-life]').forEach((b) => {
+          b.addEventListener('click', () => {
+            this.send({ t: 'ask-life', to: b.dataset.life ?? '' });
+            this.closePage();
+          });
+        });
+        el.querySelector('[data-release]')?.addEventListener('click', () => {
+          const castId = el.querySelector<HTMLSelectElement>('[data-person]')?.value;
+          const id = castId?.split('.')[2];
+          if (!id) return;
+          this.send({ t: 'release-person', to: id });
+          this.save();
+          status.textContent = this.climb.journal.at(-1)?.text ?? '';
+        });
+        for (const fork of [false, true])
+          el.querySelector(fork ? '[data-fork]' : '[data-checkpoint]')?.addEventListener('click', () => {
+            const id = el.querySelector<HTMLSelectElement>('[data-person]')?.value;
+            if (!id) return;
+            void this.continuity
+              .checkpoint(id, fork)
+              .then(() => {
+                this.save();
+                status.textContent = this.continuity.status;
+              })
+              .catch((error) => {
+                status.textContent = String(error);
+              });
+          });
+        el.querySelector('[data-export]')?.addEventListener('click', () => this.exportRun());
+        el.querySelector<HTMLInputElement>('[data-import]')?.addEventListener('change', async (event) => {
+          try {
+            const file = (event.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            const raw = JSON.parse(await file.text());
+            if (raw.game !== 'rope' || raw.engine !== FRAMEWORK_VERSION)
+              throw new Error('Unsupported export edition. Start fresh.');
+            if (raw.chapter) checkChapter(raw.chapter);
+            const c = replay(raw.start, raw.inputs, JSON.parse(raw.state).minute);
+            if (snapshot(c) !== raw.state) throw new Error('Export replay differs.');
+            const season = validateSeasonStart(c.seed, raw.chapter, raw.past ?? [], raw.start);
+            await this.continuity.restoreOwnership(
+              { season, climb: c },
+              { runId: crypto.randomUUID(), heads: [], fileOrigin: true, sources: raw.castSources ?? [] },
+              true,
+            );
+            this.season = season;
+            this.disc = newDisclosure();
+            this.begin(c, raw.start, true);
+            if (c.over) this.endClimb();
+          } catch (error) {
+            status.textContent = String(error);
+          }
+        });
+      },
+      'people',
+    );
   }
 
   private titlePage(): void {
@@ -1940,7 +2085,7 @@ export class Game {
     // One download per tap burst.
     if (performance.now() - this.exportedAt < 3000) return;
     this.exportedAt = performance.now();
-    const data = exportClimb(this.start, this.climb, FRAMEWORK_VERSION);
+    const data = this.runExport();
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

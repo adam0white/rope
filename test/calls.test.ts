@@ -24,7 +24,7 @@ it('no call before anyone is hurt', () => {
 it('the leader stopping on their own says why', () => {
   // The owner pressed "lead on" again and again between 13:41 and 17:04 while the leader kept stopping.
   expect(haltReason(replay(ex.start, ex.inputs, at('14:20')))).toBe(
-    'You are waiting for Tamar and Bilal to catch up.',
+    'You are waiting for Tamar Vale and Bilal to catch up.',
   );
   expect(haltReason(replay(ex.start, ex.inputs, at('16:47')))).toMatch(
     /summit step: it could take a fixed rope/,
