@@ -1,3 +1,7 @@
+## Frictionless recording direction, 2026-10-23
+
+The owner directs automatic linkage across games on this device whenever recording is on. The first-visit notice covers recording and linkage. One menu switch turns recording on even with DNT/GPC; those signals set the initial default off. Send word uses one optional unchecked “Share this run and my play with the lab” checkbox only while recording is off. Submit with it checked enables recording/linkage and sends an available run; unchecked sends the note alone. Old linkage choices migrate silently. No separate continuing-person recording consent applies, including identity changes and loaded histories. This supersedes earlier recording-consent sections below. Owner words and authority: human-framework/docs/owner-directions-2026-10-18.md (2026-10-23 frictionless feedback).
+
 # Canonical cast and browser continuity (2026-10-24)
 
 Remaining: Adam accepts feel. Technical delivery evidence and any live journey limitations are in `/Users/abdul/code/.lab-scratch/cast/rope.md` and `rope-ledger.md`.

@@ -6,7 +6,7 @@
 
 import { ENGINE_VERSION, FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
 import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
-import { feedbackPersonaControl, telemetryToggle } from '@adam0white/lab-kit';
+import { feedbackPersonaControl, feedbackSharePlay, telemetryToggle } from '@adam0white/lab-kit';
 import { campFacts, campFallback } from '../sim/camp.ts';
 import {
   approachEstimate,
@@ -1765,7 +1765,7 @@ export class Game {
       /* storage unavailable */
     }
     this.openPage(
-      `<div class="page-body feedback-body"><button class="btn" data-feedback-back>← Back</button><h1>Send word</h1><p>Your run, saves and log reach us on their own. Tell us what they can't show.</p><div class="feedback-verdicts">${[
+      `<div class="page-body feedback-body"><button class="btn" data-feedback-back>← Back</button><h1>Send word</h1><p>Send a note about this game.</p><div class="feedback-verdicts">${[
         ['keep', "I'd keep playing"],
         ['mixed', 'Not sure'],
         ['quit', "I'd stop here"],
@@ -1776,7 +1776,7 @@ export class Game {
         )
         .join(
           '',
-        )}</div><label class="feedback-note">What happened on the mountain, what you wanted, what got in the way.<textarea rows="4" data-feedback-note></textarea></label><details class="feedback-name" ${remembered ? 'open' : ''}><summary>+ Add a name</summary><label>Your name or tester id<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to stay pseudonymous.</p></details><details><summary>What is sent</summary><p>Your note, optional verdict and name. Recording on includes this run. Continuing character state is included without linking recorded history unless you approve linkage.</p><pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></details><div data-feedback-consent></div><p data-feedback-status role="status"></p><button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Keep a copy of this run</button></div><div class="page-actions"><button class="btn go" data-feedback-send>Send</button></div>`,
+        )}</div><label class="feedback-note">What happened on the mountain, what you wanted, what got in the way.<textarea rows="4" data-feedback-note></textarea></label><details class="feedback-name" ${remembered ? 'open' : ''}><summary>+ Add a name</summary><label>Your name or tester id<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to stay pseudonymous.</p></details><details><summary>What is sent</summary><p>Your note, optional verdict and name. Recording on includes this run. Recorded play is linked across games on this device.</p><pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></details><div data-feedback-consent></div><p data-feedback-status role="status"></p><button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Keep a copy of this run</button></div><div class="page-actions"><button class="btn go" data-feedback-send>Submit</button></div>`,
       (el) => {
         let verdict = '';
         let sent = false;
@@ -1784,33 +1784,9 @@ export class Game {
         const consent = el.querySelector<HTMLElement>('[data-feedback-consent]');
         const status = el.querySelector<HTMLElement>('[data-feedback-status]');
         if (!send || !consent || !status) return;
+        const choice = feedbackPersonaControl(lab);
+        if (choice) consent.append(choice);
         const update = () => {
-          consent.replaceChildren();
-          consent.append(
-            h(
-              'p',
-              '',
-              !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride)
-                ? 'Recording is off or browser privacy is on. Send includes only your note and verdict.'
-                : 'Send includes your note. An available run may also include continuing character state without linking recorded history unless you approve linkage.',
-            ),
-          );
-          const choice = feedbackPersonaControl({
-            get personaRecordingRequired() {
-              return lab.personaRecordingRequired;
-            },
-            get personaRecordingAllowed() {
-              return lab.personaRecordingAllowed;
-            },
-            allowPersonaRecording: (allow) => {
-              void (allow ? this.continuity.recording(true) : this.continuity.deny())
-                .then(update)
-                .catch((error) => {
-                  status.textContent = String(error);
-                });
-            },
-          });
-          if (choice) consent.append(choice);
           send.disabled = false;
         };
         update();
@@ -1841,8 +1817,9 @@ export class Game {
             } catch {
               /* A broken export must not block feedback. */
             }
-            const noteOnly = !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride);
-            await lab.sendFeedback(note, { name, run });
+            const sharePlay = feedbackSharePlay(choice);
+            const noteOnly = !lab.telemetryOn && !sharePlay;
+            await lab.sendFeedback(note, { name, run, sharePlay });
             try {
               if (name) localStorage.setItem('hf-lab-feedback-name', name);
               else localStorage.removeItem('hf-lab-feedback-name');

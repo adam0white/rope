@@ -181,19 +181,21 @@ it('sends a note and optional name while recording, then remembers the name', as
   expect(query<HTMLInputElement>('[data-feedback-name]').value).toBe('Ridge tester');
 });
 
-it.each(['off', 'privacy'])('sends feedback in the same sheet when %s', async (choice) => {
+it.each([false, true])('shares play only at submit when checked=%s', async (checked) => {
   await boot();
-  if (choice === 'off') {
-    localStorage.setItem('hf-lab-recording-off', '1');
-    lab.telemetryOn = false;
-  } else lab.privacySignalOn = true;
+  lab.telemetryOn = false;
+  lab.privacySignalOn = true;
   feedback();
-  expect(query<HTMLButtonElement>('[data-feedback-send]').disabled).toBe(false);
+  const checkbox = query<HTMLInputElement>('[data-feedback-consent] input[type=checkbox]');
+  expect(checkbox.checked).toBe(false);
+  if (checked) checkbox.click();
+  expect(lab.setTelemetryOff).not.toHaveBeenCalled();
   tap('[data-feedback-send]');
-  await vi.waitFor(() => expect(lab.sendFeedback).toHaveBeenCalledOnce());
+  await vi.waitFor(() =>
+    expect(lab.sendFeedback).toHaveBeenCalledWith('', expect.objectContaining({ sharePlay: checked })),
+  );
   expect(lab.sendRun).not.toHaveBeenCalled();
   expect(lab.openSendDialog).not.toHaveBeenCalled();
-  expect(lab.setTelemetryOff).not.toHaveBeenCalled();
 });
 
 it('returns from the journal to the unresolved hut or title page', async () => {
