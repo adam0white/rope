@@ -1745,9 +1745,9 @@ export class Game {
             h(
               'p',
               '',
-              off() || (lab.privacySignalOn && !lab.privacyOverride)
+              !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride)
                 ? 'Recording is off or browser privacy is on. Send includes only your note and verdict.'
-                : 'Send includes this run and your note. Continuing character state is included without linking recorded history unless you approve linkage.',
+                : 'Send includes your note. An available run may also include continuing character state without linking recorded history unless you approve linkage.',
             ),
           );
           const choice = feedbackPersonaControl(lab);
@@ -1782,6 +1782,7 @@ export class Game {
             } catch {
               /* A broken export must not block feedback. */
             }
+            const noteOnly = !lab.telemetryOn || (lab.privacySignalOn && !lab.privacyOverride);
             await lab.sendFeedback(note, { name, run });
             try {
               if (name) localStorage.setItem('hf-lab-feedback-name', name);
@@ -1789,10 +1790,9 @@ export class Game {
             } catch {
               /* storage unavailable */
             }
-            status.textContent =
-              off() || (lab.privacySignalOn && !lab.privacyOverride)
-                ? 'Note queued without a run or history linkage. This is not a delivery receipt.'
-                : 'Run and note queued. This is not a delivery receipt.';
+            status.textContent = noteOnly
+              ? 'Note queued without a run or history linkage. This is not a delivery receipt.'
+              : 'Note queued. An available run may also be included. This is not a delivery receipt.';
             sent = true;
             send.textContent = 'Back to the game';
             send.disabled = false;
