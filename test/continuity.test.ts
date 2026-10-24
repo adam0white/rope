@@ -5,9 +5,21 @@ import { newSeason } from '../src/sim/season.ts';
 import { Continuity } from '../src/ui/continuity.ts';
 
 function control(enabled = false) {
+  let selected: string | null = null;
+  const approved = new Set<string>();
   const lab = {
-    setPersonaRecording: vi.fn(),
-    allowPersonaRecording: vi.fn(),
+    setPersonaRecording: vi.fn((key: string | null) => {
+      selected = key;
+    }),
+    allowPersonaRecording: vi.fn((allow: boolean) => {
+      if (selected) {
+        if (allow) approved.add(selected);
+        else approved.delete(selected);
+      }
+    }),
+    get personaRecordingAllowed() {
+      return selected === null || approved.has(selected);
+    },
     build: () => ({ c: 'control' }),
   };
   const requests: PersonaRequest[] = [];
@@ -93,4 +105,45 @@ it('never auto-associates a fresh actor after identity or consent invalidation',
   expect(put?.authored).toBe(false);
   expect(continuity.sources).toHaveLength(1);
   expect(continuity.heads).toHaveLength(1);
+});
+
+it('recording-off Continue never depends on the shelf permission service', async () => {
+  const { continuity, shelf, requests, lab } = control();
+  const state = newSeason(42);
+  await continuity.restoreOwnership(
+    state,
+    { runId: 'offline', heads: [], sources: [], fileOrigin: true },
+    true,
+  );
+  Object.assign(lab, { telemetryOn: false });
+  shelf.request = async () => {
+    throw new Error('Shelf unavailable');
+  };
+  await expect(continuity.recording()).resolves.toBeUndefined();
+  expect(requests).toEqual([]);
+  expect(lab.allowPersonaRecording).not.toHaveBeenCalledWith(true);
+  Object.assign(lab, { telemetryOn: true });
+  shelf.enabled = true;
+  continuity.heads = [{ castId: 'test', branchId: 'test', revision: 'test' } as never];
+  await expect(continuity.recording(true)).resolves.toBeUndefined();
+  expect(continuity.status).toContain('local chapter stays pinned');
+  expect(lab.allowPersonaRecording).not.toHaveBeenCalledWith(true);
+});
+
+it('service failure closes a previously approved key and keeps the installed run local', async () => {
+  const { continuity, shelf, lab } = control(true);
+  await continuity.restoreOwnership(newSeason(42));
+  continuity.heads = [
+    { castId: 'hf.cast.oskar.rope', branchId: 'control', revision: 'a'.repeat(64) } as never,
+  ];
+  shelf.request = async <T>(r: PersonaRequest) =>
+    ({ sameEpoch: true, revisions: r.envelopes?.map((p) => p.revision) ?? [], recordingEpoch: 'epoch' }) as T;
+  await continuity.recording();
+  expect(lab.personaRecordingAllowed).toBe(true);
+  shelf.request = async () => {
+    throw new Error('bridge unavailable');
+  };
+  await continuity.recording();
+  expect(lab.personaRecordingAllowed).toBe(false);
+  expect(continuity.status).toContain('local chapter stays pinned');
 });

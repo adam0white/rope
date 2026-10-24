@@ -210,15 +210,32 @@ export class Continuity {
       this.fileAllowed = this.fileOrigin;
     }
     const generation = this.generation;
+    const key = crypto.randomUUID();
+    this.key = key;
+    this.lab.setPersonaRecording(key);
+    try {
+      await this.recordingAttempt(allow, key);
+    } catch (error) {
+      if (generation === this.generation && key === this.key)
+        this.status = `Recording linkage is unavailable. This local chapter stays pinned. ${String(error)}`;
+    }
+  }
+  private async recordingAttempt(allow: boolean, key: string) {
+    const generation = this.generation;
     const pinned = structuredClone(this.pinnedHistories());
     const revisions = pinned.map((p) => p.revision).join('/');
     const current = () =>
+      key === this.key &&
       generation === this.generation &&
       revisions ===
         this.pinnedHistories()
           .map((p) => p.revision)
           .join('/');
     this.lab.setPersonaRecording(this.key);
+    if (this.lab.telemetryOn === false) {
+      if (!pinned.length && !this.fileOrigin) this.lab.setPersonaRecording(null);
+      return;
+    }
     if (this.denied || (this.fileOrigin && !this.fileAllowed)) return;
     if (!pinned.length) {
       if (this.fileOrigin) {
