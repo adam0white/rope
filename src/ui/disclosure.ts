@@ -72,7 +72,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
     if (!seen('watch') && s.lines.length > 0)
       return {
         id: 'watch',
-        text: 'Each answers for themself. Watch how they walk: short steps and a bent back mean tired; a bowed head, low spirits.',
+        text: 'Each person answers for themselves. Short steps and a bent back suggest tiredness. A bowed head may suggest sadness.',
       };
   }
   const fork = forkOf(m);
@@ -107,14 +107,14 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       id: 'fix',
       unlock: 'fix',
       lit: 'fix',
-      text: 'The leg above can take a fixed rope. In **more actions**, **Fix rope** costs time but makes it safer for everyone after.',
+      text: 'You can secure a rope to the route above. In **more actions**, **Fix rope** takes time but makes the route safer for everyone who follows.',
     };
   const tired = s.members.some((x) => readPerson(personOf(s, x.id)).body.fatigue > 0.45 || x.rations === 0);
   if (!has(d, 'pack') && tired)
     return {
       id: 'pack',
       unlock: 'pack',
-      text: 'Someone is flagging. Pick them, then open **more actions** to **take their pack** or **share food** from yours.',
+      text: 'Someone looks tired. Pick them, then open **more actions** to **take their pack** or **share food** from yours.',
     };
   return null;
 }

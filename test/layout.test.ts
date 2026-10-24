@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
+
+import { preparePersonaLife } from '@adam0white/lab-client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { type ClimbState, MOUNTAINS, snapshot } from '../src/sim/climb.ts';
+import { type ClimbState, MOUNTAINS, queueInput, snapshot, step } from '../src/sim/climb.ts';
+import { newSeason, type SeasonState } from '../src/sim/season.ts';
 import type { Continuity } from '../src/ui/continuity.ts';
 import { Game } from '../src/ui/game.ts';
 
@@ -44,6 +47,12 @@ vi.mock('../src/ui/scene.ts', () => ({
 }));
 interface Driver {
   continuity: Continuity;
+  season: SeasonState;
+  begin(c: ClimbState, start: string): void;
+  save(): void;
+  resume(save: unknown): Promise<void>;
+  debriefPage(): void;
+  seasonPage(): void;
   climb: ClimbState;
   frame(): void;
   renderSheet(): void;
@@ -58,8 +67,10 @@ const tap = (selector: string) => query<HTMLButtonElement>(selector).click();
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] });
   vi.stubGlobal('requestAnimationFrame', () => 0);
+  history.replaceState(null, '', '/');
   localStorage.clear();
   shelf.ready = Promise.resolve(true);
+  shelf.enabled = false;
   lab.telemetryOn = true;
   lab.privacySignalOn = false;
   lab.privacyOverride = false;
@@ -124,17 +135,31 @@ it('information holds time, closes with Escape or an outside tap, and returns to
   expect(document.querySelector('.info-backdrop')).toBeNull();
 });
 
-it('keeps manual pacing in the menu and exposes its journal and feedback rows', async () => {
+it('keeps the ordinary menu bounded and confirms a new game inline', async () => {
   await boot();
   tap('.menu-trigger');
-  expect(query('[data-menu-journal]').textContent).toContain('The journal');
-  expect(query('[data-menu-send]').textContent).toContain('Send word');
-  expect(document.querySelectorAll('[data-pace]')).toHaveLength(4);
-  tap('[data-pace="fast"]');
-  expect(query('[data-pace="fast"]').getAttribute('aria-pressed')).toBe('true');
-  tap('[data-menu-journal]');
-  expect(query('.page h2').textContent).toBe('The journal');
-  expect(document.querySelector('.menu-backdrop')).toBeNull();
+  expect(query('[data-menu-send]').textContent).toBe('Feedback');
+  expect(
+    document.querySelectorAll('[data-pace], [data-menu-people], [data-menu-title], [data-menu-journal]'),
+  ).toHaveLength(0);
+  expect(query('[data-menu-fullscreen]')).toBeTruthy();
+  expect(document.querySelectorAll('[data-recording] input')).toHaveLength(1);
+  tap('[data-menu-new]');
+  expect(query('[data-menu-confirm]').hidden).toBe(false);
+  tap('[data-new-no]');
+  expect(query('[data-menu-confirm]').hidden).toBe(true);
+});
+
+it.each(['1', 'true', '0', '01'])('shows diagnostic tools only with exact lab=1 (%s)', async (flag) => {
+  history.replaceState(null, '', `/?lab=${flag}`);
+  await boot(false);
+  tap('.menu-trigger');
+  expect(document.querySelectorAll('[data-menu-people]')).toHaveLength(flag === '1' ? 1 : 0);
+  expect(document.querySelectorAll('[data-pace]')).toHaveLength(flag === '1' ? 4 : 0);
+  if (flag === '1') {
+    tap('[data-menu-people]');
+    expect(document.querySelector('[data-import]')).not.toBeNull();
+  }
 });
 
 it('a company call opens from its banner and a promised hour takes over the sheet', async () => {
@@ -209,20 +234,19 @@ it.each([false, true])('shares play only at submit when checked=%s', async (chec
 });
 
 it('returns from the journal to the unresolved hut or title page', async () => {
+  history.replaceState(null, '', '/?lab=1');
   await boot(false);
   tap('[data-a="new"]');
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
-  tap('.menu-trigger');
-  tap('[data-menu-journal]');
+  tap('.journal-trigger');
   tap('[data-a="close"]');
   expect(document.querySelector('.page-hut')).not.toBeNull();
   expect(document.querySelectorAll('[data-hour]')).toHaveLength(3);
   tap('.menu-trigger');
   tap('[data-menu-title]');
-  tap('.menu-trigger');
-  tap('[data-menu-journal]');
+  tap('.journal-trigger');
   tap('[data-a="close"]');
   expect(document.querySelector('.page-title')).not.toBeNull();
 });
@@ -238,4 +262,173 @@ it('does not cancel a pending season when recording identity acknowledges', asyn
   window.dispatchEvent(new StorageEvent('storage', { key: 'hf-lab-player' }));
   release(true);
   await expect(pending).resolves.toHaveProperty('season');
+});
+
+it('keeps one-page note-only Feedback and preserves the stable notice node', async () => {
+  await boot();
+  const notice = document.querySelector('.recording-footer')?.firstChild;
+  lab.telemetryOn = false;
+  feedback();
+  expect(document.querySelector('.page-feedback h1')?.textContent).toBe('Feedback');
+  expect(document.querySelectorAll('.page-feedback details')).toHaveLength(0);
+  expect(document.querySelectorAll('.page-feedback input[type=checkbox]')).toHaveLength(1);
+  expect(document.querySelector('[data-feedback-copy]')).toBeNull();
+  expect(document.querySelector('[data-feedback-preview]')).toBeNull();
+  expect(document.querySelector('.recording-footer')?.firstChild).toBe(notice);
+});
+
+it('a failed real admission keeps the saved season and ownership, without silently substituting a cast', async () => {
+  const game = await boot();
+  const saved = localStorage.getItem('rope.save.cast.v1');
+  const ownership = game.continuity.ownership();
+  shelf.enabled = true;
+  shelf.request.mockRejectedValue(new Error('Shelf unavailable. Use a local file.'));
+  tap('.menu-trigger');
+  tap('[data-menu-new]');
+  tap('[data-new-yes]');
+  await vi.waitFor(() =>
+    expect(document.querySelector('.page-title h1')?.textContent).toBe('The season has not begun'),
+  );
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe(saved);
+  expect(game.continuity.ownership()).toEqual(ownership);
+  expect(document.querySelector('.page-title')?.textContent).not.toContain('Shelf unavailable');
+  expect(document.querySelector('[data-local]')).toBeNull();
+  expect(document.querySelector('[data-retry]')).not.toBeNull();
+  shelf.enabled = false;
+});
+
+it.each(['after-prepare', 'accepted-reply-lost'])(
+  'preserves nonempty ownership through %s, saves and reloads',
+  async (failure) => {
+    const game = await boot(false);
+    const { season, climb } = newSeason(13);
+    queueInput(climb, { t: 'lead', dir: 'up' });
+    while (!climb.over) step(climb);
+    queueInput(climb, { t: 'release-person', to: 'oskar' });
+    step(climb);
+    game.season = season;
+    game.begin(climb, season.start ?? '');
+    shelf.enabled = true;
+    shelf.request.mockResolvedValue({});
+    await game.continuity.checkpoint('hf.cast.oskar.rope');
+    game.save();
+    const ownership = game.continuity.ownership();
+    expect(ownership.heads).toHaveLength(1);
+    const head = ownership.heads[0];
+    if (!head) throw new Error('Missing owned head');
+    const prepared = preparePersonaLife(head, 20 * 3600000);
+    const saved = localStorage.getItem('rope.save.cast.v1');
+    let accepted = false;
+    shelf.request.mockImplementation(async (request) => {
+      if (request.action === 'prepareBatch')
+        return {
+          expectedHeads: Object.fromEntries(
+            ['tamar', 'oskar', 'nell', 'bilal', 'wren'].map((id) => [
+              `hf.cast.${id}.rope`,
+              id === 'oskar' ? head.revision : null,
+            ]),
+          ),
+          inputs: [prepared],
+          blocked: [],
+        };
+      if (request.action === 'putBatch') {
+        expect(request.envelopes).toHaveLength(1);
+        if (failure === 'accepted-reply-lost') accepted = true; // The fake service accepted; the transport reply was lost.
+        throw new Error(
+          failure === 'accepted-reply-lost'
+            ? 'Reply lost after acceptance'
+            : 'Write refused after preparation',
+        );
+      }
+      throw new Error('Unexpected request');
+    });
+    tap('.menu-trigger');
+    tap('[data-menu-new]');
+    tap('[data-new-yes]');
+    await vi.waitFor(() =>
+      expect(document.querySelector('.page-title h1')?.textContent).toBe('The season has not begun'),
+    );
+    expect(accepted).toBe(failure === 'accepted-reply-lost');
+    expect(localStorage.getItem('rope.save.cast.v1')).toBe(saved);
+    expect(game.continuity.ownership()).toEqual(ownership);
+    game.save();
+    expect(JSON.parse(localStorage.getItem('rope.save.cast.v1') ?? '{}').ownership).toEqual(ownership);
+    const stored = JSON.parse(localStorage.getItem('rope.save.cast.v1') ?? '{}');
+    await game.resume(stored);
+    expect(game.continuity.ownership()).toEqual(ownership);
+    expect(game.climb.seed).toBe(climb.seed);
+    expect(document.querySelector('[data-local]')).toBeNull();
+  },
+);
+
+it.each([false, true])(
+  'offers a finished-climb departure and displays the actual HF answer (refusal=%s)',
+  async (refusal) => {
+    const game = await boot(false);
+    const { season, climb } = newSeason(13);
+    queueInput(climb, { t: 'lead', dir: 'up' });
+    while (!climb.over) step(climb);
+    if (refusal) {
+      const person = climb.people.find((p) => p.id === 'oskar');
+      if (!person) throw new Error('Missing Oskar');
+      person.activity = null;
+      // Isolated HF refusal fixture. No host verdict is mocked or written.
+      person.agenda.commitments.push({
+        id: 'test-self-rule',
+        status: 'pending',
+        kind: 'abstain',
+        actions: [],
+        violatedBy: ['rest'],
+        firm: true,
+        from: climb.minute,
+        until: climb.minute + 240,
+        importance: 1,
+        label: 'test-only refusal',
+      });
+    }
+    game.season = season;
+    game.begin(climb, season.start ?? '');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false })),
+    );
+    vi.stubGlobal(
+      'Worker',
+      class {
+        postMessage() {}
+      },
+    );
+    game.debriefPage();
+    tap('[data-depart="oskar"]');
+    const line = game.climb.lines.at(-1);
+    expect(game.climb.inputs.at(-1)).toMatchObject({ t: 'release-person', to: 'oskar' });
+    expect(line?.verdict).toBe(refusal ? 'refused' : 'assented');
+    expect(document.querySelector('[data-depart-status]')?.textContent).toContain(
+      line?.says.replace(' — ', ': '),
+    );
+    if (refusal) expect(game.climb.journal.at(-1)?.text).not.toContain('agreed to end');
+  },
+);
+
+it('confirms New game from the completed season without changing the save on preview', async () => {
+  const game = await boot();
+  game.season.over = true;
+  game.seasonPage();
+  const before = snapshot(game.climb);
+  tap('[data-a="new"]');
+  expect(query('[data-season-confirm]').hidden).toBe(false);
+  expect(snapshot(game.climb)).toBe(before);
+  tap('[data-season-no]');
+  expect(query('[data-season-confirm]').hidden).toBe(true);
+});
+
+it('retains the manual playback control test behind lab=1', async () => {
+  history.replaceState(null, '', '/?lab=1');
+  await boot();
+  tap('.menu-trigger');
+  expect(document.querySelectorAll('[data-pace]')).toHaveLength(4);
+  tap('[data-pace="fast"]');
+  expect(query('[data-pace="fast"]').getAttribute('aria-pressed')).toBe('true');
+  tap('[data-menu-close]');
+  expect(document.querySelector('.menu-backdrop')).toBeNull();
 });

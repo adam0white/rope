@@ -27,7 +27,7 @@ it('the leader stopping on their own says why', () => {
     'You are waiting for Tamar Vale and Bilal to catch up.',
   );
   expect(haltReason(replay(ex.start, ex.inputs, at('16:47')))).toMatch(
-    /summit step: it could take a fixed rope/,
+    /summit step\. You can secure a rope here/,
   );
   expect(haltReason(replay(ex.start, ex.inputs, at('05:05')))).toBeNull();
 });

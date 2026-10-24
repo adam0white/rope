@@ -45,12 +45,14 @@ export function haltReason(s: ClimbState): string | null {
   if (L.pos.place === m.hut && L.path.length === 0) return null;
   const last = [...s.inputs].reverse().find((i) => i.t === 'lead');
   if (last?.t === 'lead' && last.dir === 'stop') return null;
-  if (L.pos.place === m.summit) return 'You are on the top. Lead them down when you are ready.';
+  if (L.pos.place === m.summit) return 'You are at the summit. Lead them down when you are ready.';
   if (L.turnedAt !== null) return null;
   const ups = legsUp(m, L.pos.place);
-  if (forkOf(m) === L.pos.place && ups.length > 1) return 'The way forks here. Lead on to choose a line.';
+  if (forkOf(m) === L.pos.place && ups.length > 1)
+    return 'The path splits here. Tap Lead on to choose a route.';
   const fixable = ups.find((l) => l.fixable && !s.fixed.includes(l.id));
-  if (fixable) return `You stopped below ${fixable.name}: it could take a fixed rope. Fix it, or lead on.`;
+  if (fixable)
+    return `You stopped below ${fixable.name}. You can secure a rope here for others to use, or lead on.`;
   const out = s.members.filter((x) => x.homeAt === null);
   if (out.length > 0 && !out.some((x) => canHear(s, x.id))) {
     return `You stopped: nobody is in earshot (${names(out.map((x) => x.id))}).`;

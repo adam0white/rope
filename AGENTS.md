@@ -22,3 +22,5 @@ You lead five Human Framework (HF) people up a mountain and back. Every one of t
 
 ## Delivery
 - Repository `adam0white/rope` (public). Site: https://rope.adamwhite.work (Cloudflare Worker static assets, `wrangler.jsonc`). The owner authorized commit, push and `npm run deploy`. Verify the live site against the commit after each deploy.
+
+- Player-facing copy follows [Plain English](docs/lab/plain-english.md).

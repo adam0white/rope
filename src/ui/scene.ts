@@ -317,6 +317,7 @@ export class Scene {
         this.labels.addChild(t);
         this.placeLabels.set(pl.id, t);
       }
+      t.style.fontSize = Math.max(17, Math.min(25, 12 + this.app.screen.width * 0.012));
       t.visible = true;
       t.position.set(x, y - (pl.id === m.summit ? 26 : 10));
     }
@@ -438,6 +439,7 @@ export class Scene {
         this.labels.addChild(t);
         this.names.set(x.id, t);
       }
+      t.style.fontSize = Math.max(16, Math.min(24, 12 + this.app.screen.width * 0.012));
       t.style.fill = this.selected === x.id ? P.rope : mem.homeAt !== null ? P.soft : P.ink;
       // Out of earshot: the name fades and trails off, so who can hear you is visible on the hill.
       const far = mem.homeAt === null && !canHear(s, x.id);
@@ -448,9 +450,11 @@ export class Scene {
       let ny = sp.y + 3;
       const half = t.width / 2 + 2;
       for (let tries = 0; tries < 6; tries++) {
-        const hit = placedNames.find((q) => Math.abs(q.x - sp.x) < q.half + half && Math.abs(q.y - ny) < 13);
+        const hit = placedNames.find(
+          (q) => Math.abs(q.x - sp.x) < q.half + half && Math.abs(q.y - ny) < t.height + 2,
+        );
         if (!hit) break;
-        ny = hit.y + 13;
+        ny = hit.y + t.height + 2;
       }
       placedNames.push({ x: sp.x, y: ny, half });
       t.position.set(sp.x, ny);

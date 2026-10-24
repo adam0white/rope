@@ -6,7 +6,12 @@
 
 import { ENGINE_VERSION, FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
 import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
-import { feedbackPersonaControl, feedbackSharePlay, telemetryToggle } from '@adam0white/lab-kit';
+import {
+  feedbackPersonaControl,
+  feedbackSharePlay,
+  telemetryNotice,
+  telemetryToggle,
+} from '@adam0white/lab-kit';
 import { campFacts, campFallback } from '../sim/camp.ts';
 import {
   approachEstimate,
@@ -43,6 +48,7 @@ import { lab } from './lab.ts';
 import { climbMilestones, climbScreen } from './labnames.ts';
 import { moodWord } from './look.ts';
 import { PACE } from './pace.ts';
+import { displayText } from './plain-english.ts';
 import { attentionNeeded, eventStamp, playbackRate, skipEventStamp } from './playback.ts';
 import { Scene } from './scene.ts';
 
@@ -84,12 +90,14 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): 
 
 const esc = (t: string): string =>
   t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
-const bold = (t: string): string => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+const bold = (t: string): string => esc(displayText(t)).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 
 export class Game {
   private continuity = new Continuity(lab, personaChannel());
   private starting = false;
   private root: HTMLElement;
+  private readonly labTools = new URLSearchParams(location.search).get('lab') === '1';
+  private noticeFooter = h('footer', 'recording-footer');
   private scene = new Scene();
   private top = h('div', 'top');
   private whereEl = h('div', 'where');
@@ -148,7 +156,9 @@ export class Game {
     const menu = h('button', 'menu-trigger', '<span>Menu</span> ≡');
     menu.setAttribute('aria-label', 'Game menu');
     menu.onclick = () => this.gameMenu();
-    this.top.append(this.whereEl, info, menu);
+    const journal = h('button', 'journal-trigger', 'Journal');
+    journal.onclick = () => this.journalPage();
+    this.top.append(this.whereEl, journal, info, menu);
     this.dayStrip.append(this.dayBar, this.paceEl);
     this.skipButton.hidden = true;
     this.skipButton.setAttribute('aria-label', 'Skip to the next event');
@@ -176,7 +186,12 @@ export class Game {
     };
     this.sceneEl.addEventListener('pointerdown', stopSkip);
     this.sheet.addEventListener('pointerdown', stopSkip);
-    this.root.append(this.top, this.dayStrip, this.sceneEl, this.sheet, this.leaderBar);
+    this.root.append(this.top, this.dayStrip, this.sceneEl, this.sheet, this.leaderBar, this.noticeFooter);
+    const notice = telemetryNotice();
+    if (notice) this.noticeFooter.append(notice);
+    new ResizeObserver(() => {
+      this.root.style.setProperty('--footer-height', `${this.noticeFooter.getBoundingClientRect().height}px`);
+    }).observe(this.noticeFooter);
     await this.scene.mount(this.sceneEl);
     this.scene.onTap = (id) => {
       if (id === 'leader') return;
@@ -261,9 +276,11 @@ export class Game {
       this.begin(climb, season.start ?? snapshot(climb));
       await this.continuity.recording();
     } catch (error) {
+      console.error('Season start failed', error);
       this.openPage(
-        `<div class="page-body"><h1>The season has not begun</h1><p>${esc(String(error))}</p><p>Your existing notebook and browser histories are unchanged. Export the source, keep its chapter, or choose a fresh local season.</p></div><div class="page-actions"><button class="btn" data-local>Begin fresh locally</button><button class="btn" data-back>Back</button><button class="btn" data-word>Send word</button></div>`,
+        `<div class="page-body"><h1>The season has not begun</h1><p>The game could not start this season. Your saved season has not been replaced.</p><p>Try again, or send Feedback if this keeps happening.</p>${this.labTools ? `<pre>${esc(String(error))}</pre>` : ''}</div><div class="page-actions">${this.labTools ? '<button class="btn" data-local>Begin fresh locally</button>' : '<button class="btn" data-retry>Try again</button>'}<button class="btn" data-back>Back</button><button class="btn" data-word>Feedback</button></div>`,
         (el) => {
+          el.querySelector('[data-retry]')?.addEventListener('click', () => void this.newGame());
           el.querySelector('[data-local]')?.addEventListener('click', () => void this.newGame(true));
           el.querySelector('[data-back]')?.addEventListener('click', () => this.titlePage());
           el.querySelector('[data-word]')?.addEventListener('click', () => this.feedbackPage());
@@ -290,8 +307,19 @@ export class Game {
       lab.screen(climbScreen(c, 'climb'));
       if (c.over || sv.over) this.endClimb();
     } catch (error) {
-      this.continuity.status = String(error);
-      this.continuityPage();
+      console.error('Resume failed', error);
+      if (this.labTools) {
+        this.continuity.status = String(error);
+        this.continuityPage();
+      } else
+        this.openPage(
+          '<div class="page-body"><h1>The game could not resume</h1><p>Your saved season has not been replaced. Return and try again, or send Feedback.</p><button class="btn" data-back>Back</button><button class="btn" data-feedback>Feedback</button></div>',
+          (el) => {
+            el.querySelector('[data-back]')?.addEventListener('click', () => this.titlePage());
+            el.querySelector('[data-feedback]')?.addEventListener('click', () => this.feedbackPage());
+          },
+          'title',
+        );
     }
   }
 
@@ -452,7 +480,7 @@ export class Game {
   }
 
   private stamp(text: string): void {
-    this.stampEl.textContent = text;
+    this.stampEl.textContent = displayText(text);
     this.stampEl.classList.add('on');
     this.stampUntil = performance.now() + 4200;
   }
@@ -526,13 +554,13 @@ export class Game {
       const tone = inp.force === 'ask' ? '?' : inp.force === 'urge' ? '.' : '. Now.';
       words = `${who}, ${what[inp.act] ?? inp.act}${tone}`;
     } else if (inp.t === 'tell') words = FACTS[inp.fact].words.replace(/^./, (x) => x.toUpperCase());
-    else if (inp.t === 'promise') words = `We turn back at ${inp.hour}:00. Wherever we are.`;
+    else if (inp.t === 'promise') words = `We turn back at ${inp.hour}:00, wherever we are.`;
     else if (inp.t === 'share') words = 'Here, have some of mine.';
     else if (inp.t === 'fix') words = 'Wait, I’ll fix a rope.';
     else if (inp.t === 'scout') words = 'Wait here. I’ll go and look.';
     if (words) this.bubble('leader', words, 'mine');
     if (this.climb.unheard.includes(this.climb.inputs.length - 1))
-      this.bubble('leader', `${words} …nobody near enough to hear.`, 'mine');
+      this.bubble('leader', `${words} … Nobody is close enough to hear you.`, 'mine');
   }
 
   private pickTarget(id: string): void {
@@ -584,7 +612,8 @@ export class Game {
     const lastJournal = c.journal[c.journal.length - 1]?.at ?? c.startMinute;
     const halt = haltReason(c);
     const quiet = c.minute - Math.max(lastLine, lastJournal) >= 20 && !c.over;
-    const text = halt ?? (quiet ? 'A quiet stretch. The walk moves briskly until something happens.' : null);
+    const text =
+      halt ?? (quiet ? 'Nothing new has happened. Walking continues quickly until something happens.' : null);
     if (text && (!this.hinting || this.hintText !== text)) {
       this.noteEl.innerHTML = `<span class="quiet">${text}</span>`;
       this.hinting = true;
@@ -611,7 +640,7 @@ export class Game {
     }
     const name = who === 'leader' ? 'you' : memberOf(who).name;
     b.el.className = `bubble ${cls}`;
-    b.el.innerHTML = `<span class="who">${esc(name)}</span>${esc(text)}`;
+    b.el.innerHTML = `<span class="who">${esc(name)}</span>${esc(displayText(text))}`;
     b.el.style.color = '';
     b.until = performance.now() + BUBBLE_MS;
     b.minute = this.climb.minute;
@@ -683,7 +712,7 @@ export class Game {
 
   private showStory(text: string): void {
     this.hinting = false;
-    this.noteEl.innerHTML = `<span class="hand">${esc(text)}</span>`;
+    this.noteEl.innerHTML = `<span class="hand">${esc(displayText(text))}</span>`;
     this.slow(PACE.noteSlowMs);
     this.storyUntil = performance.now() + 9000;
   }
@@ -717,13 +746,13 @@ export class Game {
     );
     this.paceEl.textContent =
       this.infoEl || this.menuEl || this.pageOpen()
-        ? 'Time waits'
+        ? 'Time has stopped'
         : this.panel !== 'main' || this.verb !== null
-          ? 'Choosing · time waits'
+          ? 'Time stops while you choose'
           : this.skipping
             ? 'Skipping…'
             : performance.now() < this.slowUntil
-              ? 'Reading the latest word'
+              ? 'Time slows for reading'
               : attentionNeeded(c)
                 ? 'A call needs attention'
                 : '';
@@ -807,7 +836,7 @@ export class Game {
       const b = h('button', `chip${far ? ' far' : ''}`, `${icon(ic)}${esc(label)}<small>${esc(sub)}</small>`);
       const pressed = this.panel === 'partner' ? this.partner === id : this.target === id;
       b.setAttribute('aria-pressed', String(pressed));
-      b.setAttribute('aria-label', label);
+      b.setAttribute('aria-label', sub ? `${label}: ${sub}` : label);
       b.onclick = () => this.pickTarget(id);
       chips.append(b);
     };
@@ -818,7 +847,13 @@ export class Game {
       const mem = memberState(c, x.id);
       const far = mem.homeAt === null && !canHear(c, x.id);
       const mood = moodWord(personOf(c, x.id), coldAt(c.seed, c.weather, c.minute, posXY(c, mem.pos).alt));
-      mk(x.id, x.name, 'person', far, mem.homeAt !== null ? 'down' : far ? 'far' : mood);
+      mk(
+        x.id,
+        x.name,
+        'person',
+        far,
+        mem.homeAt !== null ? 'at hut' : far ? 'too far' : mood ? `looks ${mood}` : '',
+      );
     }
     const label = h('div', 'label');
     const tgt = this.target === 'all' ? 'everyone' : memberOf(this.target).name;
@@ -855,7 +890,7 @@ export class Game {
       const bar = h(
         'div',
         `ask-bar hurt${hurt.near ? '' : ' faint'}`,
-        `<span><b>${esc(nm)}</b> fell on ${esc(hurt.where)} and is hurt.${hurt.near ? '' : ' Too far to call to.'}</span>`,
+        `<span><b>${esc(nm)}</b> fell on ${esc(hurt.where)} and is hurt.${hurt.near ? '' : ' They are too far away to hear you.'}</span>`,
       );
       const go = h('button', 'force', `go to ${obj}`);
       go.onclick = () => this.send({ t: 'lead', dir: 'with', who: hurt.who });
@@ -944,6 +979,16 @@ export class Game {
       sh.append(calls);
     } else if (this.panel === 'more') {
       sh.append(this.peopleVerbs());
+      if (this.target !== 'all') {
+        const talk = h(
+          'button',
+          'btn',
+          `Ask ${esc(tgt)} about ${esc(DISCOVERIES[this.target]?.topic ?? 'their life')}`,
+        );
+        talk.disabled = !this.heardTarget();
+        talk.onclick = () => this.send({ t: 'ask-life', to: this.target });
+        sh.append(talk);
+      }
     } else if (this.panel === 'leader-more') {
       const extra = this.leaderRow();
       for (const child of extra.querySelectorAll('.verb-option:not(.secondary-action)')) child.remove();
@@ -1011,8 +1056,8 @@ export class Game {
     const one = this.target !== 'all';
     const unheard =
       one && memberState(c, this.target).homeAt !== null
-        ? 'Back at the hut for today.'
-        : 'Out of earshot; walk to them.';
+        ? 'They are back at the hut for today.'
+        : 'They cannot hear you. Walk closer.';
     const chooseOne = !one ? 'Pick one person.' : '';
     const near = one && distance(c, memberState(c, this.target).pos, c.leader.pos) < 40;
     // Match the offer builder: the hut provides food without consuming carried rations.
@@ -1039,8 +1084,8 @@ export class Game {
         !ok
           ? unheard
           : c.leader.rations > 0
-            ? 'No food left; you can share yours.'
-            : 'No food left; eat at the hut.',
+            ? 'They have no food left. You can share yours.'
+            : 'They have no food left. They can eat at the hut.',
       ),
       this.verbBtn('wait', 'wait', 'wait', ok, choose('wait'), unheard),
     );
@@ -1113,7 +1158,7 @@ export class Game {
         'down',
         L.path.length > 0 || L.pos.leg !== null,
         () => this.send({ t: 'lead', dir: 'down' }),
-        'At the hut; climb first.',
+        'You are at the hut. Climb first.',
       ),
       this.verbBtn(
         'stop',
@@ -1121,7 +1166,7 @@ export class Game {
         'stop',
         L.move !== null || !!L.follow || !!L.near,
         () => this.send({ t: 'lead', dir: 'stop' }),
-        L.fixing ? 'Finish fixing the rope first.' : 'Standing still; start walking.',
+        L.fixing ? 'Finish fixing the rope first.' : 'You are standing still. Start walking.',
       ),
     );
     // Walking with them: the whole party, or the one picked in the chips.
@@ -1144,7 +1189,7 @@ export class Game {
             dir: one ? 'near' : 'with',
             who: one ? one.id : 'party',
           }),
-        'Back at the hut for today.',
+        'They are back at the hut for today.',
       ),
     );
     if (has(this.disc, 'tell')) {
@@ -1165,7 +1210,7 @@ export class Game {
             ? 'Already looking; wait for your return.'
             : L.move
               ? 'Stop at a junction first.'
-              : 'No path above to scout here.',
+              : 'There is no path above you to inspect.',
         ),
       );
     }
@@ -1180,7 +1225,7 @@ export class Game {
             this.panel = 'tell';
             this.renderSheet();
           },
-          'Nothing learned yet; scout a path.',
+          'You have no new information. Inspect a path first.',
         ),
       );
     if (has(this.disc, 'promise'))
@@ -1194,7 +1239,7 @@ export class Game {
             this.panel = 'promise';
             this.renderSheet();
           },
-          `Turnback promised at ${c.promise?.hour}:00.`,
+          `You promised to turn back at ${c.promise?.hour}:00.`,
         ),
       );
     if (has(this.disc, 'fix')) {
@@ -1212,8 +1257,8 @@ export class Game {
           L.fixing
             ? 'Already fixing; wait until done.'
             : L.move
-              ? 'Stop below a fixable leg first.'
-              : 'No unfixed rope site above here.',
+              ? 'Stop below a route where you can secure a rope.'
+              : 'There is nowhere above you to secure another rope.',
         ),
       );
     }
@@ -1242,9 +1287,9 @@ export class Game {
     const name = memberOf(id).name;
     if (mem.homeAt !== null) return `${name} is back at the hut.`;
     const { metres, minutes } = approachEstimate(c, id);
-    if (metres < 40) return `Close enough to help ${name}.`;
+    if (metres < 40) return `You are close enough to help ${name}.`;
     if (!c.leader.near && !c.leader.move)
-      return `Keeping ${name} in earshot, too far to help. Tap walk to ${name} to get closer.`;
+      return `You can hear ${name}, but you are too far away to help. Tap walk to ${name} to get closer.`;
     const gap =
       metres < 70
         ? 'a few dozen metres'
@@ -1266,7 +1311,7 @@ export class Game {
               ? 'about half an hour'
               : 'over half an hour';
     const pronoun = memberOf(id).they;
-    return `Walking to ${name}: ${gap}; ${eta} if ${pronoun} stays here.${mem.move ? ` ${name} is still moving.` : ''}`;
+    return `You are walking to ${name}. The distance is ${gap}. You should arrive in ${eta} of game time if ${pronoun} stays here.${mem.move ? ` ${name} is still moving.` : ''}`;
   }
 
   private forceRow(): HTMLElement {
@@ -1354,7 +1399,7 @@ export class Game {
     const box = h('div', 'request-replies request-result');
     box.dataset.input = String(index);
     if (input.t === 'promise') {
-      box.append(h('p', 'request-acknowledgement', `Turnback promised at ${input.hour}:00.`));
+      box.append(h('p', 'request-acknowledgement', `You promised to turn back at ${input.hour}:00.`));
       const more = this.answersButton(answers.length, index);
       if (answers.length) box.append(more);
       else
@@ -1389,7 +1434,7 @@ export class Game {
     )[input.act];
     const response = (line: Line): string => {
       if (line.verdict === 'assented') return `agreed to ${label}`;
-      if (line.verdict === 'complied') return `complied with ${label}`;
+      if (line.verdict === 'complied') return `agreed under pressure to ${label}`;
       if (line.verdict === 'deferred') return `put off ${action}`;
       if (line.verdict === 'refused') return `refused ${action}`;
       if (line.verdict === 'modified') return `offered another action instead of ${action}`;
@@ -1429,7 +1474,7 @@ export class Game {
       const objection = h(
         'p',
         'request-objection',
-        `<b>${esc(memberOf(no.who).name)} ${esc(response(no))}</b>: “${esc(no.says)}”`,
+        `<b>${esc(memberOf(no.who).name)} ${esc(response(no))}</b>: “${esc(displayText(no.says))}”`,
       );
       if (collectiveTurn) box.append(objection);
       else box.prepend(objection);
@@ -1535,12 +1580,13 @@ export class Game {
       h(
         'p',
         '',
-        `<b>${esc(this.requestName(act))} · ${esc(memberOf(first.who).name)}</b> (${clock(first.at)}): “${esc(first.says)}”`,
+        `<b>${esc(this.requestName(act))} · ${esc(memberOf(first.who).name)}</b> (${clock(first.at)}): “${esc(displayText(first.says))}”`,
       ),
     );
     if (answers.length > 1 && (!refusalsOnly || act === 'rope')) {
       const more = h('details', '', `<summary>All ${answers.length} recorded answers</summary>`);
-      for (const l of answers) more.append(h('p', '', `${esc(memberOf(l.who).name)}: “${esc(l.says)}”`));
+      for (const l of answers)
+        more.append(h('p', '', `${esc(memberOf(l.who).name)}: “${esc(displayText(l.says))}”`));
       box.append(more);
     }
     return box;
@@ -1579,7 +1625,7 @@ export class Game {
       g.append(
         this.verbBtn(
           `route:${lg.id}`,
-          `${scout ? 'look at' : 'by'} ${lg.name.replace(/^the /, '')}`,
+          `${scout ? 'Inspect' : 'Take'} ${lg.name}${lg.name.includes('couloir') ? ' (snow channel)' : lg.name.includes('arête') ? ' (narrow rock ridge)' : lg.kind === 'scree' ? ' (loose stones)' : ''}`,
           scout ? 'tell' : 'up',
           true,
           () => this.send(scout ? { t: 'scout', via: lg.id } : { t: 'lead', dir: 'up', via: lg.id }),
@@ -1626,14 +1672,14 @@ export class Game {
     }
     const copy =
       this.pageKind === 'title' && this.pageOpen()
-        ? '<h2>The season</h2><p>For eleven summers Ezra led them. This year they asked you.</p><p>Three mountains, one season. They can say no.</p><p>Plays offline once loaded. Install it from your browser’s menu.</p>'
+        ? '<h2>The season</h2><p>Ezra led them for eleven summers. This year they asked you to lead.</p><p>Three mountains, one season. They can say no.</p><p>Plays offline once loaded. Install it from your browser’s menu.</p>'
         : this.pageKind === 'hut' && this.pageOpen()
-          ? '<h2>At the hut</h2><p>A promised hour holds them, and you.</p><p>Keeping it is remembered, and so is breaking it.</p><p>“We’ll see” promises nothing.</p>'
+          ? '<h2>At the hut</h2><p>A promised return time matters to you and the party.</p><p>Keeping it is remembered, and so is breaking it.</p><p>“We’ll see” promises nothing.</p>'
           : this.pageOpen()
             ? '<h2>The notebook</h2><p>The tally counts twice the people home by dark plus summit visits.</p><p>It is the game’s convention, not a measure of people.</p><p>The night at the hut is voiced from the journal and changes nothing.</p>'
             : this.panel === 'calls' || (this.climb && (hurtCall(this.climb) || promiseDue(this.climb)))
               ? '<h2>Calls</h2><p>A fall far off needs you to walk there.</p><p>Sending someone down with a friend only ties a rope if they are close.</p><p>People out of earshot cannot hear you.</p>'
-              : '<h2>Asking</h2><p>Your voice reaches only those in earshot. Dimmed names are too far.</p><p>Ask leaves it to them. Urge presses. Insist comes after a refusal and costs trust.</p><p>The bottom row is you: where you walk, they may follow.</p><p>Postures show tiredness and spirits. Nothing is counted.</p>';
+              : '<h2>Asking</h2><p>Your voice reaches only those in earshot. Dimmed names are too far.</p><p>Ask lets them choose freely. Urge puts more pressure on them. Insist becomes available after a refusal and costs trust.</p><p>The bottom row is you: where you walk, they may follow.</p><p>Their posture suggests how they feel. It is an estimate.</p>';
     const backdrop = h(
       'div',
       'info-backdrop',
@@ -1662,7 +1708,7 @@ export class Game {
     const menu = h(
       'div',
       'menu-backdrop',
-      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu${this.climb ? ` · ${esc(MOUNTAINS[this.climb.mountain]?.name ?? '')} · ${clock(this.climb.minute)}` : ''}</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">The mountain waits while it is open.</p><div class="menu-body">${this.climb ? '<button class="btn" data-menu-journal>The journal ▸</button>' : ''}<fieldset class="menu-pacing"><legend>Walking pace</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${{ auto: 'Automatic', slow: 'Slow', normal: 'Steady', fast: 'Fast' }[speed]}</button>`).join('')}</fieldset><button class="btn" data-menu-people>People and browser continuity</button><button class="btn" data-menu-send>Send word ▸</button><button class="btn phone-only" data-menu-fullscreen>Full screen</button><button class="btn" data-menu-title>To the title page</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a></div><div class="menu-footer"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><button class="btn go menu-resume" data-menu-close>${this.pageOpen() ? 'Back' : 'Back to the climb'}</button></section>`,
+      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div>${this.labTools ? `<button class="btn" data-menu-people>Lab tools</button><button class="btn" data-menu-title>Title page</button><fieldset class="menu-pacing"><legend>Playback speed</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset>` : ''}</div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
     );
     const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => {
@@ -1678,7 +1724,17 @@ export class Game {
       if (e.target === menu) close();
     };
     this.menuEl = menu;
-    menu.querySelector('.menu-footer')?.append(telemetryToggle(lab));
+    menu.querySelector('[data-recording]')?.append(telemetryToggle(lab));
+    menu.querySelector('[data-menu-new]')?.addEventListener('click', () => {
+      menu.querySelector<HTMLElement>('[data-menu-confirm]')?.removeAttribute('hidden');
+    });
+    menu.querySelector('[data-new-no]')?.addEventListener('click', () => {
+      menu.querySelector<HTMLElement>('[data-menu-confirm]')?.setAttribute('hidden', '');
+    });
+    menu.querySelector('[data-new-yes]')?.addEventListener('click', () => {
+      close();
+      void this.newGame();
+    });
     this.root.append(menu);
     menu.querySelectorAll('[data-menu-close]').forEach((button) => {
       button.addEventListener('click', close);
@@ -1728,19 +1784,19 @@ export class Game {
           ? `turn at ${input.hour}:00`
           : 'the request';
     const verdicts: Record<string, string> = {
-      assented: 'agreed to',
-      complied: 'complied with',
-      refused: 'refused',
-      deferred: 'put off',
-      modified: 'offered another action instead of',
-      heard: 'heard',
+      assented: `agreed to ${action}`,
+      complied: `agreed under pressure to ${action}`,
+      refused: `refused to ${action}`,
+      deferred: `asked to ${action} later`,
+      modified: `offered another action when asked to ${action}`,
+      heard: `${input?.t === 'promise' ? 'heard your promise to' : 'heard your request to'} ${action}`,
     };
     for (const line of this.climb.lines.filter((line) => line.input === this.answersInput))
       box.append(
         h(
           'p',
           '',
-          `<b>${esc(memberOf(line.who).name)} ${esc(verdicts[line.verdict] ?? line.verdict)} ${esc(action)}</b> · ${clock(line.at)}: “${esc(line.says)}”`,
+          `<b>${esc(memberOf(line.who).name)} ${esc(verdicts[line.verdict] ?? line.verdict)}</b> · ${clock(line.at)}: “${esc(displayText(line.says))}”`,
         ),
       );
     return box;
@@ -1763,7 +1819,7 @@ export class Game {
       /* storage unavailable */
     }
     this.openPage(
-      `<div class="page-body feedback-body"><button class="btn" data-feedback-back>← Back</button><h1>Send word</h1><p>Send a note about this game.</p><div class="feedback-verdicts">${[
+      `<div class="page-body feedback-body"><button class="btn" data-feedback-back>← Back</button><h1>Feedback</h1><p>Send a note about this game.</p><div class="feedback-verdicts">${[
         ['keep', "I'd keep playing"],
         ['mixed', 'Not sure'],
         ['quit', "I'd stop here"],
@@ -1774,7 +1830,7 @@ export class Game {
         )
         .join(
           '',
-        )}</div><label class="feedback-note">What happened on the mountain, what you wanted, what got in the way.<textarea rows="4" data-feedback-note></textarea></label><details class="feedback-name" ${remembered ? 'open' : ''}><summary>+ Add a name</summary><label>Your name or tester id<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to stay pseudonymous.</p></details><details><summary>What is sent</summary><p>Your note, optional verdict and name. Recording on includes this run. Recorded play is linked across games on this device.</p><pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></details><div data-feedback-consent></div><p data-feedback-status role="status"></p><button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Keep a copy of this run</button></div><div class="page-actions"><button class="btn go" data-feedback-send>Submit</button></div>`,
+        )}</div><label class="feedback-note">What happened? What did you want to do? What got in the way?<textarea rows="4" data-feedback-note></textarea></label><div class="feedback-name"><label>Name (optional)<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to use an unnamed device id.</p></div><div><p>We send your note and any verdict or name you add. When Recording is on, we also include this run. Recorded play is linked across games on this device.</p>${this.labTools ? `<pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre>` : ''}<a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><div data-feedback-consent></div><p data-feedback-status role="status"></p>${this.labTools ? `<button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Download this run</button>` : ''}</div><div class="page-actions"><button class="btn go" data-feedback-send>Submit</button></div>`,
       (el) => {
         let verdict = '';
         let sent = false;
@@ -1831,7 +1887,10 @@ export class Game {
             send.textContent = 'Back to the game';
             send.disabled = false;
           } catch (error) {
-            status.textContent = error instanceof Error ? error.message : 'Could not send. Try again.';
+            console.error('Feedback failed', error);
+            status.textContent = this.labTools
+              ? String(error)
+              : 'Your feedback could not be queued. Your note is still here. Try Submit again.';
             send.disabled = false;
           }
         });
@@ -1860,7 +1919,7 @@ export class Game {
   }
 
   private footer(): string {
-    return `<div class="footer">People by the Human Framework ${FRAMEWORK_VERSION}</div>`;
+    return this.labTools ? `<div class="footer">Human Framework ${FRAMEWORK_VERSION}</div>` : '';
   }
 
   private peaksSvg(done: number): string {
@@ -1896,6 +1955,7 @@ export class Game {
 
   private continuityPage(): void {
     const back = () => (this.climb ? this.closePage() : this.titlePage());
+    if (!this.labTools) return;
     this.openPage(
       `<div class="page-body"><h1>The people</h1><p>${esc(this.continuity.status)}</p><p>Continuity stays in this browser. It is separate from lab recording. A loaded season keeps its pinned people.</p><label><input type="checkbox" data-continuity ${this.continuity.shelf.enabled ? 'checked' : ''}> Use continuing people in a new season</label><p><a href="https://human.adamwhite.work/lab/people/">Inspect or export browser histories</a></p>${CAST.map((c) => `<p><b>${esc(c.name)}</b> · ${c.age} · ${esc(c.work)} ${esc(FAMILY[c.castId.split('.')[2] ?? ''] ?? '')}</p>`).join('')}${this.climb ? `<h2>Ask in private</h2><p>Only people in earshot can answer. They may keep a subject private.</p>${MEMBERS.map((m) => `<button class="btn" data-life="${m.id}" ${canHear(this.climb, m.id) ? '' : 'disabled'}>${esc(m.name)}: ${esc(DISCOVERIES[m.id]?.topic ?? 'talk')}</button>`).join('')}<h2>Leave this chapter</h2><p>Finish this climb before saving a person for another chapter. Injuries, active tasks and obligations can still refuse departure. A fresh branch is an explicit alternative; it does not continue an old branch.</p><select data-person>${CAST.map((c) => `<option value="${c.castId}">${esc(c.name)}</option>`).join('')}</select><button class="btn" data-release>Ask to end this person’s mountain chapter</button><button class="btn" data-checkpoint>Save this person at the finished climb</button><button class="btn" data-fork>Save an explicit fresh branch</button><button class="btn" data-export>Download this run</button>` : ''}<p><label>Load a current Rope run<input type="file" accept="application/json" data-import></label></p><p data-person-status role="status"></p><p>Loaded files remain file-origin through local save/reload. Their embedded ownership receipts are never acquired.</p></div><div class="page-actions"><button class="btn go" data-back>Back</button></div>`,
       (el) => {
@@ -1970,7 +2030,7 @@ export class Game {
     const sv = this.load();
     const cont = sv && !sv.season.over;
     this.openPage(
-      `<div class="title-scene"><h1>The Rope</h1><p class="sub">Five people, three mountains.</p>${this.peaksSvg(cont ? sv.season.history.length : 0)}</div><div class="page-body"><p class="title-goal">Lead them up and bring them home. They can say no.</p>${cont ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}<div data-new-confirm hidden><p>The season in your notebook will be lost.</p><button class="btn" data-yes>Yes, begin</button><button class="btn" data-no>No</button></div></div><div class="page-actions">${cont ? '<button class="btn go" data-a="continue">Continue the season</button>' : ''}<button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'Begin a new season' : 'Begin the season'}</button>${this.footer()}</div>`,
+      `<div class="title-scene"><h1>The Rope</h1><p class="sub">Five people will climb three mountains.</p>${this.peaksSvg(cont ? sv.season.history.length : 0)}</div><div class="page-body"><p class="title-goal">Lead them up and bring them home. They can say no.</p>${cont ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}<div data-new-confirm hidden><p>The season in your notebook will be lost.</p><button class="btn" data-yes>Start new game</button><button class="btn" data-no>No</button></div></div><div class="page-actions">${cont ? '<button class="btn go" data-a="continue">Resume</button>' : ''}<button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'New game' : 'New game'}</button>${this.footer()}</div>`,
       (el) => {
         el.querySelector('[data-a="continue"]')?.addEventListener('click', () => {
           if (sv) this.resume(sv);
@@ -1992,7 +2052,9 @@ export class Game {
     const c = this.climb;
     lab.screen(climbScreen(c, 'hut'));
     const m = MOUNTAINS[c.mountain];
-    const lines = c.journal.map((j) => `<p class="${j.story ? 'hand' : ''}">${esc(j.text)}</p>`).join('');
+    const lines = c.journal
+      .map((j) => `<p class="${j.story ? 'hand' : ''}">${esc(displayText(j.text))}</p>`)
+      .join('');
     this.openPage(
       `<div class="page-body hut-sheet"><h1>${esc(m?.name ?? '')}</h1>
       <p class="sub">Climb ${c.climbNo} of ${SEASON.length} · ${clock(c.minute)}, at the hut</p>
@@ -2030,7 +2092,7 @@ export class Game {
     const rows = c.journal
       .map(
         (j) =>
-          `<div class="entry${j.story ? ' story' : ''}"><time>${clock(j.at)}</time><span>${esc(j.text)}</span></div>`,
+          `<div class="entry${j.story ? ' story' : ''}"><time>${clock(j.at)}</time><span>${esc(displayText(j.text))}</span></div>`,
       )
       .join('');
     this.openPage(
@@ -2094,25 +2156,26 @@ export class Game {
     const outcomes = c.members
       .map((mem) => {
         const p = { ...factsFor(c, mem.id) };
-        return `<div class="outcome"><b>${esc(memberOf(mem.id).name)}</b><span>${esc(outcomeWords(c, p))}.</span></div>`;
+        return `<div class="outcome"><b>${esc(memberOf(mem.id).name)}</b><span>${esc(memberOf(mem.id).name)} ${esc(displayText(outcomeWords(c, p)))}.</span></div>`;
       })
       .join('');
     const story = c.journal
       .filter((j) => j.story)
-      .map((j) => `<p class="hand">${esc(j.text)}</p>`)
+      .map((j) => `<p class="hand">${esc(displayText(j.text))}</p>`)
       .join('');
     this.openPage(
       `<div class="page-body"><h1>${esc(m?.name ?? '')}</h1>
-      <p class="sub">The day, read back</p>
+      <p class="sub">What happened today</p>
       ${outcomes}
       <div data-reckoning-result></div>
+      <details class="departure"><summary>End a person’s mountain trip</summary><p>You can ask after everyone returns to the hut and finishes their work. Each person can refuse.</p>${MEMBERS.map((member) => `<button class="btn" data-depart="${member.id}">Ask ${esc(member.name)} to end this trip</button>`).join('')}<p data-depart-status role="status"></p></details>
       ${story}
       <h2>That night at the hut</h2>
       <div class="camp" data-camp><p class="caption">They talk a little over the stove…</p></div>
       <h2>One thing you said</h2>
-      <div class="branch" data-branch><p class="caption">Climbing it again in the notebook, without each of your words in turn…</p></div>
+      <div class="branch" data-branch><p class="caption">Checking how the outcome changes when one input is removed…</p></div>
       <button class="btn" data-a="journal">The journal ▸</button></div>
-      <div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Send word</button><button class="btn" data-a="export">Download this run</button></div><button class="btn go" data-a="next">${c.climbNo < SEASON.length ? `On to ${esc(SEASON[c.climbNo]?.name ?? '')}` : 'Close the season'}</button></div>`,
+      <div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Feedback</button>${this.labTools ? '<button class="btn" data-a="export">Download this run</button>' : ''}</div><button class="btn go" data-a="next">${c.climbNo < SEASON.length ? `On to ${esc(SEASON[c.climbNo]?.name ?? '')}` : 'Close the season'}</button></div>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="journal"]')?.addEventListener('click', () => {
           this.journalPage();
@@ -2123,6 +2186,20 @@ export class Game {
       },
       'debrief',
     );
+    this.pageEl?.querySelectorAll<HTMLButtonElement>('[data-depart]').forEach((button) => {
+      button.onclick = () => {
+        const who = button.dataset.depart;
+        if (!who) return;
+        this.send({ t: 'release-person', to: who });
+        const input = this.climb.inputs.length - 1;
+        const answer = this.climb.lines.findLast((line) => line.input === input && line.who === who);
+        const status = this.pageEl?.querySelector<HTMLElement>('[data-depart-status]');
+        if (status)
+          status.textContent = answer
+            ? `${memberOf(who).name}: “${displayText(answer.says)}”`
+            : displayText(this.climb.journal.at(-1)?.text ?? 'The request could not be made.');
+      };
+    });
     this.renderReckoning();
     this.runCamp(m?.name ?? '');
     this.runDebrief();
@@ -2137,7 +2214,7 @@ export class Game {
     const show = (lines: string[], label: string) => {
       const b = box();
       if (b)
-        b.innerHTML = `${lines.map((l) => `<p class="hand">${esc(l)}</p>`).join('')}<p class="caption">${esc(label)}</p>`;
+        b.innerHTML = `${lines.map((l) => `<p class="hand">${esc(displayText(l))}</p>`).join('')}<p class="caption">${esc(label)}</p>`;
     };
     const fallback = () => show(campFallback(facts), 'Read from the journal (no model).');
     fetch('/api/camp', {
@@ -2160,8 +2237,8 @@ export class Game {
       const el = this.pageEl?.querySelector<HTMLElement>('[data-branch]');
       if (!el) return;
       el.innerHTML = b
-        ? `<p>${esc(b.sentence)}</p><p class="caption">${esc(ALTERNATIVE_CAPTION)}</p>`
-        : '<p>Nothing you said, taken back on its own, changed how the day ended for anyone. They climbed their own mountain.</p>';
+        ? `<p>${esc(displayText(b.sentence))}</p><p class="caption">${esc(displayText(ALTERNATIVE_CAPTION))}</p>`
+        : '<p>Nothing you said, taken back on its own, changed how the day ended for anyone. Their outcomes did not depend on any single input.</p>';
     };
     if (this.branch !== undefined) {
       show(this.branch);
@@ -2202,8 +2279,8 @@ export class Game {
         const down = Object.values(x.facts).filter((f) => f.home).length;
         return `<h2>${esc(m?.name ?? '')}</h2>
           <p>${tops.length ? `${esc(tops.join(', '))} stood on the top.` : 'Nobody reached the top.'} ${down === 5 ? 'Everyone came down.' : `${down} of five were down by dark.`}</p>
-          ${x.branch ? `<p class="branch">${esc(x.branch.sentence)}</p>` : ''}
-          ${x.notes.map((n) => `<p class="hand">${esc(n)}</p>`).join('')}`;
+          ${x.branch ? `<p class="branch">${esc(displayText(x.branch.sentence))}</p>` : ''}
+          ${x.notes.map((n) => `<p class="hand">${esc(displayText(n))}</p>`).join('')}`;
       })
       .join('');
     this.openPage(
@@ -2211,9 +2288,16 @@ export class Game {
       ${this.peaksSvg(this.season.history.length)}
       ${hist}
       <div data-reckoning-result></div>
-      </div><div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Send word</button><button class="btn" data-a="export">Download this run</button></div><button class="btn go" data-a="new">Begin a new season</button></div>`,
+      <div data-season-confirm hidden><p>A new game replaces this season’s saved notebook.</p><button class="btn" data-season-yes>Start new game</button><button class="btn" data-season-no>Keep this game</button></div>
+      </div><div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Feedback</button>${this.labTools ? '<button class="btn" data-a="export">Download this run</button>' : ''}</div><button class="btn go" data-a="new">New game</button></div>`,
       (el) => {
-        el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () => this.newGame());
+        el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () =>
+          el.querySelector<HTMLElement>('[data-season-confirm]')?.removeAttribute('hidden'),
+        );
+        el.querySelector('[data-season-yes]')?.addEventListener('click', () => void this.newGame());
+        el.querySelector('[data-season-no]')?.addEventListener('click', () =>
+          el.querySelector<HTMLElement>('[data-season-confirm]')?.setAttribute('hidden', ''),
+        );
         el.querySelector('[data-a="send"]')?.addEventListener('click', () => this.sendRun());
         el.querySelector('[data-a="export"]')?.addEventListener('click', () => this.exportRun());
       },

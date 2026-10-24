@@ -84,7 +84,7 @@ async function camp(req: Request, env: Env): Promise<Response> {
         {
           role: 'system',
           content:
-            'You write four short lines of quiet talk at a mountain hut in the evening, between the people named in the facts. Use only the facts given; invent no events, injuries or summits. Each line is "Name: words". No narration, no numbers, no lists, no advice to the reader.',
+            'You write four short lines of quiet talk at a mountain hut in the evening, between the people named in the facts. Use only the facts given; invent no events, injuries or summits. Write complete grammatical sentences in plain, literal English. Keep every name and cultural word unchanged. Each line is "Name: words". No narration, no numbers, no lists, no advice to the reader.',
         },
         { role: 'user', content: facts },
       ],

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type ClimbState, distance, type Line, MOUNTAINS, step } from '../src/sim/climb.ts';
 import { newSeason } from '../src/sim/season.ts';
 import { Game } from '../src/ui/game.ts';
+import { displayText } from '../src/ui/plain-english.ts';
 
 vi.mock('../src/ui/scene.ts', () => ({
   Scene: class {
@@ -98,7 +99,7 @@ it('keeps mandatory opening story across title and hut below forty words, with c
   button('About this part of the climb').click();
   expect(document.querySelector('.info-popover')?.textContent).toContain('eleven summers');
   button('Close information').click();
-  button('Begin the season').click();
+  button('New game').click();
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -130,7 +131,7 @@ it('gives every unavailable verb an adjacent readable reason and updates changed
 
 it('shows target, selected request and commit without repeating unrelated verb grids', async () => {
   await boot();
-  button('Begin the season').click();
+  button('New game').click();
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -149,7 +150,7 @@ it('shows target, selected request and commit without repeating unrelated verb g
 
 it('retains actual HF refusal words by request and refreshes them after another answer', async () => {
   const driver = await boot();
-  button('Begin the season').click();
+  button('New game').click();
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -162,10 +163,10 @@ it('retains actual HF refusal words by request and refreshes them after another 
   const refusal = refusals[0] as Line;
   vi.advanceTimersByTime(8000);
   driver.renderSheet(true);
-  expect(document.querySelector('.request-replies')?.textContent).toContain(refusal.says);
+  expect(document.querySelector('.request-replies')?.textContent).toContain(displayText(refusal.says));
   button(refusal.who[0]?.toUpperCase() + refusal.who.slice(1)).click();
   button('rest').click();
-  expect(document.querySelector('.request-replies')?.textContent).toContain(refusal.says);
+  expect(document.querySelector('.request-replies')?.textContent).toContain(displayText(refusal.says));
   expect(document.querySelector<HTMLButtonElement>('.forces button:last-child')?.disabled).toBe(false);
   // Another real HF resolution replaces the earlier answer for this person/request.
   vi.advanceTimersByTime(500);
@@ -174,15 +175,17 @@ it('retains actual HF refusal words by request and refreshes them after another 
   button('rest').click();
   const latest = driver.climb.lines.filter((l) => l.who === refusal.who).at(-1) as Line;
   expect(latest.says).not.toBe(refusal.says);
-  expect(document.querySelector('.request-replies')?.textContent).toContain(latest.says);
-  expect(document.querySelector('.request-replies')?.textContent).not.toContain(refusal.says);
+  expect(document.querySelector('.request-replies')?.textContent).toContain(displayText(latest.says));
+  expect(document.querySelector('.request-replies')?.textContent).not.toContain(displayText(refusal.says));
   button('Back to requests').click();
   button('everyone').click();
   const stillDeclines = driver.climb.lines.filter((l) => l.who === 'wren').at(-1) as Line;
   // Main feedback belongs to the last request; changing selection does not mix in old answers.
-  expect(document.querySelector('.request-replies')?.textContent).not.toContain(stillDeclines.says);
+  expect(document.querySelector('.request-replies')?.textContent).not.toContain(
+    displayText(stillDeclines.says),
+  );
   document.querySelector<HTMLButtonElement>('.all-answers')?.click();
-  expect(document.querySelector('.answers-sheet')?.textContent).toContain(latest.says);
+  expect(document.querySelector('.answers-sheet')?.textContent).toContain(displayText(latest.says));
 });
 
 it('updates an open request when the target leaves earshot and when they return', async () => {
@@ -270,20 +273,20 @@ it('retains both rope partners’ HF answers after bubble expiry and when the pa
   vi.advanceTimersByTime(8500);
   driver.renderSheet(true);
   const replies = () => document.querySelector('.request-replies');
-  expect(replies()?.querySelector('p')?.textContent).toContain(oskar.says);
+  expect(replies()?.querySelector('p')?.textContent).toContain(displayText(oskar.says));
   document.querySelector<HTMLButtonElement>('.all-answers')?.click();
-  expect(document.querySelector('.answers-sheet')?.textContent).toContain(nell.says);
+  expect(document.querySelector('.answers-sheet')?.textContent).toContain(displayText(nell.says));
   button('Back to requests').click();
   button('rope up').click();
   button('Oskar').click();
-  expect(replies()?.querySelector('p')?.textContent).toContain(oskar.says);
-  expect(replies()?.textContent).toContain(nell.says);
+  expect(replies()?.querySelector('p')?.textContent).toContain(displayText(oskar.says));
+  expect(replies()?.textContent).toContain(displayText(nell.says));
   button('Back to requests').click();
   button('Oskar').click();
   button('rope up').click();
   button('Nell').click();
-  expect(replies()?.querySelector('p')?.textContent).toContain(oskar.says);
-  expect(replies()?.textContent).toContain(nell.says);
+  expect(replies()?.querySelector('p')?.textContent).toContain(displayText(oskar.says));
+  expect(replies()?.textContent).toContain(displayText(nell.says));
   // Another pair must not inherit the Nell/Oskar answer.
   button('Back to requests').click();
   button('rope up').click();
@@ -305,7 +308,7 @@ it('shows the saved climb, mountain and time beside Continue without advancing t
   });
   localStorage.setItem('rope.save.cast.v1', saved);
   await boot();
-  expect(button('Continue the season')).toBeTruthy();
+  expect(button('Resume')).toBeTruthy();
   expect(document.querySelector('.continue-summary')?.textContent).toContain('Climb 1 of 3');
   expect(document.querySelector('.continue-summary')?.textContent).toContain('Hollin');
   expect(document.querySelector('.continue-summary')?.textContent).toContain('05:13');

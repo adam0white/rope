@@ -125,8 +125,7 @@ it('Back from the drawer journal after auto-ending returns to the next phase', a
   const driver = await atNight(true);
   vi.advanceTimersByTime(2600);
   driver.frame();
-  document.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-  document.querySelector<HTMLButtonElement>('[data-menu-journal]')?.click();
+  document.querySelector<HTMLButtonElement>('.journal-trigger')?.click();
   expect(document.querySelector('.page h2')?.textContent).toBe('The journal');
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
   expect(document.querySelector<HTMLButtonElement>('[data-a="next"]')?.textContent).toBe('On to The Tooth');
@@ -136,8 +135,7 @@ it('Back from the drawer journal after auto-ending returns to the next phase', a
 
 it('leaving the journal during the ending stamp cannot later reopen an obsolete debrief', async () => {
   const driver = await atNight(true);
-  document.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-  document.querySelector<HTMLButtonElement>('[data-menu-journal]')?.click();
+  document.querySelector<HTMLButtonElement>('.journal-trigger')?.click();
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
   expect(document.querySelector<HTMLButtonElement>('[data-a="next"]')?.textContent).toBe('On to The Tooth');
   document.querySelector<HTMLButtonElement>('[data-a="next"]')?.click();
@@ -158,8 +156,7 @@ it('Back from the journal after closing the season keeps the season closed', asy
   expect(close?.textContent).toBe('Close the season');
   close?.click();
   expect(document.querySelector('.page h1')?.textContent).toBe('The season');
-  document.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-  document.querySelector<HTMLButtonElement>('[data-menu-journal]')?.click();
+  document.querySelector<HTMLButtonElement>('.journal-trigger')?.click();
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
   expect(document.querySelector('.page h1')?.textContent).toBe('The season');
   expect(document.querySelector('[data-a="next"]')).toBeNull();

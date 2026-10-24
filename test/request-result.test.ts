@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type ClimbState, MOUNTAINS, type NewInput, queueInput } from '../src/sim/climb.ts';
 import { newSeason } from '../src/sim/season.ts';
 import { Game } from '../src/ui/game.ts';
+import { displayText } from '../src/ui/plain-english.ts';
 
 vi.mock('../src/ui/scene.ts', () => ({
   Scene: class {
@@ -88,8 +89,9 @@ it('labels accepted rest as rest and retains each authentic HF answer', async ()
   expect(answers.some((line) => line.verdict === 'assented')).toBe(true);
   expect(result()?.textContent).toContain('Rest accepted:');
   const details = openAnswers();
-  for (const line of answers) expect(details?.textContent).toContain(line.says);
+  for (const line of answers) expect(details?.textContent).toContain(displayText(line.says));
   expect(details?.textContent).toContain('agreed to rest');
+  expect(details?.textContent).toContain('asked to rest later');
   backToRequests();
   vi.advanceTimersByTime(8500);
   driver.renderSheet(true);
@@ -122,11 +124,11 @@ it('explains we all turn as your descent plus a new urge with renewed HF objecti
   expect(objection?.verdict).toBe('deferred');
   expect(result()?.textContent).toContain('You turned downhill and urged everyone to turn back.');
   expect(result()?.textContent).toContain('Oskar put off turning back');
-  expect(result()?.textContent).toContain(objection?.says);
+  expect(result()?.textContent).toContain(displayText(objection?.says ?? ''));
   expect(result()?.textContent).toContain('Descending:');
   const accepted = c.lines.filter((line) => line.input === latest && line.verdict === 'assented');
   const answers = openAnswers();
-  for (const line of accepted) expect(answers?.textContent).toContain(line.says);
+  for (const line of accepted) expect(answers?.textContent).toContain(displayText(line.says));
   expect(answers?.textContent).toContain('agreed to turn back');
 });
 
@@ -152,18 +154,18 @@ it('keeps every opening promise answer readable after speech expires', async () 
   driver.send({ t: 'promise', hour: 12 });
   const answers = driver.climb.lines.filter((line) => line.input === 0);
   expect(answers).toHaveLength(5);
-  expect(result()?.textContent).toContain('Turnback promised at 12:00.');
+  expect(result()?.textContent).toContain('You promised to turn back at 12:00.');
   const details = openAnswers();
   expect(document.querySelectorAll('.answers-sheet p')).toHaveLength(5);
-  for (const line of answers) expect(details?.textContent).toContain(line.says);
+  for (const line of answers) expect(details?.textContent).toContain(displayText(line.says));
   vi.advanceTimersByTime(8500);
   driver.renderSheet(true);
   for (const line of answers)
-    expect(document.querySelector('.answers-sheet')?.textContent).toContain(line.says);
+    expect(document.querySelector('.answers-sheet')?.textContent).toContain(displayText(line.says));
   backToRequests();
   vi.advanceTimersByTime(500);
   driver.send({ t: 'say', to: 'tamar', act: 'rest', force: 'ask' });
-  expect(result()?.textContent).not.toContain('Turnback promised at 12:00.');
+  expect(result()?.textContent).not.toContain('You promised to turn back at 12:00.');
 });
 
 const tap = (text: string) => {
@@ -189,18 +191,18 @@ it('distinguishes an old earshot follow from an active close approach and arriva
   c.leader.pos = { place: null, leg: 'meadow', t: 0.43 };
   c.leader.follow = 'tamar';
   tap('Tamar Vale');
-  expect(document.querySelector('.movement-status')?.textContent).toContain('earshot');
-  expect(document.querySelector('.movement-status')?.textContent).toContain('too far to help');
+  expect(document.querySelector('.movement-status')?.textContent).toContain('You can hear');
+  expect(document.querySelector('.movement-status')?.textContent).toContain('too far away to help');
   tap('walk to Tamar Vale');
-  expect(document.querySelector('.movement-status')?.textContent).toContain('Walking to Tamar');
+  expect(document.querySelector('.movement-status')?.textContent).toContain('walking to Tamar');
   expect(document.querySelector('.movement-status')?.textContent).toContain('metres');
   expect(document.querySelector('.movement-status')?.textContent).toContain('if she stays');
   c.leader.pos = { ...tamar.pos };
   c.leader.move = null;
   driver.renderSheet(true);
-  expect(document.querySelector('.movement-status')?.textContent).toContain('Close enough to help Tamar');
+  expect(document.querySelector('.movement-status')?.textContent).toContain('close enough to help Tamar');
   tap('stop');
-  expect(document.querySelector('.movement-status')?.textContent).not.toContain('Walking to Tamar');
+  expect(document.querySelector('.movement-status')?.textContent).not.toContain('walking to Tamar');
 });
 
 it('offers a real pair gathering request after distance blocks roping', async () => {
@@ -230,7 +232,7 @@ it('offers a real pair gathering request after distance blocks roping', async ()
   expect(answers).toHaveLength(2);
   expect(result()?.textContent).toContain('Close up');
   const recorded = openAnswers();
-  for (const line of answers) expect(recorded?.textContent).toContain(line.says);
+  for (const line of answers) expect(recorded?.textContent).toContain(displayText(line.says));
 });
 
 it('keeps recorded answers open when walking progress rebuilds the sheet', async () => {
@@ -242,7 +244,7 @@ it('keeps recorded answers open when walking progress rebuilds the sheet', async
   driver.renderSheet(true);
   expect(document.querySelector('.sheet-answers')).not.toBeNull();
   for (const line of driver.climb.lines)
-    expect(document.querySelector('.answers-sheet')?.textContent).toContain(line.says);
+    expect(document.querySelector('.answers-sheet')?.textContent).toContain(displayText(line.says));
 });
 
 it('removes a distance gathering response as soon as the pair reaches one another', async () => {

@@ -52,21 +52,21 @@ export function lookOf(p: Person): Look {
  */
 export function moodWord(p: Person, cold: number): string {
   const r = readPerson(p);
-  if (p.body.downed !== undefined) return 'down hurt';
+  if (p.body.downed !== undefined) return 'hurt';
   const fatigue = r.body.fatigue;
   const fear = emotionLevel(p, 'fear');
   const sad = Math.max(emotionLevel(p, 'distress'), emotionLevel(p, 'grief'));
   const pain = r.body.perceived.pain;
   const cands: [number, string][] = [
-    [fatigue > 0.8 ? fatigue + 0.2 : fatigue - 0.12, fatigue > 0.8 ? 'spent' : 'tired'],
+    [fatigue > 0.8 ? fatigue + 0.2 : fatigue - 0.12, fatigue > 0.8 ? 'exhausted' : 'tired'],
     [fear * 1.3, 'scared'],
     [cold * 0.8, 'cold'],
-    [pain * 1.2, 'hurting'],
-    [sad * 1.1, 'low'],
+    [pain * 1.2, 'hurt'],
+    [sad * 1.1, 'sad'],
   ];
   cands.sort((a, b) => b[0] - a[0]);
   const top = cands[0];
   if (top && top[0] > 0.45) return top[1];
   const trust = voiceOf(p, LEADER)?.trust ?? 0.5;
-  return fatigue < 0.25 && trust > 0.6 ? 'keen' : '';
+  return fatigue < 0.25 && trust > 0.6 ? 'eager' : '';
 }
