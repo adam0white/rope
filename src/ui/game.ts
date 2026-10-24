@@ -5,7 +5,7 @@
  */
 
 import { FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
-import { telemetryToggle } from '@adam0white/lab-kit';
+import { feedbackPersonaControl, telemetryToggle } from '@adam0white/lab-kit';
 import { campFacts, campFallback } from '../sim/camp.ts';
 import {
   approachEstimate,
@@ -855,7 +855,14 @@ export class Game {
       for (const o of c.members) {
         if (o.id === asking.id || o.homeAt !== null || !canHear(c, o.id)) continue;
         const b = h('button', 'force', `send ${esc(memberOf(o.id).name)}`);
-        b.onclick = () => this.send({ t: 'say', to: o.id, act: 'escort', force: 'ask', with: asking.id });
+        b.onclick = () =>
+          this.send({
+            t: 'say',
+            to: o.id,
+            act: 'escort',
+            force: 'ask',
+            with: asking.id,
+          });
         bar.append(b);
       }
       if (near) {
@@ -1085,7 +1092,12 @@ export class Game {
             : 'stay with them',
         'all',
         !one || memberState(c, one.id).homeAt === null,
-        () => this.send({ t: 'lead', dir: one ? 'near' : 'with', who: one ? one.id : 'party' }),
+        () =>
+          this.send({
+            t: 'lead',
+            dir: one ? 'near' : 'with',
+            who: one ? one.id : 'party',
+          }),
         'Back at the hut for today.',
       ),
     );
@@ -1420,7 +1432,14 @@ export class Game {
           'force gather-pair',
           `Close up: ${esc(memberOf(a.id).name)} + ${esc(memberOf(b.id).name)}`,
         );
-        gather.onclick = () => this.send({ t: 'say', to: a.id, act: 'gather', with: b.id, force: 'ask' });
+        gather.onclick = () =>
+          this.send({
+            t: 'say',
+            to: a.id,
+            act: 'gather',
+            with: b.id,
+            force: 'ask',
+          });
         box.append(gather);
       }
     }
@@ -1705,7 +1724,7 @@ export class Game {
         )
         .join(
           '',
-        )}</div><label class="feedback-note">What happened on the mountain, what you wanted, what got in the way.<textarea rows="4" data-feedback-note></textarea></label><details class="feedback-name" ${remembered ? 'open' : ''}><summary>+ Add a name</summary><label>Your name or tester id<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to stay pseudonymous.</p></details><details><summary>What is sent</summary><p>Your note, optional verdict and name, and the current run when you consent to send it.</p><pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></details><div data-feedback-consent></div><p data-feedback-status role="status"></p><button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Keep a copy of this run</button></div><div class="page-actions"><button class="btn go" data-feedback-send>Send</button></div>`,
+        )}</div><label class="feedback-note">What happened on the mountain, what you wanted, what got in the way.<textarea rows="4" data-feedback-note></textarea></label><details class="feedback-name" ${remembered ? 'open' : ''}><summary>+ Add a name</summary><label>Your name or tester id<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to stay pseudonymous.</p></details><details><summary>What is sent</summary><p>Your note, optional verdict and name. Recording on includes this run. Continuing character state is included without linking recorded history unless you approve linkage.</p><pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></details><div data-feedback-consent></div><p data-feedback-status role="status"></p><button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Keep a copy of this run</button></div><div class="page-actions"><button class="btn go" data-feedback-send>Send</button></div>`,
       (el) => {
         let verdict = '';
         let sent = false;
@@ -1722,18 +1741,18 @@ export class Game {
         };
         const update = () => {
           consent.replaceChildren();
-          if (off()) {
-            consent.append(h('p', '', 'Recording is off, so nothing is sent.'), telemetryToggle(lab));
-            consent.addEventListener('change', update, { once: true });
-            send.disabled = true;
-          } else if (lab.privacySignalOn && !lab.privacyOverride) {
-            consent.innerHTML =
-              '<label><input type="checkbox" data-feedback-run> Send this run with my note</label>';
-            send.disabled = true;
-            consent.querySelector('input')?.addEventListener('change', (event) => {
-              send.disabled = !(event.target as HTMLInputElement).checked || !this.climb;
-            });
-          } else send.disabled = false;
+          consent.append(
+            h(
+              'p',
+              '',
+              off() || (lab.privacySignalOn && !lab.privacyOverride)
+                ? 'Recording is off or browser privacy is on. Send includes only your note and verdict.'
+                : 'Send includes this run and your note. Continuing character state is included without linking recorded history unless you approve linkage.',
+            ),
+          );
+          const choice = feedbackPersonaControl(lab);
+          if (choice) consent.append(choice);
+          send.disabled = false;
         };
         update();
         el.querySelector('[data-feedback-back]')?.addEventListener('click', back);
@@ -1757,23 +1776,23 @@ export class Game {
           const note = [verdict ? `Verdict: ${verdict}` : '', text].filter(Boolean).join('\n\n');
           send.disabled = true;
           try {
-            if (lab.privacySignalOn && !lab.privacyOverride) {
-              const run = exportClimb(this.start, this.climb, FRAMEWORK_VERSION);
-              try {
-                await lab.sendRun(run, { note, name });
-              } catch {
-                lab.openSendDialog({ getRun: () => run, name, note });
-                send.disabled = false;
-                return;
-              }
-            } else await lab.sendFeedback(note, { name });
+            let run: unknown;
+            try {
+              run = this.climb ? exportClimb(this.start, this.climb, FRAMEWORK_VERSION) : undefined;
+            } catch {
+              /* A broken export must not block feedback. */
+            }
+            await lab.sendFeedback(note, { name, run });
             try {
               if (name) localStorage.setItem('hf-lab-feedback-name', name);
               else localStorage.removeItem('hf-lab-feedback-name');
             } catch {
               /* storage unavailable */
             }
-            status.textContent = 'Sent. Thank you.';
+            status.textContent =
+              off() || (lab.privacySignalOn && !lab.privacyOverride)
+                ? 'Note queued without a run or history linkage. This is not a delivery receipt.'
+                : 'Run and note queued. This is not a delivery receipt.';
             sent = true;
             send.textContent = 'Back to the game';
             send.disabled = false;
@@ -2028,7 +2047,9 @@ export class Game {
       show(this.branch);
       return;
     }
-    const w = new Worker(new URL('./debrief.worker.ts', import.meta.url), { type: 'module' });
+    const w = new Worker(new URL('./debrief.worker.ts', import.meta.url), {
+      type: 'module',
+    });
     w.onmessage = (e: MessageEvent<{ branch: Branch | null }>) => {
       show(e.data.branch);
       w.terminate();

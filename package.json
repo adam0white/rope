@@ -23,11 +23,11 @@
   },
   "dependencies": {
     "@adam0white/human-framework": "2.8.0",
-    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.2.1.tgz",
-    "pixi.js": "8.22.0"
+    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.1.tgz",
+    "pixi.js": "8.22.0",
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.1.tgz"
   },
   "devDependencies": {
-    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.3.1.tgz",
     "@biomejs/biome": "2.5.15",
     "@types/node": "26.6.5",
     "happy-dom": "21.0.4",

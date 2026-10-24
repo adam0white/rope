@@ -151,37 +151,33 @@ it('sends a note and optional name while recording, then remembers the name', as
   tap('[data-verdict="keep"]');
   tap('[data-feedback-send]');
   await vi.waitFor(() =>
-    expect(lab.sendFeedback).toHaveBeenCalledWith('Verdict: keep\n\nI could tell who heard me.', {
-      name: 'Ridge tester',
-    }),
+    expect(lab.sendFeedback).toHaveBeenCalledWith(
+      'Verdict: keep\n\nI could tell who heard me.',
+      expect.objectContaining({
+        name: 'Ridge tester',
+      }),
+    ),
   );
   expect(lab.sendRun).not.toHaveBeenCalled();
-  expect(query('[data-feedback-status]').textContent).toContain('Sent');
+  expect(query('[data-feedback-status]').textContent).toContain('queued');
   tap('[data-feedback-send]');
   feedback();
   expect(query<HTMLInputElement>('[data-feedback-name]').value).toBe('Ridge tester');
 });
 
-it('blocks feedback when recording is off and requires explicit consent for a privacy signal', async () => {
+it.each(['off', 'privacy'])('sends feedback in the same sheet when %s', async (choice) => {
   await boot();
-  localStorage.setItem('hf-lab-recording-off', '1');
-  lab.telemetryOn = false;
+  if (choice === 'off') {
+    localStorage.setItem('hf-lab-recording-off', '1');
+    lab.telemetryOn = false;
+  } else lab.privacySignalOn = true;
   feedback();
-  expect(query<HTMLButtonElement>('[data-feedback-send]').disabled).toBe(true);
-  expect(query('[data-feedback-consent]').textContent).toContain('Recording is off');
-  expect(query<HTMLInputElement>('[data-feedback-consent] input').type).toBe('checkbox');
-  tap('[data-feedback-consent] input');
   expect(query<HTMLButtonElement>('[data-feedback-send]').disabled).toBe(false);
-  expect(lab.setTelemetryOff).toHaveBeenCalledWith(false);
-  tap('[data-feedback-back]');
-  localStorage.removeItem('hf-lab-recording-off');
-  lab.privacySignalOn = true;
-  feedback();
-  expect(query<HTMLButtonElement>('[data-feedback-send]').disabled).toBe(true);
-  tap('[data-feedback-run]');
   tap('[data-feedback-send]');
-  await vi.waitFor(() => expect(lab.sendRun).toHaveBeenCalledOnce());
-  expect(lab.sendFeedback).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(lab.sendFeedback).toHaveBeenCalledOnce());
+  expect(lab.sendRun).not.toHaveBeenCalled();
+  expect(lab.openSendDialog).not.toHaveBeenCalled();
+  expect(lab.setTelemetryOff).not.toHaveBeenCalled();
 });
 
 it('returns from the journal to the unresolved hut or title page', async () => {
