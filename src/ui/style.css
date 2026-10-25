@@ -1323,10 +1323,6 @@ body {
   right: 0;
   z-index: 15;
   background: var(--paper);
-  border-top: 1px solid var(--ink-soft);
-  font-size: 12px;
-  line-height: 1.25;
-  padding: 3px 8px;
 }
 .recording-footer:empty {
   display: none;
@@ -1532,9 +1528,6 @@ body {
   .day-strip {
     grid-row: 2;
     margin-top: 0;
-  }
-  .recording-footer {
-    font-size: 16px;
   }
 }
 .outcome {

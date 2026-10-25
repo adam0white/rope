@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Game } from '../src/ui/game.ts';
 
@@ -42,4 +43,16 @@ it('mounts the actual non-null SDK notice once and retains its parent through pa
   notice?.remove();
   expect(document.querySelectorAll('.lk-telemetry-notice')).toHaveLength(0);
   expect(document.querySelector('.recording-footer')).toBe(footer);
+});
+
+// happy-dom does not measure glyphs. Browser footprint checks also verify one line at360.
+it('leaves the SDK the full viewport width and its own accessible type and natural height', () => {
+  const css = readFileSync('src/ui/style.css', 'utf8');
+  const hosts = [...css.matchAll(/\.recording-footer\s*\{([^}]+)\}/g)];
+  expect(hosts).toHaveLength(1);
+  expect(hosts[0]?.[1]).not.toMatch(
+    /(?:padding|font-size|line-height|min-height|max-height|height|overflow)\s*:/,
+  );
+  expect(hosts[0]?.[1]).toContain('left: 0');
+  expect(hosts[0]?.[1]).toContain('right: 0');
 });
