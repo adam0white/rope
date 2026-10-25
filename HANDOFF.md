@@ -1,3 +1,11 @@
+# HF plain narration adoption (2026-10-25)
+
+Remaining: Adam accepts feel. Technical delivery receipts are in `/Users/abdul/code/.lab-scratch/hfadopt/rope-report.md`.
+
+HF is pinned exactly to published 2.21.0, including lab-client's dependency. Every fresh canonical party persists `lexicon.plainEnglish: true`; loaded runs retain their saved choice. The two commitment-label display mappings remain because they preserve cast wording and are not patches for clipped HF decisions. Incoming native Rope/Commonstead mapping and identity checks admit exactly historical 2.17.0 and current 2.21.0 dialects. Outgoing Rope source stamps use 2.21.0.
+
+Three seed-4 full climbs (all mountains, noon turnaround) match the pre-upgrade state at 91 checkpoints/finals after blanking presentation text, parsing known wrappers with their complete semantic payload intact, and excluding pin/opt-in metadata. Episode records, action/outcome identities, input logs, decisions, physical state and RNG remain in the proof. Current exports replay exactly, including a pinned admitted real Commonstead Oskar fixture and a saved legacy narration choice. The proof and its semantic mutation controls live in tests; the lesson is in docs/findings.md. No new faculties, game mechanics or model calls were added. Existing Workers AI spend remains unchanged.
+
 ## Frictionless recording direction, 2026-10-23
 
 Immutable client0.4.4 and kit0.5.4 implement this direction. The owner directs automatic linkage across games on this device whenever recording is on. The first-visit notice covers recording and linkage. One menu switch turns recording on even with DNT/GPC; those signals set the initial default off. Send word uses one optional unchecked “Share this run and my play with the lab” checkbox only while recording is off. Submit with it checked enables recording/linkage and sends an available run; unchecked sends the note alone. Old linkage choices migrate silently. No separate continuing-person recording consent applies, including identity changes and loaded histories. This supersedes earlier recording-consent sections below. Owner words and authority: human-framework/docs/owner-directions-2026-10-18.md (2026-10-23 frictionless feedback).

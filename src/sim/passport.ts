@@ -65,7 +65,7 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
   if (
     portable.person.mappingVersion !== mapping ||
     portable.person.source.id !== sourceId ||
-    portable.person.source.engine !== '2.17.0' ||
+    !['2.17.0', '2.21.0'].includes(portable.person.source.engine) ||
     portable.person.name !== cast.name
   )
     throw new Error('The person’s original role, history format, simulation version or name does not match.');
@@ -150,7 +150,7 @@ export function checkChapter(chapter: Chapter) {
       claim.branchId !== input.parent.branchId ||
       claim.parentRevision !== input.parent.revision ||
       claim.source.game !== 'rope' ||
-      claim.source.engine !== '2.17.0' ||
+      !['2.17.0', '2.21.0'].includes(claim.source.engine) ||
       claim.source.rules !== RULES ||
       !same(claim.transfer, { ...input.parent.transfer, life: input.life })
     )

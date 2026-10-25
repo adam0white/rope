@@ -61,7 +61,7 @@ async function boot() {
   const driver = game as unknown as Driver;
   const { season, climb } = newSeason(20261018);
   await driver.resume({
-    engine: '2.17.0',
+    engine: '2.21.0',
     season,
     start: season.start,
     inputs: [],

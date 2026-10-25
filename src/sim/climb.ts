@@ -634,7 +634,15 @@ export function queueInput(s: ClimbState, input: NewInput): number {
 }
 
 function line(s: ClimbState, who: string, input: number, r: SuggestionResolution): void {
-  const own = voiced(s.seed, who, s.minute, r.verdict, r.says, r.reason);
+  const own = voiced(
+    s.seed,
+    who,
+    s.minute,
+    r.verdict,
+    r.says,
+    r.reason,
+    personOf(s, who).lexicon?.plainEnglish === true,
+  );
   const says = withCause(
     s,
     who,

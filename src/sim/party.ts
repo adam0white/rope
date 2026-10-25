@@ -98,7 +98,7 @@ function spec(seed: number, now: number, id: string): PersonSpec {
     name: memberOf(id).name,
     seed,
     now,
-    lexicon: { names: NAMES },
+    lexicon: { names: NAMES, plainEnglish: true },
     // HF 2.6.0: exertion accumulates over the day, so a long climb leaves a person spent for the descent.
     enable: { fatigueStore: true },
   };

@@ -4,7 +4,8 @@ import { type ClimbState, replay } from '../src/sim/climb.ts';
 import { newSeason } from '../src/sim/season.ts';
 import { Game } from '../src/ui/game.ts';
 import { ownerNight } from './fixtures/owner-night.ts';
-import { proofHash, proseBlanked } from './prose-proof.ts';
+import { narrationBlanked, narrationPeople } from './hf-narration-proof.ts';
+import { proofHash } from './prose-proof.ts';
 
 // Keep the real clock, inputs and pages; replace only WebGL and the external camp/worker boundaries.
 vi.mock('../src/ui/scene.ts', () => ({
@@ -68,7 +69,7 @@ async function atNight(skip: boolean) {
   await game.boot();
   const driver = game as unknown as Driver;
   await driver.resume({
-    engine: '2.17.0',
+    engine: '2.21.0',
     v: 1,
     season,
     start: season.start,
@@ -100,11 +101,13 @@ it('the historical owner input log has a deterministic current-cast replay', () 
   const played = replay(season.start as string, ownerNight.inputs);
   expect(played.minute).toBe(5700);
   expect(played.over).toBe(true);
-  // Baseline b1b73bc: only journal text and spoken sentences are blanked.
-  expect(proofHash(proseBlanked(played))).toBe(
-    '44842d714cfd20142e5b095423daf1939911161e19dc1919b607541adfe91774',
+  // Baseline d642cea: explicit HF narration paths and pin metadata are excluded.
+  expect(proofHash(narrationBlanked(played))).toBe(
+    '0fb388face27ed7822c2405740722e7f9f4c29dbdeef1fc6ba667e0665e41eaa',
   );
-  expect(proofHash(played.people)).toBe('ddd6e6da06ac0a74f09564d28965ec22505ba6fc9775669a5075ef8d9754b9d9');
+  expect(proofHash(narrationPeople(played.people))).toBe(
+    'adedce985332bec0f2e862fd7d0aef331d27b9ee9bccdae4d8dbb4d3838037db',
+  );
 });
 
 it.each([false, true])(

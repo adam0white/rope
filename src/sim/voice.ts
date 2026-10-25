@@ -81,6 +81,7 @@ export function voiced(
   verdict: string,
   says: string,
   reason = '',
+  plainEnglish = false,
 ): string {
   const k = (n: number) => Math.floor(hashUnit(seed, 9101, minute, who.length, who.charCodeAt(0), 0) * n);
   if ((verdict === 'assented' || verdict === 'complied') && PLAIN_YES.test(says)) {
@@ -94,7 +95,8 @@ export function voiced(
     if (t) return t;
   }
   // "After I climb the ice wall, then I will." / "Not now. After I climb the ice wall."
-  const m = says.match(/After I ([^,.]+)[,.]/);
+  // Plain HF already supplies a full deferral. Keep its complete sentence.
+  const m = plainEnglish ? null : says.match(/After I ([^,.]+)[,.]/);
   if (verdict === 'deferred' && m?.[1]) {
     const opts = AFTER[who];
     const t = opts?.[k(opts.length)];

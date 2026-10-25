@@ -13,7 +13,8 @@ import {
   step,
 } from '../src/sim/climb.ts';
 import { inputPhrase } from '../src/sim/debrief.ts';
-import { proofHash, proseBlanked } from './prose-proof.ts';
+import { narrationBlanked, narrationPeople } from './hf-narration-proof.ts';
+import { proofHash } from './prose-proof.ts';
 
 function fixture() {
   const s = startClimb(1, 3);
@@ -28,9 +29,13 @@ it('pins the current-cast pursuit state for old input verbs', () => {
   for (let i = 0; i < 80; i++) step(s);
   queueInput(s, { t: 'lead', dir: 'with', who: 'tamar' });
   for (let i = 0; i < 100; i++) step(s);
-  // Baseline b1b73bc; the complete HF people are independently unchanged.
-  expect(proofHash(proseBlanked(s))).toBe('6787f4dc63ef0e660ad149051026158070e4eee2c72d089e6b00277f5d9dbe6e');
-  expect(proofHash(s.people)).toBe('6218059bc8b8724650c5a2bd7340fe411ba1ef75ce21f7db67d2a0eca2671e72');
+  // Baseline d642cea; non-prose HF state is independently unchanged.
+  expect(proofHash(narrationBlanked(s))).toBe(
+    'e1792a5a0e87365968721d204d62081da9ddd0cba48c3ba9414c4d8ba5e83a0f',
+  );
+  expect(proofHash(narrationPeople(s.people))).toBe(
+    'b4a05d2634604a782534b7c7ea9413f0be0c2ba6dc7ede55ca7d1e5f72bf69c2',
+  );
 });
 
 it('both people answer through HF, close the distance, and can then receive a rope offer', () => {

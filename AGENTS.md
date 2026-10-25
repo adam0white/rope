@@ -7,7 +7,7 @@ You lead five Human Framework (HF) people up a mountain and back. Every one of t
 - **First acceptance test:** within ten minutes the player makes a plan, meets a reasonable objection, changes something concrete and sees a consequence they care about.
 
 ## Rules
-- HF comes only from npm: `@adam0white/human-framework@2.18.0`, exact. Never import sibling source. No game logic goes into HF. A generic HF gap goes into [docs/hf-requests.md](docs/hf-requests.md).
+- HF comes only from npm: `@adam0white/human-framework@2.21.0`, exact. Never import sibling source. No game logic goes into HF. A generic HF gap goes into [docs/hf-requests.md](docs/hf-requests.md).
 - Never fake a verdict. Every refusal, deferral or counter-offer comes from an HF resolution (`answerNow`, `decide` with a suggestion, `predict`).
 - Inner state is never a number on screen. Show it as drawing: stride, lag, lean, gaze, hatching.
 - All world randomness is keyed by (seed, kind, place, minute) through `hashUnit`, never by draw order. Person RNG stays unused (`will.temperature` 0). Seed + input log + start state is the replay, the playtest export and the debrief substrate.

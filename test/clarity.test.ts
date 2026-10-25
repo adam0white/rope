@@ -72,7 +72,7 @@ async function boot(all = false, seed = 20261018) {
   if (all) {
     const { season, climb } = newSeason(seed);
     await (game as unknown as Driver).resume({
-      engine: '2.17.0',
+      engine: '2.21.0',
       season,
       start: season.start,
       inputs: [],
@@ -300,7 +300,7 @@ it('shows the saved climb, mountain and time beside Continue without advancing t
   const { season, climb } = newSeason(23);
   const saved = JSON.stringify({
     v: 1,
-    engine: '2.17.0',
+    engine: '2.21.0',
     season,
     start: '',
     inputs: [],

@@ -79,7 +79,7 @@ it('pins a complete admitted cast and changed life preparation in deterministic 
   expect(climb.journal.some((j) => j.text.includes('last local stop'))).toBe(true);
   queueInput(climb, { t: 'ask-life', to: 'nell' });
   for (let i = 0; i < 30; i++) step(climb);
-  const exported = exportClimb(start, climb, '2.18.0', chapter);
+  const exported = exportClimb(start, climb, '2.21.0', chapter);
   expect(snapshot(replayExport(exported))).toBe(exported.state);
   expect(personSnapshot(JSON.parse(start).people.find((p: { id: string }) => p.id === 'oskar')).rng).toEqual(
     initial.oskar.rng,
@@ -94,7 +94,7 @@ it('private clues require a chosen receptive encounter and replay exactly', () =
   queueInput(climb, { t: 'ask-life', to: 'nell' });
   step(climb);
   expect(climb.lines.some((l) => l.reason === 'private-conversation')).toBe(true);
-  const exported = exportClimb(season.start!, climb, '2.18.0');
+  const exported = exportClimb(season.start!, climb, '2.21.0');
   expect(snapshot(replayExport(exported))).toBe(exported.state);
 });
 
@@ -109,7 +109,7 @@ it('a played finished hut chapter waits for actual rest, releases mountain aims,
   expect(person.activity).toBeNull();
   expect(climb.journal.some((j) => j.text.includes('You waited at the hut'))).toBe(true);
   await expect(climberTransfer(person)).resolves.toHaveProperty('transfer.castPassport', DIALECT);
-  const exported = exportClimb(season.start ?? '', climb, '2.18.0');
+  const exported = exportClimb(season.start ?? '', climb, '2.21.0');
   expect(snapshot(replayExport(exported))).toBe(exported.state);
 });
 
