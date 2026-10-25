@@ -294,7 +294,8 @@ export class Game {
 
   private async resume(sv: Save): Promise<void> {
     try {
-      if (sv.engine !== ENGINE_VERSION) throw new Error('Older edition. Start fresh.');
+      if (sv.engine !== ENGINE_VERSION)
+        throw new Error('This save comes from an older edition. Start a new game.');
       if (sv.season.chapter) checkChapter(sv.season.chapter);
       const start = sv.start || sv.season.start || '';
       validateSeasonStart(sv.season.seed, sv.season.chapter, sv.season.past ?? [], start);
@@ -540,23 +541,26 @@ export class Game {
             ? `${memberOf(inp.to).name} and ${memberOf(inp.with).name}`
             : memberOf(inp.to).name;
       const what: Record<string, string> = {
-        climb: 'on we go',
-        descend: 'we turn back',
+        climb: 'keep climbing',
+        descend: 'turn back',
         rest: 'take a rest',
         eat: 'eat something',
         wait: 'wait here',
-        rope: `rope up with ${inp.with ? memberOf(inp.with).name : ''}`,
+        rope: `tie a rope between yourself and ${inp.with ? memberOf(inp.with).name : ''}`,
         pack: 'give me your pack',
         ahead: 'go on ahead and call down what you see',
         escort: `go down with ${inp.with ? memberOf(inp.with).name : 'them'}`,
-        gather: 'close up and wait for each other',
+        gather: 'come together and wait for each other',
       };
-      const tone = inp.force === 'ask' ? '?' : inp.force === 'urge' ? '.' : '. Now.';
-      words = `${who}, ${what[inp.act] ?? inp.act}${tone}`;
+      const tone = inp.force === 'ask' ? '?' : inp.force === 'urge' ? '.' : '. Do it now.';
+      words =
+        inp.force === 'ask'
+          ? `${who}, will you ${what[inp.act] ?? inp.act}?`
+          : `${who}, ${what[inp.act] ?? inp.act}${tone}`;
     } else if (inp.t === 'tell') words = FACTS[inp.fact].words.replace(/^./, (x) => x.toUpperCase());
     else if (inp.t === 'promise') words = `We turn back at ${inp.hour}:00, wherever we are.`;
-    else if (inp.t === 'share') words = 'Here, have some of mine.';
-    else if (inp.t === 'fix') words = 'Wait, I’ll fix a rope.';
+    else if (inp.t === 'share') words = 'Here, have some of my food.';
+    else if (inp.t === 'fix') words = 'Wait. I will secure a rope to the route.';
     else if (inp.t === 'scout') words = 'Wait here. I’ll go and look.';
     if (words) this.bubble('leader', words, 'mine');
     if (this.climb.unheard.includes(this.climb.inputs.length - 1))
@@ -597,7 +601,7 @@ export class Game {
     const trust = p ? (voiceOf(p, 'leader')?.trust ?? 0.5) : 0.5;
     const was = this.trustSeen.get(l.who) ?? trust;
     this.trustSeen.set(l.who, trust);
-    const turned = trust < was - 0.01 ? ` (${memberOf(l.who).they} looks away)` : '';
+    const turned = trust < was - 0.01 ? ` (${memberOf(l.who).they} looks away.)` : '';
     this.bubble(l.who, l.says + turned, cls);
     this.slow();
   }
@@ -692,7 +696,7 @@ export class Game {
   private showNote(n: Note): void {
     this.note = n;
     this.hinting = false;
-    this.noteEl.innerHTML = `<button aria-label="dismiss">×</button><span class="note-copy">${bold(n.text)}</span>`;
+    this.noteEl.innerHTML = `<button aria-label="Dismiss this note">×</button><span class="note-copy">${bold(n.text)}</span>`;
     const btn = this.noteEl.querySelector('button');
     if (btn) btn.onclick = () => this.dismissNote();
     if (n.unlock) markSeen(this.disc, { ...n, id: `${n.id}:unlock` });
@@ -735,14 +739,14 @@ export class Game {
       phase === 'title'
         ? '<a href="https://human.adamwhite.work/games/">All games</a>'
         : esc(
-            `${m?.name ?? ''} · ${phase === 'debrief' ? 'read back' : phase === 'season' ? 'the season' : clock(c.minute)}${phase === 'hut' ? ' · at the hut' : c.promise ? ` · turn at ${c.promise.hour}` : ''}`,
+            `${m?.name ?? ''} · ${phase === 'debrief' ? 'today’s results' : phase === 'season' ? 'the season' : clock(c.minute)}${phase === 'hut' ? ' · at the hut' : c.promise ? ` · turn back at ${c.promise.hour}:00` : ''}`,
           );
     const minute = c.minute % 1440;
     this.dayBar.style.setProperty('--dusk', `${(((m?.duskMinuteOfDay ?? 1170) - 240) / 1140) * 100}%`);
     this.dayBar.innerHTML = `<span class="day-dawn">04</span><span class="day-dusk"></span><span class="day-now" style="left:${Math.max(0, Math.min(100, ((minute - 240) / 1140) * 100))}%"></span>${c.promise ? `<span class="day-promise" aria-label="Turn at ${c.promise.hour}:00" style="left:${((c.promise.hour * 60 - 240) / 1140) * 100}%"></span>` : ''}`;
     this.dayBar.setAttribute(
       'aria-label',
-      `Daylight, ${clock(c.minute)}${c.promise ? `, promised turn ${c.promise.hour}:00` : ''}`,
+      `Daylight, ${clock(c.minute)}${c.promise ? `, promised time to turn back, ${c.promise.hour}:00` : ''}`,
     );
     this.paceEl.textContent =
       this.infoEl || this.menuEl || this.pageOpen()
@@ -852,17 +856,23 @@ export class Game {
         x.name,
         'person',
         far,
-        mem.homeAt !== null ? 'at hut' : far ? 'too far' : mood ? `looks ${mood}` : '',
+        mem.homeAt !== null
+          ? `${x.they === 'she' ? 'She' : 'He'} is at the hut.`
+          : far
+            ? `${x.they === 'she' ? 'She' : 'He'} cannot hear you.`
+            : mood
+              ? `${x.they === 'she' ? 'She' : 'He'} looks ${mood}.`
+              : '',
       );
     }
     const label = h('div', 'label');
     const tgt = this.target === 'all' ? 'everyone' : memberOf(this.target).name;
     label.innerHTML =
       this.panel === 'partner'
-        ? `<span>rope ${esc(tgt)} to whom?</span>`
+        ? `<span>Who should tie a rope to ${esc(tgt)}?</span>`
         : this.panel === 'force' && this.verb === 'rope' && this.partner
-          ? `<span>rope ${esc(tgt)} to ${esc(memberOf(this.partner).name)}: how hard?</span>`
-          : `<span>to ${esc(tgt)}</span><span>${c.members.some((x) => x.ropedTo) ? 'roped' : ''}</span>`;
+          ? `<span>How firmly will you ask ${esc(tgt)} to tie a rope to ${esc(memberOf(this.partner).name)}?</span>`
+          : `<span>Speak to ${esc(tgt)}</span><span>${c.members.some((x) => x.ropedTo) ? 'Some people are tied to a partner.' : ''}</span>`;
     if (this.panel === 'force')
       label.innerHTML = `<span>${esc(tgt)}: ${esc(this.requestName(this.verb ?? 'climb'))}</span>`;
     const cancel = h('button', 'sheet-back', '←');
@@ -908,7 +918,7 @@ export class Game {
       const bar = h(
         'div',
         'ask-bar hurt',
-        `<span><b>${due.hour}:00</b>, the hour you promised.</span><div class="call-names"><span>In earshot</span>${due.near.map((id) => `<span class="chip">${esc(memberOf(id).name)}</span>`).join('') || '<span>Nobody</span>'}</div><div class="call-names"><span>Too far to hear</span>${due.far.map((id) => `<span class="chip far">${esc(memberOf(id).name)}</span>`).join('') || '<span>Nobody</span>'}</div>`,
+        `<span>It is <b>${due.hour}:00</b>, the time you promised to turn back.</span><div class="call-names"><span>In earshot</span>${due.near.map((id) => `<span class="chip">${esc(memberOf(id).name)}</span>`).join('') || '<span>Nobody</span>'}</div><div class="call-names"><span>Too far to hear</span>${due.far.map((id) => `<span class="chip far">${esc(memberOf(id).name)}</span>`).join('') || '<span>Nobody</span>'}</div>`,
       );
       const all = h('button', 'force', 'we all turn');
       all.onclick = () =>
@@ -931,7 +941,7 @@ export class Game {
         `ask-bar${near ? '' : ' faint'}`,
         near
           ? `<span><b>${esc(nm)}</b> wants to go down. Who goes with ${obj}?${queue.length > 1 ? ` <small>(${queue.length - 1} more waiting)</small>` : ''}</span>`
-          : `<span><b>${esc(nm)}</b> is calling from ${below ? 'below' : 'above'}, too far to make out.</span>`,
+          : `<span><b>${esc(nm)}</b> is calling from ${below ? 'below' : 'above'}, too far away for you to hear the words.</span>`,
       );
       for (const o of c.members) {
         if (o.id === asking.id || o.homeAt !== null || !canHear(c, o.id)) continue;
@@ -983,7 +993,7 @@ export class Game {
         const talk = h(
           'button',
           'btn',
-          `Ask ${esc(tgt)} about ${esc(DISCOVERIES[this.target]?.topic ?? 'their life')}`,
+          `Ask ${esc(tgt)} about ${esc(DISCOVERIES[this.target]?.displayTopic ?? DISCOVERIES[this.target]?.topic ?? 'their life')}`,
         );
         talk.disabled = !this.heardTarget();
         talk.onclick = () => this.send({ t: 'ask-life', to: this.target });
@@ -1099,7 +1109,7 @@ export class Game {
           'rope',
           ok && one && !memberState(c, this.target).ropedTo,
           choose('rope'),
-          chooseOne || (!ok ? unheard : 'Already tied to a partner.'),
+          chooseOne || (!ok ? unheard : 'They are already tied to a partner.'),
         ),
       );
     if (has(this.disc, 'pack')) {
@@ -1176,11 +1186,9 @@ export class Game {
         'with',
         one
           ? memberState(c, one.id).homeAt !== null
-            ? `${one.name} is down`
+            ? `${one.name} is at the hut`
             : `walk to ${one.name}`
-          : L.follow === 'party'
-            ? 'with them'
-            : 'stay with them',
+          : 'stay with them',
         'all',
         !one || memberState(c, one.id).homeAt === null,
         () =>
@@ -1207,7 +1215,7 @@ export class Game {
             } else this.send({ t: 'scout' });
           },
           L.scouting
-            ? 'Already looking; wait for your return.'
+            ? 'You are already inspecting a path. Wait until you return.'
             : L.move
               ? 'Stop at a junction first.'
               : 'There is no path above you to inspect.',
@@ -1255,7 +1263,7 @@ export class Game {
           Boolean(fixable),
           () => this.send({ t: 'fix' }),
           L.fixing
-            ? 'Already fixing; wait until done.'
+            ? 'You are already securing a rope. Wait until you finish.'
             : L.move
               ? 'Stop below a route where you can secure a rope.'
               : 'There is nowhere above you to secure another rope.',
@@ -1306,7 +1314,7 @@ export class Game {
         : minutes < 10
           ? 'under ten minutes'
           : minutes < 20
-            ? 'about a quarter-hour'
+            ? 'about fifteen minutes'
             : minutes < 40
               ? 'about half an hour'
               : 'over half an hour';
@@ -1340,8 +1348,8 @@ export class Game {
           'p',
           'force-reason',
           this.target !== 'all' && memberState(this.climb, this.target).homeAt !== null
-            ? 'Back at the hut for today; cancel this request.'
-            : 'Out of earshot; cancel and walk to them.',
+            ? 'They are back at the hut for today. Cancel this request.'
+            : 'They are too far away to hear you. Cancel this request and walk to them.',
         ),
       );
     g.append(
@@ -1367,7 +1375,7 @@ export class Game {
           eat: 'eat',
           wait: 'wait',
           rope: 'rope up',
-          pack: 'take pack',
+          pack: 'give you their pack',
           ahead: 'go ahead',
           escort: 'go down together',
           gather: 'close up',
@@ -1404,7 +1412,11 @@ export class Game {
       if (answers.length) box.append(more);
       else
         box.append(
-          h('p', '', c.unheard.includes(index) ? 'Nobody heard the promise.' : 'Awaiting their answers.'),
+          h(
+            'p',
+            '',
+            c.unheard.includes(index) ? 'Nobody heard the promise.' : 'You are waiting for their answers.',
+          ),
         );
       slot.append(box);
       return slot;
@@ -1420,13 +1432,13 @@ export class Game {
     const label = this.requestName(input.act);
     const action = (
       {
-        climb: 'climbing on',
+        climb: 'climbing farther',
         descend: 'turning back',
         rest: 'resting',
         eat: 'eating',
         wait: 'waiting',
         rope: 'roping up',
-        pack: 'taking the pack',
+        pack: 'giving you their pack',
         ahead: 'going ahead',
         escort: 'going down together',
         gather: 'closing up',
@@ -1435,7 +1447,7 @@ export class Game {
     const response = (line: Line): string => {
       if (line.verdict === 'assented') return `agreed to ${label}`;
       if (line.verdict === 'complied') return `agreed under pressure to ${label}`;
-      if (line.verdict === 'deferred') return `put off ${action}`;
+      if (line.verdict === 'deferred') return `asked to delay ${action}`;
       if (line.verdict === 'refused') return `refused ${action}`;
       if (line.verdict === 'modified') return `offered another action instead of ${action}`;
       return `heard ${label}`;
@@ -1455,7 +1467,13 @@ export class Game {
       const descending = c.members.filter((member) => member.move?.dir === 'down').map((member) => member.id);
       const names = [...(turned ? ['you'] : []), ...descending.map((id) => memberOf(id).name)];
       box.append(
-        h('p', '', names.length ? `Descending: ${esc(names.join(', '))}.` : 'Nobody is descending yet.'),
+        h(
+          'p',
+          '',
+          names.length
+            ? `${esc(names[0] === 'you' ? ['You', ...names.slice(1)].join(', ') : names.join(', '))} ${names.length === 1 && names[0] !== 'you' ? 'is' : 'are'} walking down.`
+            : 'Nobody is descending yet.',
+        ),
       );
     } else {
       const accepted = answers.filter((line) => ['assented', 'complied'].includes(line.verdict));
@@ -1464,8 +1482,8 @@ export class Game {
           'p',
           'request-acknowledgement',
           accepted.length
-            ? `${esc(label[0]?.toUpperCase() + label.slice(1))} accepted: ${esc(namesOf(accepted.map((line) => line.who)))}.`
-            : `${esc(label[0]?.toUpperCase() + label.slice(1))} requested.`,
+            ? `${esc(namesOf(accepted.map((line) => line.who)))} agreed to ${esc(label)}.`
+            : `You asked them to ${esc(label)}.`,
         ),
       );
     }
@@ -1481,7 +1499,11 @@ export class Game {
       if (input.act === 'rope') box.querySelector('.request-acknowledgement')?.remove();
     } else if (!answers.length)
       box.append(
-        h('p', '', c.unheard.includes(index) ? 'Nobody heard the request.' : 'Awaiting their answers.'),
+        h(
+          'p',
+          '',
+          c.unheard.includes(index) ? 'Nobody heard the request.' : 'You are waiting for their answers.',
+        ),
       );
     if (answers.length) {
       const more = this.answersButton(answers.length, index);
@@ -1503,16 +1525,12 @@ export class Game {
             close
               ? `${esc(memberOf(a.id).name)} and ${esc(memberOf(b.id).name)} are close enough to rope up.`
               : walking.length
-                ? `${esc(namesOf(walking.map((m) => m.id)))} ${walking.length === 1 ? 'is' : 'are'} meeting at ${esc(memberOf(a.id).name)}’s position until ${clock(walking[0]?.gather?.until ?? c.minute)}; not together yet.`
+                ? `${esc(namesOf(walking.map((m) => m.id)))} ${walking.length === 1 ? 'is' : 'are'} meeting at ${esc(memberOf(a.id).name)}’s position until ${clock(walking[0]?.gather?.until ?? c.minute)}. They are not together yet.`
                 : 'They are still apart. Their answers are recorded above.',
           ),
         );
         if (unheard) {
-          const go = h(
-            'button',
-            'force gather-pair',
-            `Walk to ${esc(memberOf(unheard.id).name)}; out of earshot`,
-          );
+          const go = h('button', 'force gather-pair', `Walk to ${esc(memberOf(unheard.id).name)} to speak`);
           go.onclick = () => this.send({ t: 'lead', dir: 'near', who: unheard.id });
           box.append(go);
         }
@@ -1672,14 +1690,14 @@ export class Game {
     }
     const copy =
       this.pageKind === 'title' && this.pageOpen()
-        ? '<h2>The season</h2><p>Ezra led them for eleven summers. This year they asked you to lead.</p><p>Three mountains, one season. They can say no.</p><p>Plays offline once loaded. Install it from your browser’s menu.</p>'
+        ? '<h2>The season</h2><p>Ezra led them for eleven summers. This year they asked you to lead.</p><p>You will climb three mountains this season. Each person can say no.</p><p>You can play offline after the game loads. Install it from your browser’s menu.</p>'
         : this.pageKind === 'hut' && this.pageOpen()
-          ? '<h2>At the hut</h2><p>A promised return time matters to you and the party.</p><p>Keeping it is remembered, and so is breaking it.</p><p>“We’ll see” promises nothing.</p>'
+          ? '<h2>At the hut</h2><p>A promised return time matters to you and the party.</p><p>They remember whether you keep that promise.</p><p>“We’ll see” promises nothing.</p>'
           : this.pageOpen()
-            ? '<h2>The notebook</h2><p>The tally counts twice the people home by dark plus summit visits.</p><p>It is the game’s convention, not a measure of people.</p><p>The night at the hut is voiced from the journal and changes nothing.</p>'
+            ? '<h2>The notebook</h2><p>The total counts each person who returned by dark twice. It adds one for each summit visit.</p><p>This is how the game counts the day. It does not measure a person’s worth.</p><p>The conversation at the hut uses facts from the journal. It does not change what happened.</p>'
             : this.panel === 'calls' || (this.climb && (hurtCall(this.climb) || promiseDue(this.climb)))
-              ? '<h2>Calls</h2><p>A fall far off needs you to walk there.</p><p>Sending someone down with a friend only ties a rope if they are close.</p><p>People out of earshot cannot hear you.</p>'
-              : '<h2>Asking</h2><p>Your voice reaches only those in earshot. Dimmed names are too far.</p><p>Ask lets them choose freely. Urge puts more pressure on them. Insist becomes available after a refusal and costs trust.</p><p>The bottom row is you: where you walk, they may follow.</p><p>Their posture suggests how they feel. It is an estimate.</p>';
+              ? '<h2>Calls</h2><p>If someone falls far away, you need to walk to them.</p><p>If you send someone down with a friend, they can only tie a rope between them when they are close.</p><p>People who are far away cannot hear you.</p>'
+              : '<h2>Asking</h2><p>Only people nearby can hear you. A dimmed name means the person is too far away.</p><p>Ask lets them choose freely. Urge puts more pressure on them. Insist becomes available after a refusal and costs trust.</p><p>The bottom row controls your own actions. People may follow where you walk.</p><p>Their posture suggests how they feel. It is an estimate.</p>';
     const backdrop = h(
       'div',
       'info-backdrop',
@@ -1787,7 +1805,7 @@ export class Game {
       assented: `agreed to ${action}`,
       complied: `agreed under pressure to ${action}`,
       refused: `refused to ${action}`,
-      deferred: `asked to ${action} later`,
+      deferred: `asked to delay the request to ${action}`,
       modified: `offered another action when asked to ${action}`,
       heard: `${input?.t === 'promise' ? 'heard your promise to' : 'heard your request to'} ${action}`,
     };
@@ -1821,7 +1839,7 @@ export class Game {
     this.openPage(
       `<div class="page-body feedback-body"><button class="btn" data-feedback-back>← Back</button><h1>Feedback</h1><p>Send a note about this game.</p><div class="feedback-verdicts">${[
         ['keep', "I'd keep playing"],
-        ['mixed', 'Not sure'],
+        ['mixed', 'I am not sure'],
         ['quit', "I'd stop here"],
       ]
         .map(
@@ -1830,7 +1848,7 @@ export class Game {
         )
         .join(
           '',
-        )}</div><label class="feedback-note">What happened? What did you want to do? What got in the way?<textarea rows="4" data-feedback-note></textarea></label><div class="feedback-name"><label>Name (optional)<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to use an unnamed device id.</p></div><div><p>We send your note and any verdict or name you add. When Recording is on, we also include this run. Recorded play is linked across games on this device.</p>${this.labTools ? `<pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre>` : ''}<a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><div data-feedback-consent></div><p data-feedback-status role="status"></p>${this.labTools ? `<button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Download this run</button>` : ''}</div><div class="page-actions"><button class="btn go" data-feedback-send>Submit</button></div>`,
+        )}</div><label class="feedback-note">What happened? What did you want to do? What got in the way?<textarea rows="4" data-feedback-note></textarea></label><div class="feedback-name"><label>Name (optional)<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to use an unnamed identifier for this device.</p></div><div><p>We send your note and any verdict or name you add. When Recording is on, we also include this run. Recorded play is linked across games on this device.</p>${this.labTools ? `<pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre>` : ''}<a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><div data-feedback-consent></div><p data-feedback-status role="status"></p>${this.labTools ? `<button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Download this run</button>` : ''}</div><div class="page-actions"><button class="btn go" data-feedback-send>Submit</button></div>`,
       (el) => {
         let verdict = '';
         let sent = false;
@@ -1905,7 +1923,7 @@ export class Game {
     const tops = facts.filter((f) => f.summit).length;
     box.innerHTML =
       this.reckoningFacts.length > 0
-        ? `<button class="btn" data-see-tally aria-expanded="false" aria-controls="reckoning-tally">See the tally</button><div id="reckoning-tally" hidden><p><b>Notebook total: ${2 * home + tops}</b> = 2 × ${home} home by dark + summit visits: ${tops}.</p><p class="caption">This game’s reckoning for ${this.season.over ? 'the completed climbs this season' : 'this completed climb'}; not a measure of people.</p></div>`
+        ? `<button class="btn" data-see-tally aria-expanded="false" aria-controls="reckoning-tally">See the tally</button><div id="reckoning-tally" hidden><p><b>Notebook total: ${2 * home + tops}</b> = 2 × ${home} home by dark + summit visits: ${tops}.</p><p class="caption">This total counts recorded outcomes for ${this.season.over ? 'the completed climbs this season' : 'this completed climb'}. It does not measure a person’s worth.</p></div>`
         : '';
     box.querySelector('[data-see-tally]')?.addEventListener('click', (event) => {
       const tally = box.querySelector<HTMLElement>('#reckoning-tally');
@@ -1954,7 +1972,7 @@ export class Game {
     const back = () => (this.climb ? this.closePage() : this.titlePage());
     if (!this.labTools) return;
     this.openPage(
-      `<div class="page-body"><h1>The people</h1><p>${esc(this.continuity.status)}</p><p>Continuity stays in this browser. It is separate from lab recording. A loaded season keeps its pinned people.</p><label><input type="checkbox" data-continuity ${this.continuity.shelf.enabled ? 'checked' : ''}> Use continuing people in a new season</label><p><a href="https://human.adamwhite.work/lab/people/">Inspect or export browser histories</a></p>${CAST.map((c) => `<p><b>${esc(c.name)}</b> · ${c.age} · ${esc(c.work)} ${esc(FAMILY[c.castId.split('.')[2] ?? ''] ?? '')}</p>`).join('')}${this.climb ? `<h2>Ask in private</h2><p>Only people in earshot can answer. They may keep a subject private.</p>${MEMBERS.map((m) => `<button class="btn" data-life="${m.id}" ${canHear(this.climb, m.id) ? '' : 'disabled'}>${esc(m.name)}: ${esc(DISCOVERIES[m.id]?.topic ?? 'talk')}</button>`).join('')}<h2>Leave this chapter</h2><p>Finish this climb before saving a person for another chapter. Injuries, active tasks and obligations can still refuse departure. A fresh branch is an explicit alternative; it does not continue an old branch.</p><select data-person>${CAST.map((c) => `<option value="${c.castId}">${esc(c.name)}</option>`).join('')}</select><button class="btn" data-release>Ask to end this person’s mountain chapter</button><button class="btn" data-checkpoint>Save this person at the finished climb</button><button class="btn" data-fork>Save an explicit fresh branch</button><button class="btn" data-export>Download this run</button>` : ''}<p><label>Load a current Rope run<input type="file" accept="application/json" data-import></label></p><p data-person-status role="status"></p><p>Loaded files remain file-origin through local save/reload. Their embedded ownership receipts are never acquired.</p></div><div class="page-actions"><button class="btn go" data-back>Back</button></div>`,
+      `<div class="page-body"><h1>The people</h1><p>${esc(this.continuity.status)}</p><p>Continuity stays in this browser. It is separate from lab recording. A loaded season keeps the people it was saved with.</p><label><input type="checkbox" data-continuity ${this.continuity.shelf.enabled ? 'checked' : ''}> Use continuing people in a new season</label><p><a href="https://human.adamwhite.work/lab/people/">Inspect or export browser histories</a></p>${CAST.map((c) => `<p><b>${esc(c.name)}</b> · ${c.age} · ${esc(c.work)} ${esc(FAMILY[c.castId.split('.')[2] ?? ''] ?? '')}</p>`).join('')}${this.climb ? `<h2>Ask in private</h2><p>Only people in earshot can answer. They may keep a subject private.</p>${MEMBERS.map((m) => `<button class="btn" data-life="${m.id}" ${canHear(this.climb, m.id) ? '' : 'disabled'}>${esc(m.name)}: ${esc(DISCOVERIES[m.id]?.displayTopic ?? DISCOVERIES[m.id]?.topic ?? 'talk')}</button>`).join('')}<h2>Leave this chapter</h2><p>Finish this climb before saving a person for another chapter. Injuries, unfinished tasks and responsibilities can still prevent departure. You can instead start a separate history. It does not continue an existing history.</p><select data-person>${CAST.map((c) => `<option value="${c.castId}">${esc(c.name)}</option>`).join('')}</select><button class="btn" data-release>Ask to end this person’s mountain chapter</button><button class="btn" data-checkpoint>Save this person at the finished climb</button><button class="btn" data-fork>Save an explicit fresh branch</button><button class="btn" data-export>Download this run</button>` : ''}<p><label>Load a current Rope run<input type="file" accept="application/json" data-import></label></p><p data-person-status role="status"></p><p>A run loaded from a file remains a file import after you save and reload it. Importing it does not give this run control over its people’s saved browser histories.</p></div><div class="page-actions"><button class="btn go" data-back>Back</button></div>`,
       (el) => {
         const status = el.querySelector<HTMLElement>('[data-person-status]');
         if (!status) return;
@@ -1999,10 +2017,11 @@ export class Game {
             if (!file) return;
             const raw = JSON.parse(await file.text());
             if (raw.game !== 'rope' || raw.engine !== FRAMEWORK_VERSION)
-              throw new Error('Unsupported export edition. Start fresh.');
+              throw new Error('This export comes from an unsupported edition. Start a new game.');
             if (raw.chapter) checkChapter(raw.chapter);
             const c = replay(raw.start, raw.inputs, JSON.parse(raw.state).minute);
-            if (snapshot(c) !== raw.state) throw new Error('Export replay differs.');
+            if (snapshot(c) !== raw.state)
+              throw new Error('Replaying this export produced a different result.');
             const season = validateSeasonStart(c.seed, raw.chapter, raw.past ?? [], raw.start);
             await this.continuity.restoreOwnership(
               { season, climb: c },
@@ -2027,7 +2046,7 @@ export class Game {
     const sv = this.load();
     const cont = sv && !sv.season.over;
     this.openPage(
-      `<div class="title-scene"><h1>The Rope</h1><p class="sub">Five people will climb three mountains.</p>${this.peaksSvg(cont ? sv.season.history.length : 0)}</div><div class="page-body"><p class="title-goal">Lead them up and bring them home. They can say no.</p>${cont ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}<div data-new-confirm hidden><p>The season in your notebook will be lost.</p><button class="btn" data-yes>Start new game</button><button class="btn" data-no>No</button></div></div><div class="page-actions">${cont ? '<button class="btn go" data-a="continue">Resume</button>' : ''}<button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'New game' : 'New game'}</button>${this.footer()}</div>`,
+      `<div class="title-scene"><h1>The Rope</h1><p class="sub">Five people will climb three mountains.</p>${this.peaksSvg(cont ? sv.season.history.length : 0)}</div><div class="page-body"><p class="title-goal">Lead them up and bring them home. They can say no.</p>${cont ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}<div data-new-confirm hidden><p>Starting a new game replaces your saved season.</p><button class="btn" data-yes>Start new game</button><button class="btn" data-no>No</button></div></div><div class="page-actions">${cont ? '<button class="btn go" data-a="continue">Resume</button>' : ''}<button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'New game' : 'New game'}</button>${this.footer()}</div>`,
       (el) => {
         el.querySelector('[data-a="continue"]')?.addEventListener('click', () => {
           if (sv) this.resume(sv);
@@ -2060,6 +2079,7 @@ export class Game {
       <p class="plan">${[12, 13, 14]
         .map((hr) => `<button class="btn" data-hour="${hr}">We turn at ${hr}:00</button>`)
         .join('')}<button class="btn" data-a="go">We'll see</button></p>
+      <details><summary>Route names</summary><p>${c.mountain === 'hollin' ? 'A moraine is a slope of rocks left by a glacier. A col is a low point between peaks. A gully is a narrow channel in the mountain.' : c.mountain === 'tooth' ? 'Screes are slopes of loose stones. A couloir is a steep snow channel. An arête is a narrow rock ridge. A gendarme is a tall rock tower on a ridge.' : 'A tarn is a small mountain lake. A moraine is a slope of rocks left by a glacier. A bergschrund is a deep gap in the glacier near the mountain.'}</p></details>
       ${c.climbNo > 1 ? `<details><summary>So far ▸</summary>${lines}</details>` : ''}</div>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => {
@@ -2168,7 +2188,7 @@ export class Game {
       <details class="departure"><summary>End a person’s mountain trip</summary><p>You can ask after everyone returns to the hut and finishes their work. Each person can refuse.</p>${MEMBERS.map((member) => `<button class="btn" data-depart="${member.id}">Ask ${esc(member.name)} to end this trip</button>`).join('')}<p data-depart-status role="status"></p></details>
       ${story}
       <h2>That night at the hut</h2>
-      <div class="camp" data-camp><p class="caption">They talk a little over the stove…</p></div>
+      <div class="camp" data-camp><p class="caption">They talk a little beside the stove…</p></div>
       <h2>One thing you said</h2>
       <div class="branch" data-branch><p class="caption">Checking how the outcome changes when one input is removed…</p></div>
       <button class="btn" data-a="journal">The journal ▸</button></div>
@@ -2213,7 +2233,8 @@ export class Game {
       if (b)
         b.innerHTML = `${lines.map((l) => `<p class="hand">${esc(displayText(l))}</p>`).join('')}<p class="caption">${esc(label)}</p>`;
     };
-    const fallback = () => show(campFallback(facts), 'Read from the journal (no model).');
+    const fallback = () =>
+      show(campFallback(facts), 'These lines come from the journal. No language model was used.');
     fetch('/api/camp', {
       method: 'POST',
       body: JSON.stringify(facts),
@@ -2222,7 +2243,10 @@ export class Game {
       .then((r) => (r.ok ? r.json() : null))
       .then((o: { lines?: string[] } | null) => {
         if (o?.lines?.length)
-          show(o.lines, 'Voiced by a small language model from the journal; it changes nothing.');
+          show(
+            o.lines,
+            'A small language model wrote this conversation from the journal. It does not change what happened.',
+          );
         else fallback();
       })
       .catch(fallback);
@@ -2235,7 +2259,7 @@ export class Game {
       if (!el) return;
       el.innerHTML = b
         ? `<p>${esc(displayText(b.sentence))}</p><p class="caption">${esc(displayText(ALTERNATIVE_CAPTION))}</p>`
-        : '<p>Nothing you said, taken back on its own, changed how the day ended for anyone. Their outcomes did not depend on any single input.</p>';
+        : '<p>We checked selected inputs one at a time. We found no change in the recorded outcomes when we removed each of those inputs.</p>';
     };
     if (this.branch !== undefined) {
       show(this.branch);
@@ -2275,7 +2299,7 @@ export class Game {
           .map(([id]) => memberOf(id).name);
         const down = Object.values(x.facts).filter((f) => f.home).length;
         return `<h2>${esc(m?.name ?? '')}</h2>
-          <p>${tops.length ? `${esc(tops.join(', '))} stood on the top.` : 'Nobody reached the top.'} ${down === 5 ? 'Everyone came down.' : `${down} of five were down by dark.`}</p>
+          <p>${tops.length ? `${esc(tops.join(', '))} reached the summit.` : 'Nobody reached the summit.'} ${down === 5 ? 'Everyone returned to the hut by dark.' : `${down} of five people returned to the hut by dark.`}</p>
           ${x.branch ? `<p class="branch">${esc(displayText(x.branch.sentence))}</p>` : ''}
           ${x.notes.map((n) => `<p class="hand">${esc(displayText(n))}</p>`).join('')}`;
       })

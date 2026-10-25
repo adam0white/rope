@@ -11,7 +11,7 @@ for (const mountain of ['hollin', 'kestrel'] as const)
       const c = playScripted(startClimb(seed, 3, undefined, mountain), { turnAt: 12 * 60 });
       const acc = dayAccount(c);
       const facts = factsOf(c);
-      const end = c.journal.filter((j) => /^Everyone was back|^Night came down/.test(j.text)).at(-1);
+      const end = c.journal.filter((j) => /^Everyone was back|^Night fell/.test(j.text)).at(-1);
       expect(end?.text).toBe(acc.line);
       for (const mem of c.members) {
         const f = facts[mem.id];

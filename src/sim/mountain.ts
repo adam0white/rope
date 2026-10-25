@@ -92,24 +92,24 @@ export const HOLLIN: Mountain = {
   startMinuteOfDay: 5 * 60,
   duskMinuteOfDay: 19 * 60 + 30,
   approach: [
-    'Cowbells somewhere below, then nothing but boots on the path.',
-    'The sun found the top of the crag before it found any of you.',
-    'Someone had built a little cairn by the path. Oskar added a stone.',
-    'The meadow grass was soaked; everyone’s socks were wet by the stile.',
+    'You heard cowbells somewhere below. Then you heard only boots on the path.',
+    'Sunlight reached the top of the steep rock face before it reached any of you.',
+    'Someone had built a small pile of stones by the path. Oskar added a stone.',
+    'The meadow grass was soaked. Everyone’s socks were wet by the steps over the fence.',
     'A marmot whistled from the boulders and was gone.',
-    'The path steepened. Talk thinned to the odd word.',
+    'The path grew steeper. People spoke less.',
   ],
   beats: [
     { when: 'start', text: 'Ezra’s map was still pinned up in the hut, his pencil line going up the gully.' },
     {
       when: 'col',
       who: 'tamar',
-      text: 'At the col Tamar looked at the gully for a long time and said nothing.',
+      text: 'At the col, the low point between peaks, Tamar looked at the gully for a long time and said nothing.',
     },
     {
       when: 'summit',
       who: 'bilal',
-      text: 'On the top Bilal took a small tin from his pack, turned it over, and put it back.',
+      text: 'At the summit, Bilal took a small tin from his pack, turned it over, and put it back.',
     },
   ],
   places: [
@@ -225,20 +225,24 @@ export const TOOTH: Mountain = {
   startMinuteOfDay: 4 * 60 + 30,
   duskMinuteOfDay: 19 * 60 + 15,
   approach: [
-    'Larch needles underfoot, soft as a carpet in the dark.',
-    'Through the trees the Tooth showed for a moment, black against grey.',
-    'A stream crossing on wobbling stones. Nobody fell in.',
-    'The wood ended all at once, and the screes began.',
+    'Soft larch needles covered the path in the dark.',
+    'You briefly saw the Tooth through the trees, black against the grey sky.',
+    'You crossed a stream on wobbling stones. Nobody fell in.',
+    'The trees ended suddenly. Loose stones covered the slope ahead.',
     'A rock went clattering down somewhere above, far off to the side.',
-    'The screes slid two steps back for every three.',
+    'For every three steps forward on the loose stones, you slid two steps back.',
   ],
   beats: [
     { when: 'start', text: 'Nobody sat in the chair by the stove. It had been Ezra’s.' },
-    { when: 'notch', who: 'wren', text: 'Wren said Ezra had always said the arête was the honest way up.' },
+    {
+      when: 'notch',
+      who: 'wren',
+      text: 'Wren said Ezra had always called the arête, a narrow rock ridge, the honest way up.',
+    },
     {
       when: 'summit',
       who: 'oskar',
-      text: 'Oskar was quiet on the top for once. He built a small cairn and did not say who it was for.',
+      text: 'Oskar was quiet at the summit for once. He built a small pile of stones and did not say who it was for.',
     },
   ],
   places: [
@@ -270,17 +274,17 @@ export const KESTREL: Mountain = {
   startMinuteOfDay: 4 * 60,
   duskMinuteOfDay: 19 * 60,
   approach: [
-    'Headtorches bobbing in a line along the tarn.',
-    'The ice on the tarn creaked as the first light touched it.',
-    'Frost on the moraine boulders; every hand went into a pocket.',
+    'Headtorches moved in a line along the mountain lake.',
+    'The ice on the mountain lake creaked in the first light.',
+    'Frost covered the boulders left by the glacier. Everyone put their hands in their pockets.',
     'The glacier came into view, grey and enormous, and nobody said anything.',
-    'Crampons on, by the edge of the ice, fingers clumsy with cold.',
-    'Far above, the wall caught the sun.',
+    'You put on crampons, spikes for walking on ice. Your cold fingers made it difficult.',
+    'Sunlight reached the rock wall far above.',
   ],
   beats: [
     {
       when: 'start',
-      text: 'In the hut book, two summers back: “Turned at the shoulder. Wind. Next year. E.”',
+      text: 'In the hut book, Ezra wrote two summers ago: “I turned back at the shoulder because of the wind. I will try again next year. E.”',
     },
     {
       when: 'shoulder',
@@ -290,7 +294,7 @@ export const KESTREL: Mountain = {
     {
       when: 'summit',
       who: 'bilal',
-      text: 'Bilal opened the tin at last. Tea, the cheap kind Ezra liked. They made it on the top, in his mug, and passed it round.',
+      text: 'Bilal opened the tin at last. It held the cheap tea Ezra liked. They made the tea at the summit, in his mug, and passed it around.',
     },
   ],
   places: [

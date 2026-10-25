@@ -123,6 +123,6 @@ it('binds later starts to the actual played prefix', () => {
   const changed = JSON.parse(season.start);
   changed.people[0].traits.honesty = 0.01;
   expect(() => validateSeasonStart(13, undefined, season.past ?? [], JSON.stringify(changed))).toThrow(
-    'start differs',
+    'starting state does not match',
   );
 });

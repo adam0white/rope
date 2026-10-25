@@ -41,9 +41,9 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
     p.castRevision !== cast.revision ||
     p.terminal
   )
-    throw new Error('Unsupported identity, edition or closed branch.');
+    throw new Error('This person belongs to an unsupported identity or edition, or their history is closed.');
   if (!same(preparePersonaLife(p, input.clockMs).life, input.life))
-    throw new Error('Pinned life result differs.');
+    throw new Error('This person’s life history does not match the saved record.');
   const native =
     p.source.game === 'rope' &&
     p.source.rules === RULES &&
@@ -57,7 +57,7 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
     p.transfer.sourceRole === p.castId;
   if (!peer && !native)
     throw new Error(
-      'No registered Rope semantic adapter for this source. Export it or choose fresh local play.',
+      'The Rope cannot continue this person’s history from that game. Export it or choose fresh local play.',
     );
   const portable = validateCalendarPersona(p.transfer.person);
   const sourceId = peer ? p.castId : opening.id;
@@ -68,7 +68,7 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
     portable.person.source.engine !== '2.17.0' ||
     portable.person.name !== cast.name
   )
-    throw new Error('Source role, mapping, engine or name differs.');
+    throw new Error('The person’s original role, history format, simulation version or name does not match.');
   const receipt = p.transfer.checkpoint as Record<string, unknown> | undefined;
   if (
     !receipt ||
@@ -78,15 +78,17 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
     typeof receipt.sha256 !== 'string' ||
     !/^[a-f0-9]{64}$/.test(receipt.sha256)
   )
-    throw new Error('Missing full-source checkpoint receipt.');
+    throw new Error('The original game’s complete saved record has no verification receipt.');
   if (portable.calendar.norms.some((norm) => !DEFAULT_NORMS.some((known) => same(known, norm))))
-    throw new Error('Unknown norm meanings.');
+    throw new Error('This history uses rules of conduct that The Rope does not understand.');
   if (
     [...portable.calendar.commitments, ...portable.calendar.owed].some((c) =>
       [...c.actions, ...(c.violatedBy ?? [])].some((a) => !supportedActions.has(a)),
     )
   )
-    throw new Error('A source obligation has no supported action here. Keep it at source.');
+    throw new Error(
+      'This person has an obligation that they cannot fulfil here. Keep their history in the original game.',
+    );
   const target = restore(snapshot(opening));
   const shifted = structuredClone(portable);
   const offset = target.now - portable.person.source.now;
@@ -103,7 +105,8 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
   }
   if (shifted.calendar.lapse) shifted.calendar.lapse.since += offset;
   const age = portable.person.source.now - portable.person.life.bornAt;
-  if (age < cast.age * 525600) throw new Error('Canonical age provenance differs.');
+  if (age < cast.age * 525600)
+    throw new Error('The person’s recorded age does not match their established history.');
   target.life.bornAt = portable.person.life.bornAt + offset;
   target.body.health = portable.person.health.health;
   target.body.fitness = portable.person.health.fitness;
@@ -114,7 +117,7 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
     shifted.person.skills = {};
     if (skills.length)
       shifted.person.limitations.push(
-        `Commonstead skills stay in source archive: ${skills.join(', ')}. No climbing qualification inferred.`,
+        `These Commonstead skills remain in the original archive: ${skills.join(', ')}. They do not give this person a climbing qualification.`,
       );
   }
   const admitted = admitCalendarPersona(shifted, target, {
@@ -137,7 +140,7 @@ export function checkChapter(chapter: Chapter) {
     new Set(chapter.inputs.map((i) => i.parent.castId)).size !== chapter.inputs.length ||
     !same(Object.keys(chapter.initial).sort(), CAST.map((c) => c.castId.split('.')[2]).sort())
   )
-    throw new Error('Invalid complete initial cast.');
+    throw new Error('The starting party is incomplete or does not match the required people.');
   for (const input of chapter.inputs) {
     const claim = chapter.claims.find((p) => p.castId === input.parent.castId);
     if (
@@ -151,14 +154,16 @@ export function checkChapter(chapter: Chapter) {
       claim.source.rules !== RULES ||
       !same(claim.transfer, { ...input.parent.transfer, life: input.life })
     )
-      throw new Error('Invalid pinned claim.');
+      throw new Error('The saved claim to this person’s history does not match its required record.');
   }
 }
 
 /** Capture an actual idle boundary. Full source stays local; shelf carries only finite projection. */
 export async function climberTransfer(person: Person) {
   if (person.body.injuries.length || person.body.illnesses.length || person.body.downed || !person.body.alive)
-    throw new Error('Health condition stays at source; no offscreen healing.');
+    throw new Error(
+      'This person has a health condition that must remain in the original game. Their health cannot recover during a transfer.',
+    );
   const retained = person.agenda.commitments.filter((c) => isContinuingCommitment(person.agenda, c));
   const owed = person.agenda.owed ?? [];
   const projection = projectCalendarPersona(person, {
@@ -205,10 +210,10 @@ export async function climberTransfer(person: Person) {
       ...projection.person.limitations.slice(0, 4),
       ...(projection.person.limitations.length > 4
         ? [
-            `${projection.person.limitations.length - 4} additional bounded source omissions are listed in the pinned projection and full local archive.`,
+            `The saved summary and full local archive list ${projection.person.limitations.length - 4} more parts of the original history that were left out.`,
           ]
         : []),
-      'Mountain positions, supplies, fictional discoveries, source social memories and transient body/needs remain in the full source archive. Zero-duration calendar adaptation is not travel, healing, payment or qualification.',
+      'Mountain positions, supplies, discoveries, social memories and temporary physical needs remain in the full original archive. Moving a calendar record takes no game time. It does not represent travel, healing, payment or new qualifications.',
     ],
   };
 }

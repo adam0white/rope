@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
-import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { type ClimbState, replay, snapshot } from '../src/sim/climb.ts';
+import { type ClimbState, replay } from '../src/sim/climb.ts';
 import { newSeason } from '../src/sim/season.ts';
 import { Game } from '../src/ui/game.ts';
 import { ownerNight } from './fixtures/owner-night.ts';
+import { proofHash, proseBlanked } from './prose-proof.ts';
 
 // Keep the real clock, inputs and pages; replace only WebGL and the external camp/worker boundaries.
 vi.mock('../src/ui/scene.ts', () => ({
@@ -100,9 +100,11 @@ it('the historical owner input log has a deterministic current-cast replay', () 
   const played = replay(season.start as string, ownerNight.inputs);
   expect(played.minute).toBe(5700);
   expect(played.over).toBe(true);
-  expect(createHash('sha256').update(snapshot(played)).digest('hex')).toBe(
-    '999f0c8ccf48fbe1078a84288b91060732860bb0292fab188c98d601572306c7',
+  // Baseline b1b73bc: only journal text and spoken sentences are blanked.
+  expect(proofHash(proseBlanked(played))).toBe(
+    '44842d714cfd20142e5b095423daf1939911161e19dc1919b607541adfe91774',
   );
+  expect(proofHash(played.people)).toBe('ddd6e6da06ac0a74f09564d28965ec22505ba6fc9775669a5075ef8d9754b9d9');
 });
 
 it.each([false, true])(

@@ -10,51 +10,66 @@ type Pick = readonly string[];
 
 const AFTER: Record<string, Pick> = {
   tamar: [
-    'Once I’ve done {X}. Not before.',
-    '{X} first. Then I’ll think about it.',
+    'I will consider it after I {x}, but not before.',
+    'I need to {x} first. Then I will think about it.',
     'Let me {x} properly first.',
   ],
-  oskar: ['{X} first, we’re so close.', 'After I {x}! Come on.', 'Not yet. Let me {x}, then sure.'],
-  nell: [
-    'Can I just {x} first? Then yes.',
-    'Um, after I {x}? I’d like to.',
-    'After I {x}, if that’s all right.',
+  oskar: [
+    'Let me {x} first. We are so close.',
+    'Let me {x} first! Come on.',
+    'Not yet. Let me {x} first. Then I will do it.',
   ],
-  bilal: ['Let me {x}. Then I’ll listen.', 'After I {x}, my friend.', 'Give me time to {x}, then I’ll come.'],
-  wren: ['After I {x}. I’m not stopping now.', 'Not till I {x}.', 'I’ll {x}. Then ask me again.'],
+  nell: [
+    'Can I just {x} first? Then I will do it.',
+    'Can I {x} first? I would like to.',
+    'Let me {x} first, if that is all right.',
+  ],
+  bilal: [
+    'Let me {x}. Then I’ll listen.',
+    'I will listen after I {x}, my friend.',
+    'Give me time to {x}, then I’ll come.',
+  ],
+  wren: [
+    'Let me {x} first. I’m not stopping now.',
+    'I will not do that until I {x}.',
+    'I’ll {x}. Then ask me again.',
+  ],
 };
 
 const NO: Record<string, Pick> = {
   tamar: ['No.', 'No. I’ve thought about it.', 'I won’t.'],
-  oskar: ['No way.', 'Nope.', 'Not a chance.'],
+  oskar: ['I will not do that.', 'No.', 'I will not agree to that.'],
   nell: ['I’m sorry, no.', 'I don’t think I can.', 'No, sorry.'],
-  bilal: ['Ah, no.', 'Not this time.', 'No, friend.'],
+  bilal: ['Ah, no.', 'I will not do that this time.', 'No, friend.'],
   wren: ['No.', 'Why would I?', 'Forget it.'],
 };
 
 const cap = (t: string) => t.replace(/^./, (c) => c.toUpperCase());
 
 const CANNOT: Record<string, Pick> = {
-  tamar: ['Not from here. Look where we are.', 'I can’t do that here.'],
-  oskar: ['Can’t, not from here.', 'How? Not from here.'],
-  nell: ['I don’t think I can, from here?', 'Sorry, I can’t, not here.'],
-  bilal: ['Not from here, friend.', 'That can’t be done here.'],
-  wren: ['Not from here.', 'Can’t. Look around.'],
+  tamar: ['I cannot do that from here. Look where we are.', 'I can’t do that here.'],
+  oskar: ['I cannot do that from here.', 'How can I do that from here?'],
+  nell: ['I don’t think I can do that from here.', 'Sorry, I cannot do that here.'],
+  bilal: ['I cannot do that from here, friend.', 'That can’t be done here.'],
+  wren: ['I cannot do that from here.', 'I cannot do that here. Look around.'],
 };
 
 const YES: Record<string, Pick> = {
-  tamar: ['All right.', 'Yes. Carefully, though.', 'I’ll come.'],
-  oskar: ['Yes! Let’s go.', 'Finally.', 'On it!'],
-  nell: ['Okay, I’ll try.', 'If you think so.', 'All right, I’m coming.'],
-  bilal: ['Good, good.', 'Lead on, friend.', 'Yes, why not.'],
-  wren: ['Fine.', 'Was going anyway.', 'Sure.'],
+  tamar: ['I will do it.', 'Yes, but we need to be careful.', 'I’ll come.'],
+  oskar: ['Yes! Let’s go.', 'I have been waiting for this.', 'I will do it!'],
+  nell: ['Okay, I’ll try.', 'I will try if you think I should.', 'All right, I’m coming.'],
+  bilal: ['That sounds good.', 'Lead the way, friend.', 'Yes, I will do it.'],
+  wren: ['I will do it.', 'I was going anyway.', 'Yes, I will do it.'],
 };
 const GRUDGING: Record<string, Pick> = {
-  tamar: ['If you insist. I don’t like it.', 'Fine. On your head.'],
-  oskar: ['Ugh. Okay.', 'Fine, fine.'],
-  nell: ['Okay… if I have to.', 'I will, but I’m scared.'],
-  bilal: ['As you say. But I don’t agree.', 'For you, then.'],
-  wren: ['Whatever you say.', 'Fine. Remember I said no.'],
+  tamar: [
+    'I will do it if you insist, but I don’t like it.',
+    'I will do it. You are responsible if this goes wrong.',
+  ],
+  oskar: ['I do not like this, but I will do it.', 'I will do it, then.'],
+  nell: ['Okay, I will do it if I have to.', 'I will, but I’m scared.'],
+  bilal: ['I will do what you say, but I don’t agree.', 'I will do it for you, then.'],
+  wren: ['I will do what you say.', 'I will do it. Remember I said no.'],
 };
 // HF's generic yeses: a voice replaces only these, so a yes that carries a reason ("I trust you") keeps it.
 const PLAIN_YES = /^(Good idea\. On it\.|Fine\.|Alright, I'll do it\.|OK\.|Okay\.|Sure\.)\s*/;

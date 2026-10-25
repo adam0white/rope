@@ -75,16 +75,16 @@ export function newSeason(seed: number, chapter?: Chapter): { season: SeasonStat
     for (const input of chapter.inputs) {
       const id = input.parent.castId.split('.')[2] ?? '';
       const opening = expected[id];
-      if (!opening) throw new Error('Unallocated initial person');
+      if (!opening) throw new Error('This person does not belong in the starting party.');
       expected[id] = admitClimber(input, opening);
     }
     if (canonicalPersona(expected) !== canonicalPersona(chapter.initial))
-      throw new Error('Initial cast differs from its pinned semantic admission.');
+      throw new Error('The starting party does not match the accepted history records.');
   }
   const people = chapter
     ? MEMBERS.map((m) => {
         const p = chapter.initial[m.id];
-        if (!p) throw new Error('Incomplete initial cast');
+        if (!p) throw new Error('The starting party is incomplete.');
         return structuredClone(p);
       })
     : openingParty(seed);
@@ -185,7 +185,7 @@ function aftermath(climb: ClimbState, facts: Facts): void {
       lines.push([
         cap < 0.7
           ? `${m.name} was still hurt from ${f.hurtWhere ?? 'the last climb'}, and came anyway.`
-          : `${m.name}'s knock from ${f.hurtWhere ?? 'the last climb'} had mostly mended.`,
+          : `${m.name}'s minor injury from ${f.hurtWhere ?? 'the last climb'} had mostly healed.`,
         m.id,
       ]);
     const trust = voiceOf(p, LEADER)?.trust ?? 0.5;
@@ -315,18 +315,22 @@ export function validateSeasonStart(
   past: PastClimb[],
   start: string,
 ): SeasonState {
-  if (!Array.isArray(past) || past.length > 2) throw new Error('Unsupported season prefix.');
+  if (!Array.isArray(past) || past.length > 2)
+    throw new Error('This saved history contains an unsupported sequence of earlier climbs.');
   const opening = newSeason(seed, chapter);
   const season = opening.season;
   for (const entry of past) {
-    if (entry.start !== season.start) throw new Error('Season prefix start differs.');
+    if (entry.start !== season.start)
+      throw new Error('An earlier climb starts from a different saved state.');
     const saved = restore(entry.state);
     const played = replay(entry.start, entry.inputs, saved.minute);
-    if (!played.over || snapshot(played) !== entry.state) throw new Error('Season prefix replay differs.');
-    if (!nextClimb(season, played, entry.branch)) throw new Error('Closed season has no next climb.');
+    if (!played.over || snapshot(played) !== entry.state)
+      throw new Error('An earlier climb does not replay to its saved outcome.');
+    if (!nextClimb(season, played, entry.branch))
+      throw new Error('The season has ended, so there is no next climb.');
   }
   if (season.start !== start)
-    throw new Error('Run start differs from its admitted cast and played season prefix.');
+    throw new Error('This climb’s starting state does not match the accepted people and earlier climbs.');
   return season;
 }
 
@@ -390,5 +394,10 @@ export function replayExport(e: PlaytestExport): ClimbState {
     );
     narration = truthfulEscort ? 3 : causes ? 2 : 1;
   }
-  return replay(e.start, e.inputs, saved.minute, narration);
+  const reconstructed = replay(e.start, e.inputs, saved.minute, narration);
+  if (snapshot(reconstructed) !== e.state)
+    throw new Error(
+      'This saved climb uses different narration or rules. Keep its export and start a fresh climb.',
+    );
+  return reconstructed;
 }

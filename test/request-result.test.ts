@@ -87,15 +87,15 @@ it('labels accepted rest as rest and retains each authentic HF answer', async ()
   driver.send({ t: 'say', to: 'all', act: 'rest', force: 'ask' });
   const answers = driver.climb.lines.filter((line) => line.input === 0);
   expect(answers.some((line) => line.verdict === 'assented')).toBe(true);
-  expect(result()?.textContent).toContain('Rest accepted:');
+  expect(result()?.textContent).toContain('agreed to rest.');
   const details = openAnswers();
   for (const line of answers) expect(details?.textContent).toContain(displayText(line.says));
   expect(details?.textContent).toContain('agreed to rest');
-  expect(details?.textContent).toContain('asked to rest later');
+  expect(details?.textContent).toContain('asked to delay the request to rest');
   backToRequests();
   vi.advanceTimersByTime(8500);
   driver.renderSheet(true);
-  expect(result()?.textContent).toContain('Rest accepted:');
+  expect(result()?.textContent).toContain('agreed to rest.');
 });
 
 it('explains we all turn as your descent plus a new urge with renewed HF objections', async () => {
@@ -123,9 +123,9 @@ it('explains we all turn as your descent plus a new urge with renewed HF objecti
   const objection = c.lines.find((line) => line.input === latest && line.who === 'oskar');
   expect(objection?.verdict).toBe('deferred');
   expect(result()?.textContent).toContain('You turned downhill and urged everyone to turn back.');
-  expect(result()?.textContent).toContain('Oskar put off turning back');
+  expect(result()?.textContent).toContain('Oskar asked to delay turning back');
   expect(result()?.textContent).toContain(displayText(objection?.says ?? ''));
-  expect(result()?.textContent).toContain('Descending:');
+  expect(result()?.textContent).toContain('walking down.');
   const accepted = c.lines.filter((line) => line.input === latest && line.verdict === 'assented');
   const answers = openAnswers();
   for (const line of accepted) expect(answers?.textContent).toContain(displayText(line.says));
@@ -139,7 +139,7 @@ it('does not attribute an earlier answer to a new request for the same action', 
   expect(previous).toBeTruthy();
   queueInput(driver.climb, { t: 'say', to: 'oskar', act: 'rest', force: 'urge' });
   driver.renderSheet();
-  expect(result()?.textContent).toContain('Awaiting');
+  expect(result()?.textContent).toContain('waiting for their answers.');
   expect(result()?.textContent).not.toContain(previous?.says);
 });
 
@@ -230,7 +230,7 @@ it('offers a real pair gathering request after distance blocks roping', async ()
   });
   const answers = c.lines.filter((l) => l.input === c.inputs.length - 1);
   expect(answers).toHaveLength(2);
-  expect(result()?.textContent).toContain('Close up');
+  expect(result()?.textContent).toContain('close up');
   const recorded = openAnswers();
   for (const line of answers) expect(recorded?.textContent).toContain(displayText(line.says));
 });

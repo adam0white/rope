@@ -29,7 +29,7 @@ export class Continuity {
   heads: PersonaEnvelope[] = [];
   fileOrigin = false;
   busy = false;
-  status = 'Browser continuity and lab recording are separate choices.';
+  status = 'Saving people’s histories in this browser and recording play for the lab are separate choices.';
   runId: string = crypto.randomUUID();
   sources: SourceArchive[] = [];
   private fileAllowed = false;
@@ -75,7 +75,8 @@ export class Continuity {
     const generation = this.generation;
     try {
       await this.shelf.ready;
-      if (generation !== this.generation) throw new Error('Run changed before admission.');
+      if (generation !== this.generation)
+        throw new Error('The run changed before its people could be prepared.');
       let chapter: Chapter | undefined;
       if (this.shelf.enabled && !localOnly) {
         const result = await claimCastChapterBatch(
@@ -87,7 +88,7 @@ export class Continuity {
             for (const input of inputs) {
               const id = input.parent.castId.split('.')[2] ?? '';
               const opening = initial[id];
-              if (!opening) throw new Error('Unallocated person.');
+              if (!opening) throw new Error('This person is not part of this game’s cast.');
               initial[id] = admitClimber(input, opening);
             }
             return initial;
@@ -102,7 +103,7 @@ export class Continuity {
             claims: result.claims,
           };
       }
-      if (generation !== this.generation) throw new Error('Run changed. No late chapter started.');
+      if (generation !== this.generation) throw new Error('The run changed. No new chapter was started.');
       const state = createGame(seed, chapter);
       this.state = state;
       this.runId = crypto.randomUUID();
@@ -112,10 +113,10 @@ export class Continuity {
       this.fileAllowed = false;
       this.denied = false;
       this.status = chapter
-        ? `Admitted ${chapter.inputs.length} applicable histories in one atomic whole-allocation claim. Other residents are canonical fresh openings.`
+        ? `This season uses ${chapter.inputs.length} saved browser histories. They were all reserved together. Everyone else starts with their original history.`
         : localOnly
-          ? 'Explicit fresh local chapter; browser histories are untouched.'
-          : 'Canonical fresh chapter; no carried histories.';
+          ? 'You started a new local chapter. Saved browser histories have not changed.'
+          : 'This chapter starts with the original cast. It uses no saved browser histories.';
       // Caller installs the prepared state before opening any recording hook.
       return state;
     } finally {
@@ -149,17 +150,18 @@ export class Continuity {
           ),
       )
     )
-      throw new Error('Ownership receipt belongs to another run.');
-    if (generation !== this.generation) throw new Error('Run changed during load.');
+      throw new Error('The saved permission to update these histories belongs to another run.');
+    if (generation !== this.generation) throw new Error('The run changed while it was loading.');
     this.state = state;
     this.heads = heads;
     this.runId = saved?.runId ?? crypto.randomUUID();
     this.fileOrigin = file || saved?.fileOrigin === true;
     this.sources = saved?.sources ?? [];
-    if (JSON.stringify(this.sources).length > maxArchive) throw new Error('Source archive too large.');
+    if (JSON.stringify(this.sources).length > maxArchive)
+      throw new Error('The saved archive is too large to load.');
     this.denied = false;
     this.status =
-      'Restored pinned actors. No current shelf state was read. File imports acquire no embedded ownership.';
+      'The people saved with this run have been restored. Their current browser histories were not loaded. Importing a file gives this run no permission to update those histories.';
   }
   ownership(): Ownership {
     return structuredClone({
@@ -196,7 +198,7 @@ export class Continuity {
     await this.shelf.ready;
     this.shelf.setEnabled(value);
     this.status =
-      'Continuity choice changed. This loaded chapter stays pinned; only a new chapter admits browser histories.';
+      'Your choice about using browser histories has changed. This chapter keeps its current people. Only a new chapter can load browser histories.';
   }
   checkpoint(castId: string, fork = false) {
     const generation = this.generation,
@@ -212,17 +214,20 @@ export class Continuity {
         !state.climb.inputs.length
       )
         throw new Error(
-          'Finish the played climb before releasing a person. Current activities, injuries and obligations still have to pass their source checks.',
+          'Finish this climb before saving a person for another chapter. Their activities, injuries and responsibilities must also allow departure.',
         );
       await this.shelf.ready;
-      if (!current() || !this.shelf.enabled) throw new Error('Continuity is off or run changed.');
+      if (!current() || !this.shelf.enabled)
+        throw new Error('Saving browser histories is off, or the run has changed.');
       const person = state.climb.people.find((p) => castIdOf(p.id) === castId);
-      if (!person || !CAST.some((c) => c.castId === castId)) throw new Error('Not an allocated resident.');
+      if (!person || !CAST.some((c) => c.castId === castId))
+        throw new Error('This person is not part of this game’s cast.');
       const parent = this.heads.find((p) => p.castId === castId);
       let envelope: PersonaEnvelope;
       let raw: unknown;
       if (!person.body.alive) {
-        if (!parent) throw new Error('No owned living branch to close.');
+        if (!parent)
+          throw new Error('This run controls no living history for this person that it can close.');
         if (parent.terminal) return;
         raw = snapshot(person);
         const closed = await closePersonaBranch(parent, this.source(), person.now);
@@ -247,7 +252,7 @@ export class Continuity {
           limitations: captured.limitations,
         });
       }
-      if (!current()) throw new Error('Run changed before checkpoint.');
+      if (!current()) throw new Error('The run changed before the history could be saved.');
       // Preserve full actual source before publication, including failed CAS attempts, local only.
       if (raw) {
         this.sources.push({ revision: envelope.revision, source: envelope.source, snapshot: raw });
@@ -265,7 +270,7 @@ export class Continuity {
       );
       this.key = crypto.randomUUID();
       this.lab.setPersonaRecording(this.key);
-      this.status = `${person.name}: accepted ${envelope.terminal ? 'terminal closure' : 'source checkpoint'}. Unsupported state remains in the local export.`;
+      this.status = `${person.name}: ${envelope.terminal ? 'This history has ended.' : 'The current history has been saved.'} Details that other games cannot use remain in the local export.`;
       this.changed();
       await this.recording();
     });

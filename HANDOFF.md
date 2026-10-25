@@ -30,6 +30,13 @@ Workers AI behavior, caps, fallback and spend are unchanged; no model calls made
 
 # Handoff
 
+## Plain English at source (2026-10-25)
+
+- Remaining: Adam accepts feel. HF package narration remains outside this rewrite and is assigned separately by the owner.
+- Game-authored story, dialogue, facts, outcomes, controls, status and errors now use plain English at their source. Route-name help explains retained climbing place names. Only two display mappings remain for immutable HF commitment labels. HF stays exactly 2.18.0; no model calls were made.
+- Thirty full climbs (all mountains, three seeds and three policies, plus one three-climb season) match baseline b1b73bc after blanking only explicit dialogue/journal/season-note prose. Complete HF state and checkpoint hash chains match separately. Current exports replay exactly. Old exports whose full state differs receive a plain start-fresh error.
+- Baseline-derived rules hashes and current full-state replay remain in tests. Independent Codex review corrected pack-transfer wording and bounded the debrief claim to selected inputs. Evidence, browser self-check, delivery and cleanup: `/Users/abdul/code/.lab-scratch/plain2/rope-report.md`; raw text: `rope-onscreen.txt` beside it.
+
 ## Hint clipping bug hunt (2026-10-23)
 - Remaining: fixed-case browser screenshot and two-minute live play/menu/save/reload smoke at 360×690 and 1280×800. Existing Chrome disconnected after the before screenshot; no isolated browser fallback was launched. Adam still accepts feel.
 - The flagging tutorial was cut by a two-line clamp and a 60 px note height cap. Both constraints are removed so the full instruction wraps. Hint wording, simulation, difficulty, cast and HF remain unchanged.

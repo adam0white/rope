@@ -114,7 +114,7 @@ it('uses one top menu and information trigger, with the promise and all six reci
   await Promise.resolve();
   await Promise.resolve();
   tap('[data-hour="12"]');
-  expect(query('.where').textContent).toContain('turn at 12');
+  expect(query('.where').textContent).toContain('turn back at 12');
   expect(query('.day-promise').getAttribute('aria-label')).toContain('12:00');
   expect(query('.day-bar').style.getPropertyValue('--dusk')).toBe(`${((1170 - 240) / 1140) * 100}%`);
   expect(document.querySelectorAll('.targets .chip')).toHaveLength(6);
@@ -189,7 +189,7 @@ it('a company call opens from its banner and a promised hour takes over the shee
   if (!far || !mountain) throw new Error('Missing fixture');
   far.pos = { place: mountain.summit, leg: null, t: 0 };
   d.renderSheet();
-  expect(query('.call-takeover').textContent).toContain('the hour you promised');
+  expect(query('.call-takeover').textContent).toContain('the time you promised');
   expect(query('.call-takeover').textContent).toContain('Too far');
   expect(document.querySelector('.sheet .people-verbs')).toBeNull();
 });
@@ -403,9 +403,7 @@ it.each([false, true])(
     const line = game.climb.lines.at(-1);
     expect(game.climb.inputs.at(-1)).toMatchObject({ t: 'release-person', to: 'oskar' });
     expect(line?.verdict).toBe(refusal ? 'refused' : 'assented');
-    expect(document.querySelector('[data-depart-status]')?.textContent).toContain(
-      line?.says.replace(' — ', ': '),
-    );
+    expect(document.querySelector('[data-depart-status]')?.textContent).toContain(line?.says);
     if (refusal) expect(game.climb.journal.at(-1)?.text).not.toContain('agreed to end');
   },
 );

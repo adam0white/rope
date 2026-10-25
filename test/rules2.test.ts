@@ -7,13 +7,13 @@ import { playScripted } from './script.ts';
 // HF 2.8.0 host rules (docs/findings.md, 2026-10-19): fullness, no "step aside" offer, alongside and reconsider.
 
 it.each(['owner-2026-10-18-hollin-334144833', 'owner-2026-10-19-kestrel-334144833'])(
-  '%s replays its complete saved JSON state exactly under rules 1',
+  '%s refuses outdated narration with a clear fresh-climb message',
   (f) => {
     const e = JSON.parse(readFileSync(new URL(`../docs/playtests/${f}.json`, import.meta.url), 'utf8'));
     expect(JSON.parse(e.start).rules).toBeUndefined();
-    const c = replayExport(e);
-    expect(c.rules).toBeUndefined();
-    expect(snapshot(c)).toBe(e.state);
+    expect(() => replayExport(e)).toThrow(
+      'This saved climb uses different narration or rules. Keep its export and start a fresh climb.',
+    );
   },
 );
 
@@ -59,19 +59,18 @@ it('a rules 2 export replays its complete state at the saved minute', () => {
   expect(snapshot(replay(start, s.inputs, s.minute))).toBe(e.state);
 });
 
-it('legacy export replay uses saved words only to identify the narrator revision', () => {
+it('legacy export replay refuses edited saved words instead of treating them as replay output', () => {
   const e = JSON.parse(
     readFileSync(
       new URL('../docs/playtests/owner-2026-10-19-kestrel-334144833.json', import.meta.url),
       'utf8',
     ),
   );
-  const expected = JSON.parse(e.state);
   const edited = JSON.parse(e.state);
   edited.lines[0].says = 'This edited line must never become replay output.';
   edited.journal[0].text = 'This edited journal must never become replay output.';
   e.state = JSON.stringify(edited);
-  expect(JSON.parse(snapshot(replayExport(e)))).toEqual(expected);
+  expect(() => replayExport(e)).toThrow('Keep its export and start a fresh climb.');
 });
 
 it('an unversioned nearby escort tied to someone else replays narrator 3 exactly', () => {

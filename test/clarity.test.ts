@@ -105,7 +105,9 @@ it('keeps mandatory opening story across title and hut below forty words, with c
   await Promise.resolve();
   expect(title + words()).toBeLessThanOrEqual(40);
   button('About this part of the climb').click();
-  expect(document.querySelector('.info-popover')?.textContent).toContain('Keeping it is remembered');
+  expect(document.querySelector('.info-popover')?.textContent).toContain(
+    'They remember whether you keep that promise.',
+  );
   button('Close information').click();
   expect(document.querySelectorAll('[data-hour]')).toHaveLength(3);
 });
@@ -200,7 +202,7 @@ it('updates an open request when the target leaves earshot and when they return'
   expect([...document.querySelectorAll<HTMLButtonElement>('.forces button')].every((b) => b.disabled)).toBe(
     true,
   );
-  expect(document.querySelector('.force-reason')?.textContent).toContain('Out of earshot');
+  expect(document.querySelector('.force-reason')?.textContent).toContain('too far away to hear you');
   nell.pos = near;
   driver.renderSheet(true);
   expect([...document.querySelectorAll<HTMLButtonElement>('.forces button')].every((b) => !b.disabled)).toBe(

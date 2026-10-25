@@ -99,7 +99,7 @@ export function inputPhrase(inp: Input): string {
         eat: 'eat',
         wait: 'wait',
         rope: `rope up with ${inp.with ? memberOf(inp.with).name : 'someone'}`,
-        pack: 'hand you the pack',
+        pack: 'hand you their pack',
         ahead: 'go on ahead',
         escort: `go down with ${inp.with ? memberOf(inp.with).name : 'someone'}`,
         gather: `meet ${inp.with ? memberOf(inp.with).name : 'the other person'} and wait together`,
@@ -115,15 +115,15 @@ export function inputPhrase(inp: Input): string {
     case 'promise':
       return `promised to turn back at ${String(inp.hour).padStart(2, '0')}:00`;
     case 'tell':
-      return `told them ${FACTS[inp.fact].words.replace(/\.$/, '')}`;
+      return `shared this news: “${FACTS[inp.fact].words}”`;
     case 'lead':
       if (inp.dir === 'near') return `walked close to ${inp.who ? memberOf(inp.who).name : 'someone'}`;
       if (inp.dir === 'with')
         return inp.who && inp.who !== 'party' ? `walked to ${memberOf(inp.who).name}` : 'kept with the party';
       return inp.dir === 'up'
         ? inp.via
-          ? 'chose that way up'
-          : 'led on'
+          ? 'chose that route up'
+          : 'led the way uphill'
         : inp.dir === 'down'
           ? 'turned back'
           : 'stopped';
@@ -147,16 +147,16 @@ export function outcomeWords(s: ClimbState, f: PersonFacts): string {
   const m = MOUNTAINS[s.mountain];
   if (!m) return '';
   const parts: string[] = [];
-  if (f.summit) parts.push('stood on the top');
+  if (f.summit) parts.push('reached the summit');
   else if (f.turnedWhere) parts.push(`turned back ${atOrOn(s, f.turnedWhere)}`);
-  else parts.push(`got no higher than ${place(m, f.high).name}`);
+  else parts.push(`climbed as far as ${place(m, f.high).name}`);
   const lv = hurtLevel(f.hurt);
-  if (lv === 'badly') parts.push(`was badly hurt on ${f.hurtWhere ?? 'the hill'}`);
-  else if (lv === 'hurt') parts.push(`was hurt on ${f.hurtWhere ?? 'the hill'}`);
-  if (f.homeAt === null) parts.push('was still on the mountain at dark');
-  else if (f.home) parts.push(`was down by ${clock(f.homeAt)}`);
-  else parts.push(`came down at ${clock(f.homeAt)}, after dark`);
-  return parts.join(', ').replace(/, ([^,]*)$/, ' and $1');
+  if (lv === 'badly') parts.push(`was badly hurt on ${f.hurtWhere ?? 'the mountain'}`);
+  else if (lv === 'hurt') parts.push(`was hurt on ${f.hurtWhere ?? 'the mountain'}`);
+  if (f.homeAt === null) parts.push('was still on the mountain when it got dark');
+  else if (f.home) parts.push(`was back at the hut by ${clock(f.homeAt)}`);
+  else parts.push(`returned to the hut at ${clock(f.homeAt)}, after dark`);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : (parts[0] ?? '');
 }
 
 /** Inputs worth replaying: the ones a person answered, and the leader's choices. Bounded. */
@@ -195,7 +195,7 @@ export function branchFor(startJson: string, played: ClimbState, i: number): Bra
     if (score < 1 || (best && best.score >= score)) continue;
     const inp = played.inputs[i];
     if (!inp) continue;
-    const where = played.inputWhere[i] ?? 'the hill';
+    const where = played.inputWhere[i] ?? 'the mountain';
     const actual = outcomeWords(played, fa);
     const alternative = outcomeWords(alt, fb);
     best = {
@@ -226,4 +226,4 @@ export function debrief(startJson: string, played: ClimbState, max = 24): Branch
 }
 
 export const ALTERNATIVE_CAPTION =
-  'One simulated alternative: the same mountain, the same weather, with that one thing left unsaid. Small changes compound, so read it as a likely story, not a certainty.';
+  'This simulation uses the same mountain and weather, with one input removed. Small changes can affect later events. This is a possible outcome, not a certainty.';

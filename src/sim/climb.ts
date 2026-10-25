@@ -697,11 +697,12 @@ function withCause(s: ClimbState, who: string, input: number, r: SuggestionResol
     if (!other || other === who) return says;
     const o = memberState(s, other);
     const name = memberIn(s, other).name;
-    if (o.ropedTo !== null || mem.ropedTo !== null) return `${says} One of us is tied in already.`;
-    if (distance(s, mem.pos, o.pos) >= 40) return `${says} ${name}'s too far off to tie to.`;
+    if (o.ropedTo !== null || mem.ropedTo !== null) return `${says} One of us is already attached to a rope.`;
+    if (distance(s, mem.pos, o.pos) >= 40)
+      return `${says} ${name} is too far away to attach to the same rope.`;
     return says;
   }
-  if (inp.act === 'eat' && mem.rations <= 0) return `${says} My food's gone.`;
+  if (inp.act === 'eat' && mem.rations <= 0) return `${says} I have no food left.`;
   return says;
 }
 
@@ -720,13 +721,13 @@ function journalFor(s: ClimbState, who: string, r: SuggestionResolution): string
   const n = memberIn(s, who).name;
   switch (r.verdict) {
     case 'refused':
-      return `${n} would not. “${r.says}”`;
+      return `${n} refused your request. “${r.says}”`;
     case 'deferred':
-      return `${n} put you off. “${r.says}”`;
+      return `${n} asked you to wait. “${r.says}”`;
     case 'modified':
       return `${n} did something else instead. “${r.says}”`;
     case 'complied':
-      return `${n} went, because you insisted.`;
+      return `${n} did it because you insisted.`;
     default:
       return `${n}: “${r.says}”`;
   }
@@ -879,7 +880,7 @@ function applyInput(s: ClimbState, idx: number): void {
         s.journal.push({
           at: s.minute,
           who: inp.to,
-          text: `${p.name}'s chapter cannot release them: return to the hut and finish active work first.`,
+          text: `${p.name} cannot leave this mountain chapter yet. Return to the hut and finish active work first.`,
         });
         return;
       }
@@ -927,7 +928,7 @@ function applyInput(s: ClimbState, idx: number): void {
         s.journal.push({
           at: s.minute,
           who: inp.to,
-          text: `${p.name} agreed to end this mountain chapter. Mountain aims are set aside; promises, debts and health remain.`,
+          text: `${p.name} agreed to end this mountain chapter. Mountain goals are set aside. Promises, debts and health remain.`,
         });
       }
       return;
@@ -966,7 +967,7 @@ function applyInput(s: ClimbState, idx: number): void {
       s.journal.push({
         at: s.minute,
         who: inp.to,
-        text: `You asked ${p.name} about ${clue.topic}. ${yes ? clue.outcome : 'They kept it private this time.'}`,
+        text: `You asked ${p.name} about ${clue.displayTopic ?? clue.topic}. ${yes ? clue.outcome : 'They kept it private this time.'}`,
         story: true,
       });
       if (yes) s.journal.push({ at: s.minute, who: inp.to, text: `${p.name}: “${clue.clue}”`, story: true });
@@ -1047,7 +1048,7 @@ function applyInput(s: ClimbState, idx: number): void {
           at: s.minute,
           text:
             s.leader.follow === 'party'
-              ? 'You kept with the party.'
+              ? 'You stayed with the party.'
               : `You went to ${memberIn(s, s.leader.follow).name}.`,
         });
         return;
@@ -1062,7 +1063,7 @@ function applyInput(s: ClimbState, idx: number): void {
             s.journal.push({
               at: s.minute,
               who: x.id,
-              text: `You turned for home, and ${memberIn(s, x.id).name} had company down.`,
+              text: `You turned for home, and ${memberIn(s, x.id).name} had someone to walk down with.`,
             });
           }
       return;
@@ -1131,27 +1132,28 @@ export const FACTS: Record<FactId, { words: string; short: string; bears: 'climb
   storm: {
     short: 'weather turning',
     bears: 'descend',
-    words: 'cloud is building in the west; it will blow this afternoon.',
+    words: 'Clouds are building in the west. The wind will get stronger this afternoon.',
   },
   'gully-quiet': {
     short: 'gully quiet',
     bears: 'climb',
-    words: 'the gully is in shade and quiet; from its top the summit is half an hour.',
+    words:
+      'The gully, a narrow channel in the mountain, is shaded and quiet. From its top, the summit is about half an hour away.',
   },
   'gully-loose': {
     short: 'gully loose',
     bears: 'descend',
-    words: 'the sun is on the gully; stones are coming down.',
+    words: 'The sun is on the gully. Stones are falling.',
   },
   'ridge-solid': {
     short: 'ridge solid',
     bears: 'climb',
-    words: 'the ridge is long but the rock is good; from the tower it is under an hour.',
+    words: 'The ridge is long, but the rock is solid. From the tower, the summit is less than an hour away.',
   },
   'descent-tiring': {
     short: 'save strength',
     bears: 'descend',
-    words: 'the way down is long. Keep something back for it.',
+    words: 'The way down is long. Save some strength for it.',
   },
 };
 
@@ -1183,6 +1185,15 @@ function consequence(
   };
 }
 
+// These words belong to HF memory records. Changing them would change saved person state.
+const FACT_RECORD_WORDS: Record<FactId, string> = {
+  storm: 'cloud is building in the west; it will blow this afternoon.',
+  'gully-quiet': 'the gully is in shade and quiet; from its top the summit is half an hour.',
+  'gully-loose': 'the sun is on the gully; stones are coming down.',
+  'ridge-solid': 'the ridge is long but the rock is good; from the tower it is under an hour.',
+  'descent-tiring': 'the way down is long. Keep something back for it.',
+};
+
 function factPercept(s: ClimbState, fact: FactId, to: string): Percept {
   const base = {
     at: s.minute,
@@ -1191,7 +1202,7 @@ function factPercept(s: ClimbState, fact: FactId, to: string): Percept {
     actorId: LEADER,
     targetId: to,
     salience: 0.75,
-    summary: `the leader said ${FACTS[fact].words}`,
+    summary: `the leader said ${FACT_RECORD_WORDS[fact]}`,
   };
   switch (fact) {
     case 'storm':
@@ -1261,9 +1272,11 @@ export function legReport(s: ClimbState, lg: Leg): string {
   const wind = windAt(s.seed, s.weather, s.minute);
   const bits: string[] = [];
   if (lg.rockfall * sun > 0.3) bits.push('stones were coming down');
-  if (lg.exposure * wind > 0.4) bits.push('the wind was hard across it');
-  if (lg.footing > 0.015) bits.push('the footing was bad');
-  return bits.length ? `${lg.name} — ${bits.join(', ')}` : `${lg.name} looked sound`;
+  if (lg.exposure * wind > 0.4) bits.push('strong wind blew across it');
+  if (lg.footing > 0.015) bits.push('it was difficult to keep a secure foothold');
+  return bits.length
+    ? `On ${lg.name}, ${bits.join(', ').replace(/, ([^,]*)$/, ' and $1')}`
+    : `${lg.name[0]?.toUpperCase()}${lg.name.slice(1)} looked safe to walk on`;
 }
 
 /** Seeing a leg up close makes its route facts known (for telling the others). */
@@ -1345,16 +1358,16 @@ export function dayAccount(s: ClimbState): {
     out.length === 0
       ? late.length === 0
         ? 'Everyone was back at the hut.'
-        : `Everyone was back at the hut, ${names(late)} after dark.`
-      : `Night came down on the mountain with ${names(out)} still out.`;
+        : `Everyone was back at the hut. ${names(late)} returned after dark.`
+      : `Night fell while ${names(out)} remained on the mountain.`;
   const stamp =
     out.length === 0
       ? late.length === 0
-        ? 'Everyone down'
-        : 'Everyone down, after dark'
+        ? 'Everyone is back.'
+        : 'Everyone is back, after dark.'
       : out.length === 1
-        ? `${names(out)} still on the hill`
-        : `${out.length === 5 ? 'All' : out.length} still on the hill`;
+        ? `${names(out)} is still on the mountain.`
+        : `${out.length === 5 ? 'All five people' : `${out.length} people`} are still on the mountain.`;
   return { dusk, out, late, line, stamp };
 }
 
@@ -1571,7 +1584,7 @@ function followStep(s: ClimbState, m: Mountain): void {
     if (L.follow && L.follow !== 'party')
       s.journal.push({
         at: s.minute,
-        text: `${memberIn(s, L.follow).name} was down; you stopped where you were.`,
+        text: `${memberIn(s, L.follow).name} was back at the hut. You stopped where you were.`,
       });
     L.follow = null;
     return;
@@ -2114,7 +2127,7 @@ function slips(s: ClimbState, m: Mountain): void {
         who: mem.id,
         text:
           hurtLevel(sev) === 'badly'
-            ? `${name} fell on ${lg.name} and lay still a long minute.`
+            ? `${name} fell on ${lg.name} and lay still for a long minute.`
             : hurtLevel(sev) === 'hurt'
               ? `${name} slipped on ${lg.name} and got up hurt.`
               : `${name} slipped on ${lg.name} and got up, shaken.`,
@@ -2261,7 +2274,7 @@ function quietLines(s: ClimbState, m: Mountain): void {
   }
   // The light going is a fact everyone on the hill can see: four hours before dark, getting down becomes a goal.
   if (mod === m.duskMinuteOfDay - 240) {
-    s.journal.push({ at: s.minute, text: 'The light began to go long and yellow on the snow.' });
+    s.journal.push({ at: s.minute, text: 'The shadows grew longer, and yellow light covered the snow.' });
     for (const mem of s.members)
       if (mem.homeAt === null && mem.path.length + (mem.pos.leg ? 1 : 0) > 0)
         wantHome(s, personOf(s, mem.id), mem.path.length + (mem.pos.leg ? 1 : 0));

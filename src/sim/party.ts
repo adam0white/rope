@@ -24,7 +24,7 @@ export const FAMILY: Record<string, string> = {
   tamar: 'Nell is her student, not her daughter.',
   oskar: 'He has a younger sister.',
   nell: 'Her mother stays in touch. Tamar Vale is her mentor.',
-  bilal: 'He is married and has a stepchild. This climb is a bounded trip from family life.',
+  bilal: 'He is married and has a stepchild. This climbing trip is a short visit away from his family.',
   wren: 'She has one older sibling. Her work and her climbing remain her own choices.',
 };
 
@@ -41,14 +41,15 @@ export const MEMBERS: Member[] = [
     name: 'Oskar',
     they: 'he',
     mark: 1,
-    first: 'Oskar was outside the hut at half four, already looking at the top.',
+    first: 'Oskar was outside the hut at 04:30, already looking at the summit.',
   },
   {
     id: 'nell',
     name: 'Nell',
     they: 'she',
     mark: 2,
-    first: 'Nell had borrowed her crampons and kept asking if they were on right.',
+    first:
+      'Nell had borrowed her crampons, spikes for walking on ice, and kept asking if she had put them on correctly.',
   },
   {
     id: 'bilal',

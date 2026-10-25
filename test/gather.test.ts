@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { trailRoute } from '../src/sim/approach.ts';
 import {
@@ -14,6 +13,7 @@ import {
   step,
 } from '../src/sim/climb.ts';
 import { inputPhrase } from '../src/sim/debrief.ts';
+import { proofHash, proseBlanked } from './prose-proof.ts';
 
 function fixture() {
   const s = startClimb(1, 3);
@@ -28,9 +28,9 @@ it('pins the current-cast pursuit state for old input verbs', () => {
   for (let i = 0; i < 80; i++) step(s);
   queueInput(s, { t: 'lead', dir: 'with', who: 'tamar' });
   for (let i = 0; i < 100; i++) step(s);
-  expect(createHash('sha256').update(snapshot(s)).digest('hex')).toBe(
-    '140dd337eccadc0e60acef2b76bc5cb62f44b0b8ce370eeb8ffaa0f584380e9a',
-  );
+  // Baseline b1b73bc; the complete HF people are independently unchanged.
+  expect(proofHash(proseBlanked(s))).toBe('6787f4dc63ef0e660ad149051026158070e4eee2c72d089e6b00277f5d9dbe6e');
+  expect(proofHash(s.people)).toBe('6218059bc8b8724650c5a2bd7340fe411ba1ef75ce21f7db67d2a0eca2671e72');
 });
 
 it('both people answer through HF, close the distance, and can then receive a rope offer', () => {

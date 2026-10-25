@@ -23,7 +23,9 @@ export function campFacts(s: ClimbState, mountainName: string): CampFacts {
   const f = factsOf(s);
   const people = s.members.map((m) => {
     const pf = f[m.id];
-    return `${memberOf(m.id).name}: ${pf ? outcomeWords(s, pf) : 'unknown'}`;
+    return pf
+      ? `${memberOf(m.id).name} ${outcomeWords(s, pf)}`
+      : `We do not know what happened to ${memberOf(m.id).name}`;
   });
   const answers = s.lines
     .filter((l) => l.verdict !== 'assented' && l.verdict !== 'heard')
@@ -37,7 +39,9 @@ export function campFacts(s: ClimbState, mountainName: string): CampFacts {
 export function campFallback(c: CampFacts): string[] {
   const out = c.people.map((p) => `${p}.`);
   const last = c.answers.at(-1);
-  if (last) out.push(`Someone remembered: ${last.replace(/^\S+ /, '')}`);
-  else out.push('Nobody said much. It had been a long day.');
+  if (last) {
+    const answer = last.match(/^\S+ (.+?) \([^)]*\): "(.*)"$/);
+    if (answer) out.push(`The journal records ${answer[1]}’s answer: “${answer[2]}”`);
+  } else out.push('Nobody said much. It had been a long day.');
   return out;
 }
