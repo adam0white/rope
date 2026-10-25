@@ -1,5 +1,20 @@
 # Current source and delivery (2026-10-25)
 
+Remaining: Adam accepts feel on 2026-11-03. Named owner journeys and broader follow-ups remain open in the design Deferred list. Technical delivery does not establish owner acceptance.
+
+- Final mechanics source and deployed application: `745b0656b1ef9b45324237646d4a30bc00a1a15d`; exact CI `40243016594` succeeded. Live `/release.json` independently fetched during this docs delta matches that commit, framework `3.0.0`, app `0.1.0`, `dirty:false`. Final delivery report: `~/code/.lab-scratch/games-deferred/rope-report.md`, including director completion at 23:18 and cleanup at 23:20. The older candidate handoff is routing only.
+- Hut **New mountain plans** has two unchecked options. Either logs explicit field rules; the second also enables HF bladder needs. Field rules add real scout crossings, timestamped reports delivered within hearing distance, guarded escort meetings, terrain/uncertain-weather notices and HF voice-promise responses. README gives literal controls and limits. Old starts/inputs keep rules 2 and raw histories; no chapter-version migration is implied.
+- HF npm pin/override remains `3.0.0`, package engine `2.23.0`; native history remains `rope-cast/1`, `rope-cast-1`, `rope-calendar/1`. Current host artifacts remain lab-client `0.4.10` / kit `0.5.11`. Released `0.4.11` / `0.5.12` artifacts are separate from host adoption; their new Feedback choices are not shipped here. SDK npm publication is excluded by the owner's release-artifact guardrail.
+- Final mechanics lane passed 174 tests in 35 files. Its recorded controls cover old owner/raw/feature-off replay, current exports, admitted continuation and an actual HF bladder action. These are source checks, not a played ownership journey. Deployment `5475dd08-6936-40b1-ab1b-326d01048717` and matching live assets are recorded in the final report. Existing Chrome title checks at 360×690 and 1280×800 are director receipts, separate from prior controlled local phone checks. This docs worker ran no browser round.
+- Phone name chips use three columns. Phone start attempts native fullscreen and a screen wake lock; unsupported or denied APIs leave ordinary play available. Desktop fullscreen remains the menu action. `CAMP_AI` is off; the current debrief uses the labelled deterministic journal fallback. This delta made no real model calls. Historical spend estimates below remain estimates.
+- README/HANDOFF only. No dedicated About/Credits app surface exists, so none was added or changed. Existing contextual and per-person panels remain unchanged. No app deployment is needed for this docs-only delta.
+
+# Prior documentation snapshot (2026-10-25)
+
+The following snapshot predates the final mechanics delivery. Its source and live claims describe that documentation pass, not the current application.
+
+# Current source and delivery (2026-10-25)
+
 Remaining: Adam accepts feel and readiness. The named owner journeys and broader game follow-ups remain open; see the design Deferred list and the dated dispositions in `~/code/.lab-scratch/v3/rope/report.md`. This documentation update does not establish owner acceptance.
 
 - Independently fetched `origin/main` and live `/release.json` during the documentation pass: both identify `dde3e7481b8746602e7fc5e236d629cd0a61ac0d`. Live reports framework `3.0.0`, app `0.1.0` and `dirty:false`. This is the deployed application baseline; a later docs-only commit does not require deployment.
