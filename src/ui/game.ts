@@ -1872,7 +1872,6 @@ export class Game {
               /* A broken export must not block feedback. */
             }
             const sharePlay = feedbackSharePlay(choice);
-            const noteOnly = !lab.telemetryOn && !sharePlay;
             await lab.sendFeedback(note, { name, run, sharePlay });
             try {
               if (name) localStorage.setItem('hf-lab-feedback-name', name);
@@ -1880,9 +1879,7 @@ export class Game {
             } catch {
               /* storage unavailable */
             }
-            status.textContent = noteOnly
-              ? 'Note queued without a run or history linkage. This is not a delivery receipt.'
-              : 'Note queued. An available run may also be included. This is not a delivery receipt.';
+            status.textContent = 'Sent. Your note is stored.';
             sent = true;
             send.textContent = 'Back to the game';
             send.disabled = false;
@@ -1890,7 +1887,7 @@ export class Game {
             console.error('Feedback failed', error);
             status.textContent = this.labTools
               ? String(error)
-              : 'Your feedback could not be queued. Your note is still here. Try Submit again.';
+              : 'Your feedback could not be sent. Your note is still here. Try Submit again.';
             send.disabled = false;
           }
         });

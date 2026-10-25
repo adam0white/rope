@@ -210,7 +210,7 @@ it('sends a note and optional name while recording, then remembers the name', as
     ),
   );
   expect(lab.sendRun).not.toHaveBeenCalled();
-  expect(query('[data-feedback-status]').textContent).toContain('queued');
+  expect(query('[data-feedback-status]').textContent).toContain('Sent. Your note is stored.');
   tap('[data-feedback-send]');
   feedback();
   expect(query<HTMLInputElement>('[data-feedback-name]').value).toBe('Ridge tester');
