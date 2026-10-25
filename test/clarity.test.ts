@@ -72,7 +72,7 @@ async function boot(all = false, seed = 20261018) {
   if (all) {
     const { season, climb } = newSeason(seed);
     await (game as unknown as Driver).resume({
-      engine: '2.21.0',
+      engine: '2.23.0',
       season,
       start: season.start,
       inputs: [],
@@ -138,62 +138,47 @@ it('shows target, selected request and commit without repeating unrelated verb g
   await Promise.resolve();
   await Promise.resolve();
   button("We'll see").click();
+  vi.advanceTimersByTime(500);
   button('rest').click();
+  document.querySelector<HTMLButtonElement>('.request-tone')?.click();
   expect(document.querySelector('.request-summary')?.textContent).toContain('rest');
   expect(document.querySelectorAll('.sheet .verbs')).toHaveLength(0);
   expect(document.querySelectorAll('.forces button')).toHaveLength(3);
   expect(document.querySelector('.target-hint')).toBeNull();
   expect(document.querySelectorAll('.targets .chip')).toHaveLength(0);
-  const insist = document.querySelector<HTMLButtonElement>('.forces button:disabled');
-  expect(insist?.textContent).toContain('after a refusal');
+  const insist = document.querySelector<HTMLButtonElement>('.forces button:last-child');
+  expect(insist?.textContent).toContain('costs trust');
+  expect(insist?.disabled).toBe(false);
   expect(document.querySelector('.force:not(:disabled)')?.classList.contains('task')).toBe(true);
   expect(document.querySelector('.chip[aria-pressed="true"]')).toBeNull();
 });
 
-it('retains actual HF refusal words by request and refreshes them after another answer', async () => {
-  const driver = await boot();
-  button('New game').click();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  button("We'll see").click();
-  vi.advanceTimersByTime(500);
+it('retains authentic HF words through the explicit pressure control and a later answer', async () => {
+  const driver = await boot(true);
   button('rest').click();
-  document.querySelector<HTMLButtonElement>('.forces button')?.click();
   const refusals = driver.climb.lines.filter((l) => ['refused', 'deferred', 'modified'].includes(l.verdict));
   expect(refusals.length).toBeGreaterThan(0);
   const refusal = refusals[0] as Line;
   vi.advanceTimersByTime(8000);
   driver.renderSheet(true);
   expect(document.querySelector('.request-replies')?.textContent).toContain(displayText(refusal.says));
-  button(refusal.who[0]?.toUpperCase() + refusal.who.slice(1)).click();
-  button('rest').click();
-  expect(document.querySelector('.request-replies')?.textContent).toContain(displayText(refusal.says));
+  document.querySelector<HTMLButtonElement>('.request-tone')?.click();
   expect(document.querySelector<HTMLButtonElement>('.forces button:last-child')?.disabled).toBe(false);
-  // Another real HF resolution replaces the earlier answer for this person/request.
-  vi.advanceTimersByTime(500);
+  expect(driver.climb.inputs).toHaveLength(1);
   document.querySelector<HTMLButtonElement>('.forces button:last-child')?.click();
   step(driver.climb);
-  button('rest').click();
   const latest = driver.climb.lines.filter((l) => l.who === refusal.who).at(-1) as Line;
   expect(latest.says).not.toBe(refusal.says);
-  expect(document.querySelector('.request-replies')?.textContent).toContain(displayText(latest.says));
-  expect(document.querySelector('.request-replies')?.textContent).not.toContain(displayText(refusal.says));
-  button('Back to requests').click();
-  button('everyone').click();
-  const stillDeclines = driver.climb.lines.filter((l) => l.who === 'wren').at(-1) as Line;
-  // Main feedback belongs to the last request; changing selection does not mix in old answers.
-  expect(document.querySelector('.request-replies')?.textContent).not.toContain(
-    displayText(stillDeclines.says),
-  );
   document.querySelector<HTMLButtonElement>('.all-answers')?.click();
   expect(document.querySelector('.answers-sheet')?.textContent).toContain(displayText(latest.says));
+  expect(document.querySelector('.answers-sheet')?.textContent).not.toContain(displayText(refusal.says));
 });
 
 it('updates an open request when the target leaves earshot and when they return', async () => {
   const driver = await boot(true);
   button('Nell').click();
   button('rest').click();
+  document.querySelector<HTMLButtonElement>('.request-tone')?.click();
   const nell = driver.climb.members.find((x) => x.id === 'nell');
   if (!nell) throw new Error('Nell missing');
   const near = { ...nell.pos };
@@ -300,7 +285,7 @@ it('shows the saved climb, mountain and time beside Continue without advancing t
   const { season, climb } = newSeason(23);
   const saved = JSON.stringify({
     v: 1,
-    engine: '2.21.0',
+    engine: '2.23.0',
     season,
     start: '',
     inputs: [],

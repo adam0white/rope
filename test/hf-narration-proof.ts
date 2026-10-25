@@ -53,7 +53,7 @@ export function counterOfferPayload(text: string): string {
 export function narrationPeople(people: Person[]): Person[] {
   const copy = structuredClone(people);
   for (const p of copy) {
-    if (p.engine === '2.17.0' || p.engine === '2.21.0') p.engine = '2.21.0';
+    if (p.engine === '2.17.0' || p.engine === '2.21.0' || p.engine === '2.23.0') p.engine = '2.21.0';
     if (p.lexicon) delete p.lexicon.plainEnglish;
     for (const e of p.memory.episodes) e.summary = outcomePayload(e.summary);
     for (const i of p.conscience.intentions) i.intention = intentionPayload(i.intention);

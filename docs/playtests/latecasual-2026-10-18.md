@@ -9,7 +9,6 @@ Played the local build that has the owner-playtest fixes (docs/playtests/owner-2
 > It's like Reigns but everyone has their own opinion and you're just the guy holding the map. I promised we'd turn back at one, and by one o'clock two of them were basically at the summit and couldn't hear me. That's either brilliant or infuriating, I can't decide.
 
 > The little lines are great: Wren saying she can do it 'though the descent will be hard.' I believed her.
-
 - Most fun: 14:20–14:29, "Far off: Bilal slipped …" then "Far off: Oskar stood on the summit", just after its 13:02 call to turn: "I felt guilty and helpless."
 - Most boring: 07:02–08:53, when every answer was a yes.
 - The change that would bring it back: "make the turn-back promise enforceable and readable. When my promised hour arrives, pause the game softly, show clearly who heard me and who didn't, and give me one tap to 'call everyone down'."

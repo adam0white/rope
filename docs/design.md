@@ -6,6 +6,7 @@
 - **Leader pace.** Going up, you wait mid-leg when the nearest person behind falls out of earshot. That is the player's own body, kept in the host.
 
 ## Deferred (with targets)
+
 - Confirm the exact screen and page-navigation sequence behind owner run `r-4sha5x28jz`; the replay ends correctly and a journal-return trap is fixed, but the export has no navigation log (target 2026-10-21).
 - Scope asynchronous debrief Worker replies to their originating climb so a slow reply cannot populate a later read-back; found during transition review, predates this fix (target 2026-10-25).
 - Send ahead / scout a crossing as verbs: after first reviewer feedback (target 2026-10-25).
@@ -33,9 +34,11 @@ New UI walks to an individual use `lead near`, which reaches within helping dist
 The optional leader `near` and member `gather` fields arise only from these new inputs. Legacy owner exports, the owner-night hash and a pre-change rules-2 individual-follow hash guard exact old replay. New-input tests compare the complete replayed state. UI distance and ETA are approximate, refer to game minutes and assume the target stays in place; a moving target is named as such. None of this changes the clock playback rate.
 
 ## Owner automatic pacing update (2026-10-21)
+
 The speed chooser is removed. Quiet travel runs briskly, every delivered event stops the current batch for reading, and active calls run slowly. Composing a request or opening a page/menu holds time. “Until something happens” replaces the nightfall shortcut only when the descent is quiet and no reading or call is pending; it stops at the first new word, injury, arrival, promise or tutorial. Information buttons retain the season and hut background. Completed-climb and closed-season totals are always computed and hidden until “See tally”. Simulation inputs, saves and replay remain unchanged. Adam accepts feel.
 
 ## Approved UI sweep (2026-10-22)
+
 The UI follows the lab layout grammar: a single top bar, daylight strip, mountain, internally scrolling sheet, and pinned leader actions. Pending hurt and promised-hour calls take over the sheet. Company requests appear as a banner. The menu contains the journal, pacing, Send word, full screen, title and lab links, recording control, and return action. Automatic pacing is the default; optional Slow, Steady and Fast overrides live in the menu. Skip ⏩ runs unchanged simulation minutes and stops for decisions, physical events, guidance, dusk, or two elapsed game hours. Ambient journal words do not stop it.
 
 Send word uses lab-client 0.2.1. It respects an explicit recording opt-out, requires consent for an unlinked run under a browser privacy signal, and remembers an optional submitted name under `hf-lab-feedback-name`. Downloads retain the existing playtest export. The simulation, HF 2.8.0 pin, save shape and replay rules remain unchanged. Adam accepts feel after retesting.

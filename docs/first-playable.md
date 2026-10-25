@@ -1,6 +1,7 @@
 # First playable (2026-10-18)
 
 ## How to play
+
 1. `npm install && npm run dev`, open the page at phone width (built for 360×780, about 690 px visible).
 2. **Begin the season.** Read the hut page, then **Step outside**.
 3. The top half is the mountain in side profile; the bottom sheet is what you can do, in thumb reach.
@@ -13,6 +14,7 @@
 6. **On to** the next mountain: three climbs (Hollin Crag, The Tooth, Kestrel Pike). People carry over trust, memory and injuries; valley days between climbs run through HF.
 
 ## What is in
+
 - Headless core (`src/sim`): world draws keyed by (place, minute); every person ticked each minute; replay = start JSON + input log. Tests: determinism, prefix identity, two verdict controls (state-dependent verdicts; gully versus ridge at the col), told route knowledge reaching HF consequence evidence, debrief attribution, season export replay.
 - Verbs: ask/urge/insist, promise (a turn-back hour, held as an HF agenda commitment, kept or broken against your own turn), tell (route facts as HF received consequences and threats), rope up, take pack, share food, rest/eat/wait, lead/stop/go down, route choice at the fork, fix rope.
 - Inner state only as drawing: stride, lean, hunch, limp, gaze toward or away from you, bowed head, ink blot for injury.
@@ -21,6 +23,7 @@
 - Journal page, playtest export (seed, start, input log, final state), save/resume in localStorage (start + inputs), PWA manifest and service worker (offline after first load).
 
 ## What is not (yet)
+
 - Deployed at https://rope.adamwhite.work.
 - No "send ahead" verb and no scouting a crossing as a distinct action (the leader walking ahead and waiting is the nearest thing).
 - Workers AI camp voice: not built (by plan, only after the core is fun). Spend $0.00.

@@ -1081,6 +1081,10 @@ export class Game {
       ? !foodAvailable(memberState(c, this.target))
       : c.members.every((x) => x.homeAt !== null || !canHear(c, x.id) || !foodAvailable(x));
     const choose = (v: string) => () => {
+      if (v === 'rest' || v === 'eat' || v === 'wait') {
+        this.send({ t: 'say', to: this.target, act: v, force: 'ask' });
+        return;
+      }
       this.verb = v;
       this.panel = v === 'rope' ? 'partner' : 'force';
       this.renderSheet();
@@ -1201,7 +1205,7 @@ export class Game {
             dir: one ? 'near' : 'with',
             who: one ? one.id : 'party',
           }),
-        `${this.target === 'all' ? 'Everyone is' : memberOf(this.target).name + ' is'} back at the hut for today.`,
+        `${this.target === 'all' ? 'Everyone is' : `${memberOf(this.target).name} is`} back at the hut for today.`,
       ),
     );
     if (has(this.disc, 'tell')) {
@@ -1353,7 +1357,7 @@ export class Game {
           'force-reason',
           this.target !== 'all' && memberState(this.climb, this.target).homeAt !== null
             ? `${memberOf(this.target).name} is back at the hut for today. Cancel this request.`
-            : `${this.target === 'all' ? 'Everyone is' : memberOf(this.target).name + ' is'} too far away to hear you. Cancel this request and walk closer.`,
+            : `${this.target === 'all' ? 'Everyone is' : `${memberOf(this.target).name} is`} too far away to hear you. Cancel this request and walk closer.`,
         ),
       );
     g.append(
@@ -1516,6 +1520,16 @@ export class Game {
     if (answers.length) {
       const more = this.answersButton(answers.length, index);
       box.append(more);
+    }
+    if (['rest', 'eat', 'wait'].includes(input.act)) {
+      const tone = h('button', 'request-tone', 'Ask more firmly…');
+      tone.onclick = () => {
+        this.target = input.to;
+        this.verb = input.act;
+        this.panel = 'force';
+        this.renderSheet();
+      };
+      box.append(tone);
     }
     if ((input.act === 'rope' || input.act === 'gather') && input.with) {
       const a = memberState(c, input.to);

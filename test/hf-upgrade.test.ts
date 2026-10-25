@@ -10,8 +10,8 @@ import { narrationBlanked } from './hf-narration-proof.ts';
 import { proofHash } from './prose-proof.ts';
 
 it('pins published HF and enables saved plain narration for every fresh opening', () => {
-  expect(FRAMEWORK_VERSION).toBe('2.21.0');
-  expect(ENGINE_VERSION).toBe('2.21.0');
+  expect(FRAMEWORK_VERSION).toBe('3.0.0');
+  expect(ENGINE_VERSION).toBe('2.23.0');
   for (const people of [
     createParty(4, 4620),
     openingParty(4),
@@ -31,13 +31,14 @@ it('keeps a loaded narration choice and replays its exact pinned state', () => {
   const exported = exportClimb(initial, loaded, FRAMEWORK_VERSION);
   expect(snapshot(replayExport(exported))).toBe(exported.state);
 });
-it('admits a real current Commonstead Oskar projection with finite identity and engine guards', async () => {
-  const fixture = JSON.parse(
-    readFileSync(new URL('./fixtures/commonstead-oskar-221.json', import.meta.url), 'utf8'),
-  );
+it.each([
+  ['commonstead-oskar-221.json', '2.21.0'],
+  ['commonstead-oskar-hf3.json', '2.23.0'],
+])('admits actual Commonstead Oskar %s with finite identity and engine guards', async (file, engine) => {
+  const fixture = JSON.parse(readFileSync(new URL(`./fixtures/${file}`, import.meta.url), 'utf8'));
   const envelope = await validatePersona(fixture.envelope);
-  expect(fixture.raw.engine).toBe('2.21.0');
-  expect(validateCalendarPersona(envelope.transfer.person).person.source.engine).toBe('2.21.0');
+  expect(fixture.raw.engine).toBe(engine);
+  expect(validateCalendarPersona(envelope.transfer.person).person.source.engine).toBe(engine);
   const input = preparePersonaLife(envelope, 20 * 3600000);
   const opening = openingParty(4).find((p) => p.id === 'oskar');
   if (!opening) throw new Error('Missing Oskar');
@@ -86,19 +87,19 @@ it('the narration proof still detects semantic history, choices and RNG mutation
       p.rng.a++;
     },
     (p) => {
-      p.memory.episodes[0]!.action = 'descend';
+      required(p.memory.episodes[0]).action = 'descend';
     },
     (p) => {
-      p.memory.episodes[0]!.tags.push('failed');
+      p.memory.episodes[0]?.tags.push('failed');
     },
     (p) => {
-      p.memory.episodes[0]!.summary = 'A new authored fact';
+      required(p.memory.episodes[0]).summary = 'A new authored fact';
     },
     (p) => {
       p.memory.episodes.pop();
     },
     (p) => {
-      p.trace[0]!.chosenAffordanceId = 'changed';
+      required(p.trace[0]).chosenAffordanceId = 'changed';
     },
   ];
   for (const mutate of mutations) {
@@ -132,22 +133,23 @@ it('retains intention, outcome and counter-offer payloads when comparing narrati
   const legacy = structuredClone(s);
   const lp = legacy.people[0];
   if (!lp) throw new Error('Missing legacy person');
-  lp.conscience.intentions[0]!.intention = 'to stand on the top';
-  lp.memory.episodes[0]!.summary = 'climb the hut path: completed';
-  lp.trace[0]!.suggestion!.counterOffer!.label = 'after I climb the hut path';
+  required(lp.conscience.intentions[0]).intention = 'to stand on the top';
+  required(lp.memory.episodes[0]).summary = 'climb the hut path: completed';
+  required(required(required(lp.trace[0]).suggestion).counterOffer).label = 'after I climb the hut path';
   expect(proofHash(narrationBlanked(legacy))).toBe(base);
   const mutations: ((person: (typeof s.people)[number]) => void)[] = [
     (person) => {
-      person.conscience.intentions[0]!.intention = 'I want to achieve this goal: get down safely.';
+      required(person.conscience.intentions[0]).intention = 'I want to achieve this goal: get down safely.';
     },
     (person) => {
-      person.memory.episodes[0]!.summary = 'I completed this action: climb the gully.';
+      required(person.memory.episodes[0]).summary = 'I completed this action: climb the gully.';
     },
     (person) => {
-      person.memory.episodes[0]!.summary = 'I could not complete this action: climb the hut path.';
+      required(person.memory.episodes[0]).summary = 'I could not complete this action: climb the hut path.';
     },
     (person) => {
-      person.trace[0]!.suggestion!.counterOffer!.label = 'after I finish this task (eat something)';
+      required(required(required(person.trace[0]).suggestion).counterOffer).label =
+        'after I finish this task (eat something)';
     },
   ];
   for (const mutate of mutations) {
@@ -163,4 +165,20 @@ it('keeps a complete plain HF deferral without the legacy clipped-reply rewrite'
   const { voiced } = await import('../src/sim/voice.ts');
   const reply = 'After I finish this task (climb the hut path), I will do it.';
   expect(voiced(4, 'oskar', 480, 'deferred', reply, 'inertia', true)).toBe(reply);
+});
+
+function required<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error('Missing test control value');
+  return value;
+}
+
+it('preserves complete published HF2.23 three-mountain state byte for byte', async () => {
+  const { playScripted } = await import('./script.ts');
+  const baseline = JSON.parse(
+    readFileSync(new URL('./fixtures/hf3-raw-baseline.json', import.meta.url), 'utf8'),
+  );
+  for (const [mountain, hash] of Object.entries(baseline)) {
+    const played = playScripted(startClimb(4, 3, undefined, mountain), { turnAt: 720 });
+    expect(proofHash(played)).toBe(hash);
+  }
 });

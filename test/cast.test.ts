@@ -65,7 +65,7 @@ it('pins a complete admitted cast and changed life preparation in deterministic 
   const { envelope } = await source('oskar');
   const input = preparePersonaLife(envelope, 20 * 3600000);
   const initial = Object.fromEntries(openingParty(8).map((p) => [p.id, p]));
-  initial.oskar = admitClimber(input, initial.oskar!);
+  initial.oskar = admitClimber(input, required(initial.oskar));
   const { revision, ...body } = envelope;
   const claim = await createPersona({
     ...body,
@@ -75,7 +75,7 @@ it('pins a complete admitted cast and changed life preparation in deterministic 
   });
   const chapter = { version: DIALECT as typeof DIALECT, inputs: [input], claims: [claim], initial };
   const { season, climb } = newSeason(8, chapter);
-  const start = season.start!;
+  const start = required(season.start);
   expect(climb.journal.some((j) => j.text.includes('last local stop'))).toBe(true);
   queueInput(climb, { t: 'ask-life', to: 'nell' });
   for (let i = 0; i < 30; i++) step(climb);
@@ -86,7 +86,7 @@ it('pins a complete admitted cast and changed life preparation in deterministic 
   );
   const bad = structuredClone(input);
   bad.parent.source.game = 'watch';
-  expect(() => admitClimber(bad, initial.oskar!)).toThrow();
+  expect(() => admitClimber(bad, required(initial.oskar))).toThrow();
 });
 it('private clues require a chosen receptive encounter and replay exactly', () => {
   const { season, climb } = newSeason(13);
@@ -94,7 +94,7 @@ it('private clues require a chosen receptive encounter and replay exactly', () =
   queueInput(climb, { t: 'ask-life', to: 'nell' });
   step(climb);
   expect(climb.lines.some((l) => l.reason === 'private-conversation')).toBe(true);
-  const exported = exportClimb(season.start!, climb, '2.21.0');
+  const exported = exportClimb(required(season.start), climb, '2.21.0');
   expect(snapshot(replayExport(exported))).toBe(exported.state);
 });
 
@@ -126,3 +126,8 @@ it('binds later starts to the actual played prefix', () => {
     'starting state does not match',
   );
 });
+
+function required<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new Error('Missing test control value');
+  return value;
+}

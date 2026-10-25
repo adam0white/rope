@@ -91,7 +91,7 @@ export interface PromiseDue {
 export function promiseDue(s: ClimbState): PromiseDue | null {
   const pr = s.promise;
   // Not the leader's turnedAt: walking back to the party also sets it. Heading down is what answers the hour.
-  if (!pr || pr.status !== 'open' || s.over || s.leader.move?.dir === 'down') return null;
+  if (pr?.status !== 'open' || s.over || s.leader.move?.dir === 'down') return null;
   const from = s.day * 1440 + pr.hour * 60;
   if (s.minute < from || s.minute > from + 60) return null;
   if (s.leader.turnedAt !== null && s.leader.turnedAt >= from) return null;

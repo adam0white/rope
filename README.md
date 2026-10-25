@@ -11,8 +11,9 @@ npm run check   # lint, typecheck, tests
 ```
 
 ## Credits
+
 - People: [@adam0white/human-framework](https://www.npmjs.com/package/@adam0white/human-framework) 2.3.0 (MIT).
 - Rendering: [PixiJS](https://pixijs.com) 8 (MIT).
 - Type: Literata (OFL) and Caveat (OFL) from Google Fonts.
-- World randomness pattern from HF's game *The Night Watch*.
+- World randomness pattern from HF's game _The Night Watch_.
 - Code MIT; see LICENSE.

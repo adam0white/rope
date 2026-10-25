@@ -69,7 +69,7 @@ async function atNight(skip: boolean) {
   await game.boot();
   const driver = game as unknown as Driver;
   await driver.resume({
-    engine: '2.21.0',
+    engine: '2.23.0',
     v: 1,
     season,
     start: season.start,

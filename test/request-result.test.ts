@@ -61,7 +61,7 @@ async function boot() {
   const driver = game as unknown as Driver;
   const { season, climb } = newSeason(20261018);
   await driver.resume({
-    engine: '2.21.0',
+    engine: '2.23.0',
     season,
     start: season.start,
     inputs: [],
@@ -272,4 +272,19 @@ it('uses a singular answer caption for one person and plural for the party', asy
   vi.advanceTimersByTime(500);
   driver.send({ t: 'say', to: 'all', act: 'rest', force: 'ask' });
   expect(result()?.querySelector('.all-answers')?.textContent).toBe('All 5 answers ▸');
+});
+
+it('sends routine rest gently in one tap and retains an explicit pressure choice', async () => {
+  const driver = await boot();
+  const rest = [...document.querySelectorAll<HTMLButtonElement>('.people-verbs .verb')].find(
+    (button) => button.querySelector('span')?.textContent === 'rest',
+  );
+  expect(rest).toBeDefined();
+  rest?.click();
+  expect(driver.climb.inputs.at(-1)).toMatchObject({ t: 'say', act: 'rest', force: 'ask' });
+  const pressure = document.querySelector<HTMLButtonElement>('.request-tone');
+  expect(pressure?.textContent).toBe('Ask more firmly…');
+  pressure?.click();
+  expect(document.querySelectorAll('.forces button')).toHaveLength(3);
+  expect(driver.climb.inputs).toHaveLength(1);
 });

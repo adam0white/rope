@@ -46,22 +46,26 @@ Workers AI behavior, caps, fallback and spend are unchanged; no model calls made
 - Baseline-derived rules hashes and current full-state replay remain in tests. Independent Codex review corrected pack-transfer wording and bounded the debrief claim to selected inputs. Evidence, browser self-check, delivery and cleanup: `/Users/abdul/code/.lab-scratch/plain2/rope-report.md`; raw text: `rope-onscreen.txt` beside it.
 
 ## Hint clipping bug hunt (2026-10-23)
+
 - Remaining: fixed-case browser screenshot and two-minute live play/menu/save/reload smoke at 360×690 and 1280×800. Existing Chrome disconnected after the before screenshot; no isolated browser fallback was launched. Adam still accepts feel.
 - The flagging tutorial was cut by a two-line clamp and a 60 px note height cap. Both constraints are removed so the full instruction wraps. Hint wording, simulation, difficulty, cast and HF remain unchanged.
 - `test/notes.test.ts` first failed on the 60 px cap, then passed. `npm run check:lane` passed: 26 files, 100 tests. Before screenshot and red/green/check/review/delivery receipts are in `~/code/.lab-scratch/bugs/rope-receipts/` and `~/code/.lab-scratch/bugs/rope.md`. The browser reproduction used live CSS in a dedicated localhost test origin with ingestion blocked; no feedback was sent.
 
 ## Owner automatic pacing update (2026-10-21)
+
 - Remaining: Adam accepts feel. Playback is automatic: brisk quiet travel, reading time for each new answer, injury, arrival, promise or tutorial, and slow response time for active calls. Choosing and menu/inspection pages hold time.
 - The former nightfall shortcut is “Until something happens”, available only after reading in a quiet walk down. Every unchanged simulation minute runs, and the first delivered event or new reading stops the batch and clears carry. Menu visits preserve reading, bubbles and presentation deadlines, including the ending transition.
 - The title and hut retain their background behind native information buttons. Recorded-answer disclosures remain. The menu has no tally preference; finished climbs and the closed season compute their recorded-outcome arithmetic and offer “See tally”.
 - No HF pin, simulation, save format, replay or scenario changes. Old owner/full-state replay and continuation controls remain in the suite. No Workers AI calls are needed for this change.
 
 ## F-414 / F-415: notebook reckoning (2026-10-21)
+
 - Remaining: Adam accepts feel. Turn-time promises, named mountains and terrain routes already use the fiction; their labels and all inputs stay unchanged. No difficulty presets exist.
 - Game menu offers “Count the day in the notebook”, off by default for each visit. It is UI state only. Finished-climb read-backs and the closed season show an optional total: twice the recorded home-by-dark count plus recorded summit visits. Each display gives the components and says this is the game’s reckoning, not a measure of people. No live totals or faith measures.
 - Focused DOM tests cover default-off, unchanged choices/state/save, immediate ending toggles, reopening, next-climb hiding and history-only season totals. Phone browser verification mocks camp networking. No HF, simulation, replay, lab-client or Worker changes.
 
 ## Round 4: readable replies and reaching people (2026-10-20)
+
 - Remaining: Adam accepts feel. A fresh source-unread retest of this round remains unrun. None of the three requested fixes is deferred.
 - Opening promises retain all five exact HF replies in the same readable result panel as later requests. Bubbles that cannot fit without overlap give way to those recorded answers. Expanded answers survive movement/status refreshes.
 - Individual walks now use explicit `lead near`, reaching helping distance. A visible physical status names the active person, approximate distance and game-time ETA, with a moving-target caveat. Old saved `with` inputs keep their exact earshot behavior and are labelled accordingly.
@@ -70,12 +74,14 @@ Workers AI behavior, caps, fallback and spend are unchanged; no model calls made
 - Mateo's report is retained verbatim in `docs/playtest-clarity-mateo-2026-10-20.md`. Phone/desktop renders, checks and delivery identity are in `/Users/abdul/code/human-framework/scratch/followups/rope-report.md`, **Round 4**, and its `rope/round4-*` evidence.
 
 ## F-230 phone and request results (2026-10-20)
+
 - Remaining: Adam accepts feel. A fresh source-unread retest remains unrun.
 - Help fits its full reserved strip at 360×690. An empty strip releases space to the mountain. Primary requests and movement stay on the main sheet; extra abilities live in “more actions”, with matching disclosure words and highlights. Outstanding company/hurt/turnback calls have a visible labelled button; opening it shows their original responses.
 - Latest-request results sit below controls. Rest names what was accepted. “We all turn” reports the leader’s descent and new urge, actual downhill movement, and the latest HF refusal with its reason. Recorded answers remain available on request; no simulation or replay changes.
 - Five new DOM regressions plus touch Chromium renders cover requests, movement, safe areas, pair selection, rest answers and renewed turnaround refusals. Report, screenshots, checks and live release identity: `/Users/abdul/code/human-framework/scratch/followups/rope-report.md`. No Workers AI calls were made.
 
 ## F-209 review follow-up (2026-10-20)
+
 - Remaining: Adam accepts feel. Cold-player understanding and the first-action timing protocol remain untested; Rope has no HF-character adapter.
 - Rope request feedback now retains both partners’ HF answers, including either refusal, for either pair orientation. A different pair does not inherit their answers. Empty rations no longer disable eating at the hut; the UI cache follows hut availability.
 - Speed, journal and note-dismiss buttons have 44×44 minimum hit boxes. Continue names the saved climb, mountain and time.
@@ -83,6 +89,7 @@ Workers AI behavior, caps, fallback and spend are unchanged; no model calls made
 - Browser renders, check/deploy logs, live release identity and the finding-by-finding report are in `/Users/abdul/code/human-framework/scratch/clarity/rope-report.md` (Follow-up) and `rope/followup-*`. No Workers AI calls were made.
 
 ## F-209 first-minute clarity (2026-10-20)
+
 - Remaining: Adam's feel acceptance stays with Adam. This round implements only the three filed clarity fixes; no HF-character playtest was requested because Rope has no adapter.
 - Disabled verbs now show adjacent, readable circumstances, not hover titles. Recorded HF answers persist by request and person, with refusals ahead of grudging yeses. The first actual objection immediately unlocks the existing insist disclosure. Ration, proximity and follow changes invalidate the UI cache.
 - Phone request panels show only the target, request and commitment controls. The person strip has an explicit swipe cue and preserves its scroll position. The phone sheet reserves space for replies and safe-area padding; desktop keeps its prior height. Selected chips and speed use ink outlines; the request choices own the accent.
@@ -92,6 +99,7 @@ Workers AI behavior, caps, fallback and spend are unchanged; no model calls made
 - Before/after Chromium renders at 360×690 and 1280×800, the two-person rope request, safe-area checks, delivery identity and final check results are recorded in `/Users/abdul/code/human-framework/scratch/clarity/rope-report.md`. Screenshots live beside that report in `rope/`.
 
 ## Owner night transition (2026-10-20)
+
 - Remaining: confirm the exact screen the owner saw in run `r-4sha5x28jz`; the export does not record page navigation. See docs/playtests/owner-2026-10-20.md.
 - The owner replay reconstructs the entire saved state byte for byte at 23:00, `over: true`. No simulation or host-rule change; HF stays pinned at 2.8.0.
 - Fixed a journal return path that exposed a stopped, finished map. All finished-climb journal returns now open the read-back; a closed season returns to the season page. Returning during the ending stamp cancels its timer before the next climb starts.
@@ -100,17 +108,20 @@ Workers AI behavior, caps, fallback and spend are unchanged; no model calls made
 - Release identity: the deployed `/release.json` must match this change's pushed commit with `dirty: false`.
 
 ## Lab client (2026-10-19, deployed)
+
 - `@adam0white/lab-client` 0.1.0 (release tarball) is wired in: `src/ui/lab.ts` (`createLab({ game: 'rope' })`), names in `src/ui/labnames.ts` (screens `title`, `climb N <mountain>: hut|climb|debrief`, `season`; milestones `climb N done|summit|all home`, `season done`; no player text). "Send this run to the notebook" sits beside each Export button (journal and debrief) and sends `exportClimb` output. `connect-src` in `public/_headers` now includes https://human.adamwhite.work.
 - `/release.json` was 404 because nothing wrote it. `npm run build` now runs `scripts/stamp-release.ts` first, which writes `public/release.json` (gitignored, copied to dist). The Worker only runs first for `/api/*`, so assets serve the file; `public/sw.js` now skips `/release.json` (it was cache-first and would have frozen the build stamp).
 - Committed and deployed. The live `/release.json` matched the commit and had `dirty: false`; the served JavaScript matched the local build SHA-256. Worker version 27af504a-145a-49a7-9020-89cc206c824a was the first delivery.
 - Still to verify with a player run: open the live game, send a run with the note "integration test" and the label "agent", and confirm the run count on https://human.adamwhite.work/lab/.
 
 ## HF 2.8.0 (2026-10-19)
+
 - **Live:** https://rope.adamwhite.work, Worker version f3b1977b-3055-419f-8c9f-3c372ce73301, bundle `assets/index-B3bkadIs.js`; its sha256 matches dist. HF is pinned at 2.8.0 exactly.
 - Host rules 2 (`ClimbState.rules`): fullness on, no "step aside" offer, `alongside` and `reconsider` for roped partners. Numbers and the old-export rule are in docs/findings.md ("HF 2.8.0 and host rules 2"). Saves and exports from before this build replay under rules 1; both owner exports still match their saved answers (test/rules2.test.ts).
 - `npm test` now runs with a 30 s timeout: the 12-seed sweeps time out at 5 s when the machine is busy.
 
 ## Owner playtest round (2026-10-18, night)
+
 - Live: Worker version 6d18e37d-6bce-4c23-901d-fe6b159ffae2, bundle `assets/index-C7ttQYIy.js`. Its sha256 matches dist.
 - Owner: "rope was not that fun". Diagnosis and fixes are in docs/playtests/owner-2026-10-18.md; the late playtest is in docs/playtests/latecasual-2026-10-18.md.
 - Shipped:
@@ -124,6 +135,7 @@ Workers AI behavior, caps, fallback and spend are unchanged; no model calls made
 - Next: the owner replays a climb. The deferred items, with dates, are in docs/design.md.
 
 ## State (2026-10-18, end of the Fable fix round)
+
 - **Live:** https://rope.adamwhite.work, Worker version 0e58bbc6-c867-4789-845d-bb11efb383ae, bundle `assets/index-DBYkc7yU.js`. HF is pinned at 2.6.0 exactly, with the fatigue store on. I fetched the bundle after each deploy and found the new strings in it.
 - **Committed 2026-10-18** (signing restored). Never `pkill -f`; kill by exact PID.
 - **Done this round** (Fable playtest, docs/playtests/fable-2026-10-18.md):
@@ -147,13 +159,14 @@ Workers AI behavior, caps, fallback and spend are unchanged; no model calls made
 - **First-time playtest round** (docs/playtests/firsttime-2026-10-18.md, findings.md, "First-time playtest fixes"): a skipped-leg descent bug, softer tired descents, an early-hour need and approach lines, a quiet-stretch hint, mood words on chips, a docked note strip, every verb above the fold, queued company prompts, stale bubbles cleared, speed and stamp reset on a new climb, "at"/"on" wording.
 - **Next:**
   1. A fresh playtest of this build.
-  1b. Re-measured and browser-checked (findings.md, "Re-measured after the path and descent fixes"); mood thresholds raised and landscape verbs compacted, both deployed (deployed as Worker 963c01c8-6ee5-4046-b32f-0e7e8810fd32, bundle assets/index-B5fKaDWR.js). Queued company prompts are still unseen in the browser.
-  1a. Owner's call: turn off Cloudflare Web Analytics auto-injection to remove the console error from the beacon.
+     1b. Re-measured and browser-checked (findings.md, "Re-measured after the path and descent fixes"); mood thresholds raised and landscape verbs compacted, both deployed (deployed as Worker 963c01c8-6ee5-4046-b32f-0e7e8810fd32, bundle assets/index-B5fKaDWR.js). Queued company prompts are still unseen in the browser.
+     1a. Owner's call: turn off Cloudflare Web Analytics auto-injection to remove the console error from the beacon.
   2. Kestrel has the most friction counting people who went on past the turn (20), but fewer disagreeing answers than Hollin (23 against 37). Decide whether that is acceptable or whether Kestrel needs more noes on the way up; climb asks are never refused on Tooth or Kestrel.
   3. Hollin summits are low: 4 of 60 at a 12:00 turn.
   4. Commit once signing works, or unsigned if the owner says so.
 
 ## Workers AI spend
+
 - Built 2026-10-18: `POST /api/camp` (worker/index.ts), model `@cf/meta/llama-3.1-8b-instruct-fp8-fast` (switched from 3.2-1b the same day), max_tokens 180, input capped at 6 KB.
 - Caps, held in isolate memory (no storage, so per isolate, approximate): 6 calls per IP per hour, 100 per day. Kill switch: set `CAMP_AI` to "off" in wrangler.jsonc and deploy. Any refusal or error gives the client's labelled deterministic fallback ("Read from the journal (no model).").
 - The model only voices text; the client keeps lines spoken by party names and never reads state from them.
@@ -161,9 +174,11 @@ Workers AI behavior, caps, fallback and spend are unchanged; no model calls made
 - Estimated spend to date: under $0.01 (a handful of test calls). Estimate per call, assumed from list pricing and not measured: about 1k input + 180 output tokens, well under $0.001. Even every isolate at the daily cap stays far inside the Workers AI free daily allocation. Check the dashboard (AI > Workers AI usage) to confirm actual spend.
 
 ## Player speed controls (2026-10-22)
+
 Remaining: Adam accepts feel. Slow, normal and fast are available again. They change playback only; reading, choosing, menu and inspection holds remain. “Until something happens” still stops at the first delivered event. Native information popovers and end-only tallies remain. Simulation, HF pin, saves and replay are unchanged.
 
 ## Owner simplify delivery (2026-10-24)
+
 Remaining: final lane, signed/rebased source push, exact green CI, fresh latest-origin deployment, and eight live browser cases. Adam separately accepts feel and readiness. No new playtest round was run; friends and Show HN remain paused.
 
 The owner explicitly lifted Rope’s freeze for this bounded change. Ordinary menus now contain Resume, Feedback, Full screen, All games, one Recording switch and New game with inline confirmation. Journal stays in play. Private conversations and departure requests moved into gameplay. Automatic continuity uses immutable client 0.4.6 / kit 0.5.7. Diagnostic continuity, local fresh alternative, import/export and speed controls require exactly `?lab=1`. The SDK’s actual notice node sits in a stable footer. Feedback is one page with an optional sharing checkbox when Recording is off.
@@ -173,11 +188,13 @@ Plain English uses a display projection for stored dialogue, stories and history
 External evidence: `/Users/abdul/code/.lab-scratch/simplify/workers/rope.md`, paired frozen-checker JSON, cultural inventory, local QA and review receipts. Original baseline: `9ded1174c17ad84917727603c65ba21311fd9382`. No Worker AI calls were made in this task; spend estimate is unchanged. Central catalogue art was already replaced by its producer; this repo does not edit it.
 
 ### Simplify verification and independent review
+
 The one independent review found six issues. The completed-climb page now preserves the departure request and displays the actual HF acceptance or refusal. The uncertain historical-account sentence again disclaims knowledge. All fifteen deferred voice variants are covered, camp fallback hides internal verdict/reason tokens, and initial disabled reasons are sentences. Debrief outcomes use fluid body text. The original SDK notice node retains its message and asynchronous suppression; kit 0.5.7 supplies its compact sentence with no Dismiss button. Failure tests now exercise nonempty ownership after preparation and after an accepted claim whose transport reply is lost, including later save/reload. No fallback cast is silently started. A dedicated DOM test checks a non-null SDK node and its stable parent.
 
 Source receipts and final CI/deployment status remain in the external worker report. The source phase is followed by exact-CI gating and deployment from a fresh latest-origin managed tree. Task-created clean source and deployment trees are removed under the owner’s disk-headroom override. Adam’s feel acceptance remains separate.
 
 ### Simplify pause for shared-suite priority (2026-10-24, 18:44 CDT)
+
 Goal: finish the owner’s bounded simplify scope, then verify delivery. Adam separately accepts feel/readiness; no new playtest round.
 
 - **Done and verified:** source/copy/layout and the six findings from exactly one independent review are fixed. Client0.4.6 / compact kit0.5.7 are adopted with exact hashes. Current focused tests and production build pass. Chromium and WebKit pass12 local cases at360×690,820×1180,1180×820,1280×800,768×1024,1366×1024; final kit phone footer54.78px. Four preliminary screenshots retained; final reruns were DOM-only. No simulation source changed. Frozen source flags173/555/25 →208/693/26; these include old replay strings and display match keys, not rendered reading grades.
@@ -190,11 +207,23 @@ Resume this session: `01a17020-6825-7e33-aafa-be735803312b`. All evidence, fixtu
 
 
 ## Compact footer correction (2026-10-24)
+
 Remaining: required source lane/sign/push/exact CI and fresh delivery; owner accepts feel separately. The earlier54.781px wrapper wrapped at360 and did not meet the one-line requirement. Removed host padding, border and type overrides so the actual unchanged SDK node uses the full viewport. Browser footprint checks require one line at360, at least14px, node/wrapper at most40px, and natural wrapping with enlarged root text. Earlier receipts remain external and historical. No simulation, HF pin, copy, culture or consent changes; no extra review or screenshots.
 
 ## Plain-English second reading pass (2026-10-25)
+
 Remaining: Adam accepts feel. This pass addresses reading audit 2, not a new acceptance playtest.
 
 Mountain data now declares reader-facing route names separately from immutable HF route labels. Journals, map labels, route controls and alerts use the reader-facing names. A finite, token-bounded display projection covers old text and route labels inside HF replies. Original route identities remain in HF offers, memories, input locations and debrief facts. Private-conversation refusal reports only that no discussion occurred; it does not assign unwillingness to physical inability. Single-person requests and debriefs use known pronouns or names. Overnight outcomes use literal wording.
 
 Focused regressions cover route-label token boundaries and capitalization, original semantic route labels, each private-conversation pronoun and neutral refusal, and plain scouting/request wording. Independent Codex review caught substring replacement, inferred unwillingness and remaining single-person request pronouns; all three were corrected. HF stays exactly 2.21.0, with plain narration enabled as before. No Workers AI calls were needed; spend is unchanged. Delivery evidence and the final on-screen dump live in `~/code/.lab-scratch/plain3/rope-report.md` and `rope-onscreen.txt`.
+
+## HF3 adoption and routine requests (2026-10-25)
+
+Remaining: signed source, exact green CI, clean deployment and live viewport verification. Adam accepts feel and readiness separately. External current evidence: `~/code/.lab-scratch/v3/rope/report.md`.
+
+HF is exactly3.0.0 (engine2.23.0), with immutable client0.4.10/kit0.5.11 and one framework graph. All direct dependencies and explicit overrides were checked against current stable releases. Miniflare retains compatible Undici7.30.1. The Worker compatibility date is2026-10-25. Rope uses no removed API form, routine driver or mutable tuning.
+
+Routine rest, eat and wait requests now use the existing gentle HF request immediately. The result offers “Ask more firmly…” to open the existing pressure choices without issuing another request. Other requests retain their existing choices. The pack-help tutorial names the actual person who is tired or has no food. These are presentation/input changes; simulation decisions and difficulty remain unchanged.
+
+The unchanged historical Commonstead Oskar fixture remains admitted. The new actual HF3 Commonstead Oskar fixture independently matches its raw source hash, source notebook, RNG and replay; its honest candidate build is0b38224a92e2, not a live ownership receipt. Only the same finite native Rope/Commonstead Oskar tuples accept engine2.23.0. Rope claims stamp the actual ENGINE_VERSION. Complete three-mountain HF2.23/HF3 snapshots match byte for byte without normalization. Earlier HF2.21 comparisons admit only the explicit engine metadata difference, retaining semantic history and mutation controls.

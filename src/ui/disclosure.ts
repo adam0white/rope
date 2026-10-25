@@ -6,6 +6,7 @@
 
 import { readPerson } from '@adam0white/human-framework';
 import { type ClimbState, canHear, forkOf, MOUNTAINS, personOf } from '../sim/climb.ts';
+import { memberOf } from '../sim/party.ts';
 
 export type Feature = 'insist' | 'tell' | 'promise' | 'rope' | 'fix' | 'pack' | 'share';
 
@@ -109,12 +110,14 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       lit: 'fix',
       text: 'You can secure a rope to the route above. Open **more actions** and choose **Fix rope**. Securing the rope takes time. It makes the route safer for everyone who follows.',
     };
-  const tired = s.members.some((x) => readPerson(personOf(s, x.id)).body.fatigue > 0.45 || x.rations === 0);
+  const tired = s.members.find(
+    (x) => x.homeAt === null && (readPerson(personOf(s, x.id)).body.fatigue > 0.45 || x.rations === 0),
+  );
   if (!has(d, 'pack') && tired)
     return {
       id: 'pack',
       unlock: 'pack',
-      text: 'Someone looks tired. Pick them, then open **more actions** to **take their pack** or **share food** from yours.',
+      text: `${memberOf(tired.id).name} ${tired.rations === 0 ? 'has no food left' : 'looks tired'}. Pick ${memberOf(tired.id).name}, then open **more actions** to **take their pack** or **share food** from yours.`,
     };
   return null;
 }

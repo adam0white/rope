@@ -1,4 +1,4 @@
-import { snapshot } from '@adam0white/human-framework';
+import { ENGINE_VERSION, snapshot } from '@adam0white/human-framework';
 import type { Lab, LifePreparation, PersonaEnvelope, PersonaLife } from '@adam0white/lab-client';
 import {
   anchorPersonaLife,
@@ -20,7 +20,6 @@ const createGame = (seed: number, chapter?: Chapter): State => newSeason(seed, c
 
 type Shelf = ReturnType<typeof personaChannel>;
 type SourceArchive = { revision: string; source: PersonaEnvelope['source']; snapshot: unknown };
-export const LOCAL_KEY = 'rope-cast-local-v1';
 const maxArchive = 1_000_000;
 
 /** Run-scoped ownership, recording and source archive. No current shelf reads on local load. */
@@ -32,9 +31,6 @@ export class Continuity {
   status = 'Saving people’s histories in this browser and recording play for the lab are separate choices.';
   runId: string = crypto.randomUUID();
   sources: SourceArchive[] = [];
-  private fileAllowed = false;
-  private denied = false;
-  private authored: { generation: number; epoch: string } | null = null;
   private key = crypto.randomUUID();
   private operation = Promise.resolve();
   private state: State | null = null;
@@ -49,15 +45,12 @@ export class Continuity {
     return {
       game: 'rope',
       build: String(this.lab.build().c ?? 'local'),
-      engine: '2.21.0',
+      engine: ENGINE_VERSION,
       rules: RULES,
     };
   }
   invalidate() {
     this.generation++;
-    this.authored = null;
-    this.fileAllowed = false;
-    this.denied = true;
     this.key = crypto.randomUUID();
     this.lab.setPersonaRecording(this.key);
     this.changed();
@@ -110,8 +103,6 @@ export class Continuity {
       this.sources = [];
       this.heads = chapter?.claims ?? [];
       this.fileOrigin = false;
-      this.fileAllowed = false;
-      this.denied = false;
       this.status = chapter
         ? `This season uses ${chapter.inputs.length} saved browser histories. They were all reserved together. Everyone else starts with their original history.`
         : localOnly
@@ -159,7 +150,6 @@ export class Continuity {
     this.sources = saved?.sources ?? [];
     if (JSON.stringify(this.sources).length > maxArchive)
       throw new Error('The saved archive is too large to load.');
-    this.denied = false;
     this.status =
       'The people saved with this run have been restored. Their current browser histories were not loaded. Importing a file gives this run no permission to update those histories.';
   }

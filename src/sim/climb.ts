@@ -2326,7 +2326,3 @@ export function replay(
   else s.narration = savedNarration;
   return s;
 }
-
-export function minuteOfDayOf(s: ClimbState): number {
-  return minuteOfDay(s);
-}

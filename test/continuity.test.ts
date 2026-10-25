@@ -43,7 +43,7 @@ function control(enabled = false) {
           revisions: r.envelopes?.map((p) => p.revision) ?? [],
           recordingEpoch: 'control-epoch',
         } as T;
-      throw new Error('unexpected ' + r.action);
+      throw new Error(`unexpected ${r.action}`);
     },
   };
   return { lab, shelf, requests, continuity: new Continuity(lab as unknown as Lab, shelf) };

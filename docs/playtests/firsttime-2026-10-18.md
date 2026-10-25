@@ -5,12 +5,14 @@ Persona: a first-time player who loves Darkest Dungeon and Frostpunk. Played the
 Verdict: "Yes, for one more climb."
 
 ## Hooks
+
 - Refusals in a real voice: "Not from here. Look where we are."
 - The scouting dilemma.
 - The "One thing you said" ending: the best part.
 - "Nell saved you the good mug."
 
 ## Problems
+
 1. Dead stretches from 05:00 to 09:00. Wanted small events on the approach (a boot, a story line, a first choice of pace or route), or at least a "quiet stretch, fast-forward" hint. The first refusal should be possible in the first hour.
 2. "Nothing visible to read" after hour one: tiredness, fear and cold should be readable at a glance on the figures.
 3. Stale bubbles: Oskar's "fine, I'll go" lingered after a turn call.

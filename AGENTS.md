@@ -7,7 +7,8 @@ You lead five Human Framework (HF) people up a mountain and back. Every one of t
 - **First acceptance test:** within ten minutes the player makes a plan, meets a reasonable objection, changes something concrete and sees a consequence they care about.
 
 ## Rules
-- HF comes only from npm: `@adam0white/human-framework@2.21.0`, exact. Never import sibling source. No game logic goes into HF. A generic HF gap goes into [docs/hf-requests.md](docs/hf-requests.md).
+
+- HF comes only from npm: `@adam0white/human-framework@3.0.0`, exact. Never import sibling source. No game logic goes into HF. A generic HF gap goes into [docs/hf-requests.md](docs/hf-requests.md).
 - Never fake a verdict. Every refusal, deferral or counter-offer comes from an HF resolution (`answerNow`, `decide` with a suggestion, `predict`).
 - Inner state is never a number on screen. Show it as drawing: stride, lag, lean, gaze, hatching.
 - All world randomness is keyed by (seed, kind, place, minute) through `hashUnit`, never by draw order. Person RNG stays unused (`will.temperature` 0). Seed + input log + start state is the replay, the playtest export and the debrief substrate.
@@ -21,6 +22,7 @@ You lead five Human Framework (HF) people up a mountain and back. Every one of t
 - Deferred work goes into the Deferred section of docs/design.md with a target. Playtesters' words go verbatim into `docs/playtest-*.md`.
 
 ## Delivery
+
 - Repository `adam0white/rope` (public). Site: https://rope.adamwhite.work (Cloudflare Worker static assets, `wrangler.jsonc`). The owner authorized commit, push and `npm run deploy`. Verify the live site against the commit after each deploy.
 
 - Player-facing copy follows [Plain English](docs/lab/plain-english.md).

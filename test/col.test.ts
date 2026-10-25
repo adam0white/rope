@@ -1,6 +1,6 @@
 import { voiceOf } from '@adam0white/human-framework';
 import { expect, it } from 'vitest';
-import { type ClimbState, type Force, queueInput, startClimb, step } from '../src/sim/climb.ts';
+import { type ClimbState, type Force, memberState, queueInput, startClimb, step } from '../src/sim/climb.ts';
 
 const below = new Set(['meadow', 'moraine', 'snow']);
 
@@ -45,7 +45,7 @@ it('control: insisting again and again on the way up wears trust down, through H
   const before = voiceOf(wren, 'leader')?.trust ?? 0;
   for (let k = 0; k < 4; k++) {
     s.leader.move = null;
-    s.leader.pos = structuredClone(s.members.find((m) => m.id === 'wren')!.pos);
+    s.leader.pos = structuredClone(memberState(s, 'wren').pos);
     queueInput(s, { t: 'say', to: 'wren', act: 'descend', force: 'insist' });
     for (let i = 0; i < 8; i++) step(s);
   }

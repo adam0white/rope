@@ -12,7 +12,6 @@ import {
   canonicalCast,
   canonicalPersona,
   type LifePreparation,
-  lifeAdmission,
   type PersonaEnvelope,
   preparePersonaLife,
 } from '@adam0white/lab-client';
@@ -65,7 +64,7 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
   if (
     portable.person.mappingVersion !== mapping ||
     portable.person.source.id !== sourceId ||
-    !['2.17.0', '2.21.0'].includes(portable.person.source.engine) ||
+    !['2.17.0', '2.21.0', '2.23.0'].includes(portable.person.source.engine) ||
     portable.person.name !== cast.name
   )
     throw new Error('The person’s original role, history format, simulation version or name does not match.');
@@ -150,7 +149,7 @@ export function checkChapter(chapter: Chapter) {
       claim.branchId !== input.parent.branchId ||
       claim.parentRevision !== input.parent.revision ||
       claim.source.game !== 'rope' ||
-      !['2.17.0', '2.21.0'].includes(claim.source.engine) ||
+      !['2.17.0', '2.21.0', '2.23.0'].includes(claim.source.engine) ||
       claim.source.rules !== RULES ||
       !same(claim.transfer, { ...input.parent.transfer, life: input.life })
     )
@@ -217,4 +216,3 @@ export async function climberTransfer(person: Person) {
     ],
   };
 }
-export { lifeAdmission };

@@ -21,3 +21,18 @@ it('lets essential tutorial notes wrap fully instead of clipping their final ins
   expect(getComputedStyle(copy).getPropertyValue('-webkit-line-clamp')).toBe('');
   expect(getComputedStyle(copy).overflow).not.toBe('hidden');
 });
+
+it('names the tired person when teaching pack help', async () => {
+  const { startClimb } = await import('../src/sim/climb.ts');
+  const { nextNote } = await import('../src/ui/disclosure.ts');
+  const state = startClimb(4, 3, undefined, 'hollin', 2);
+  const oskar = state.members.find((m) => m.id === 'oskar');
+  if (!oskar) throw new Error('Missing Oskar');
+  oskar.rations = 0;
+  const note = nextNote(
+    { unlocked: ['insist', 'tell', 'promise', 'rope', 'fix'], seen: ['intro', 'people', 'walk'] },
+    state,
+  );
+  expect(note?.text).toContain('Oskar');
+  expect(note?.text).not.toContain('Someone');
+});
