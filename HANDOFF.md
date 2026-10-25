@@ -1,4 +1,19 @@
-# HF plain narration adoption (2026-10-25)
+# Current source and delivery (2026-10-25)
+
+Remaining: Adam accepts feel and readiness. The named owner journeys and broader game follow-ups remain open; see the design Deferred list and the dated dispositions in `~/code/.lab-scratch/v3/rope/report.md`. This documentation update does not establish owner acceptance.
+
+- Independently fetched `origin/main` and live `/release.json` during the documentation pass: both identify `dde3e7481b8746602e7fc5e236d629cd0a61ac0d`. Live reports framework `3.0.0`, app `0.1.0` and `dirty:false`. This is the deployed application baseline; a later docs-only commit does not require deployment.
+- Current exact npm HF pin and override: `3.0.0`; package engine: `2.23.0`. Fresh simulation rules remain `2`. Native Rope history uses dialect `rope-cast/1`, rules stamp `rope-cast-1` and mapping `rope-calendar/1`. These values describe different contracts. Lab client `0.4.10` and kit `0.5.11` remain immutable vendored artifacts.
+- Current controls come from `src/ui/game.ts`: automatic pacing, bottom-row leader movement, nearby-person requests, one-tap gentle rest/eat/wait and optional pressure choices. Menu provides Feedback, Full screen, All games, Recording, New game and Resume. Diagnostic playback speed, People/history tools and run downloads require exactly `?lab=1`. Title-page Resume uses the browser autosave. Lab tools can import a current run and verify its reconstructed state.
+- README now explains these controls, HF's contribution, exact versions and replay limits. No dedicated About/Credits page exists; contextual information panels are unchanged. No app, simulation, metadata, dependency, save or replay code changed.
+- Offline support is bounded by `src/main.ts` and `public/sw.js`: production registration, cached navigation fallback and caching of fetched assets. Initial online asset loading and retained browser caches are required. Feedback delivery and online camp conversation need a connection; camp has a deterministic fallback. No new offline browser test or online receipt is claimed.
+- HF3 technical delivery is recorded in `~/code/.lab-scratch/v3/rope/report.md`: signed source, exact green CI, clean deployment, matching live assets and phone/desktop/tablet checks. That receipt supersedes the unfinished delivery status in the historical source-phase notes below. Workers AI spend remains at the existing recorded estimate; this documentation pass made no model calls.
+
+# Historical receipts
+
+The dated sections below retain their original version claims, owner words and evidence. They describe those increments, not the current release. Earlier pause/resume instructions are historical and do not authorize resuming an obsolete worktree.
+
+## HF plain narration adoption (2026-10-25)
 
 Remaining: Adam accepts feel. Technical delivery receipts are in `/Users/abdul/code/.lab-scratch/hfadopt/rope-report.md`.
 
