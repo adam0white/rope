@@ -149,6 +149,7 @@ export function nextClimb(season: SeasonState, played: ClimbState, branch: Branc
   valley(people, played.minute, day * 1440 + next.startMinuteOfDay);
   season.climbNo = played.climbNo + 1;
   const climb = startClimb(season.seed, day, people, next.id, season.climbNo);
+  if (played.fieldRules) climb.fieldRules = { ...played.fieldRules };
   aftermath(climb, season.history.at(-1)?.facts ?? {});
   season.start = snapshot(climb);
   season.people = [];
@@ -253,7 +254,11 @@ export function valley(people: Person[], from: number, to: number): void {
       });
     }
     const offers: Affordance[] = [
-      ...VALLEY,
+      ...VALLEY.map((o) =>
+        p.body.bladder && o.id === 'relieve'
+          ? { ...o, label: 'use the toilet', advertises: {}, voidsBladder: true }
+          : o,
+      ),
       ...MEMBERS.filter((m) => m.id !== p.id).map(
         (m): Affordance => ({
           id: `talk:${m.id}`,
@@ -284,6 +289,7 @@ export function valley(people: Person[], from: number, to: number): void {
         action: aff.action,
         status: end < (p.activity?.endsAt ?? end) ? 'interrupted' : 'completed',
         at: end,
+        ...(aff.voidsBladder ? { voidedBladder: true } : {}),
         ...(aff.action === 'eat' ? { needs: { food: 0.8, water: 0.4 } } : {}),
         ...(aff.action === 'talk' && aff.targetId
           ? {

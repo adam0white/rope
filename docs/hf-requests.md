@@ -15,3 +15,11 @@ Generic gaps found while building The Rope. Nothing here is game-specific; the H
 
 **Gap (confirmed, same export):** three minutes into the climb Wren wanted to go down and answered five asks with "Not till I go down the tarn path. I'll still have enough for the descent." The sentence is built from a goal (`g1`) whose affordance is the leg she is already on. The text reads as if the descent were planned and the path were ahead of her.
 **Proposal:** the deferral template should use "turn back" when the goal's target is the person's current leg, and the reason for a goal formed three minutes after leaving should be inspectable (why did the goal form so early?).
+
+## Released API reconciliation (2026-10-25)
+
+The optional `field-rules` path uses published HF3.0.0, never sibling source. `bodyForecast` and the existing fullness/alongside paths already serve future-body and resting-partner requests. No replacement faculty is added. `noteVoicePromise` now supplies the new path's response to the leader's own turn-time promise. Existing tapes retain the original host trust step.
+
+The optional bladder faculty is now used through `enableBladder`, real water outcomes and completed voiding, with no `relief` advertisement. HF owns bodily dynamics. `scripts/field-control.ts` exercises actual host intake, one completed void, unchanged Person RNG and exact full replay. This supersedes the historical claim that HF has no bladder, not the old reproduction evidence.
+
+In the new path, reversing the currently occupied leg is labelled **turn back down** in the host offer. HF retains the complete reason and deferral. It has no terrain-specific template. Existing saved semantic labels remain unchanged. No generic HF gap is closed by inventing a game-local reasoning system.

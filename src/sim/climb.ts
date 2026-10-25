@@ -16,11 +16,13 @@ import {
   bodyForecast,
   type DecisionRecord,
   decide,
+  enableBladder,
   enableFullness,
   type FollowOn,
   finish,
   interrupt,
   knockDown,
+  noteVoicePromise,
   type Outcome,
   type Percept,
   type Person,
@@ -28,6 +30,7 @@ import {
   predict,
   promise as promiseCommitment,
   type ReceivedConsequence,
+  readBladder,
   readPerson,
   reviewed,
   type Suggestion,
@@ -115,6 +118,18 @@ export interface MemberState {
   escortFor?: string | null;
   /** An explicit, finite rendezvous request; absent in all older input paths. */
   gather?: GatherPlan;
+  /** A report exists only after physically completing the requested crossing. */
+  escortMeeting?: {
+    with: string;
+    input: number;
+    until: number;
+    /** Actual original HF resolution, never a host-authored accepted flag. */
+    answer?: SuggestionResolution;
+    activity?: { id: string; startedAt: number };
+  };
+  /** Nearby company accepted after a real meeting; never invokes legacy auto-rope. */
+  companyFor?: string;
+  scoutReport?: { leg: string; at: number; words: string; fact?: FactId };
 }
 
 export interface LeaderState {
@@ -146,10 +161,15 @@ export type Act =
   | 'pack'
   | 'ahead'
   | 'escort'
-  | 'gather';
+  | 'gather'
+  | 'escort-reach'
+  | 'scout-route'
+  | 'drink'
+  | 'relieve';
 export type FactId = 'storm' | 'gully-quiet' | 'gully-loose' | 'ridge-solid' | 'descent-tiring';
 
 export type Input =
+  | { t: 'field-rules'; at: number; bladder: boolean }
   | { t: 'say'; at: number; to: string; act: Act; force: Force; via?: string; with?: string }
   | { t: 'promise'; at: number; hour: number }
   | { t: 'tell'; at: number; fact: FactId }
@@ -192,6 +212,11 @@ export interface JournalEntry {
 export type NarrationVersion = 1 | 2 | 3;
 
 export interface ClimbState {
+  /** Explicit input opt-in; absent in every legacy tape. HF owns bodily dynamics. */
+  fieldRules?: {
+    bladder: boolean;
+    observations?: Partial<Record<FactId, { at: number; source: 'direct' | 'scout' }>>;
+  };
   castEdition?: 'rope-cast-1';
   v: 1;
   /** Host rules version. Absent (1): climbs saved before HF 2.8.0. 2: fullness on, alongside, reconsider. */
@@ -521,7 +546,7 @@ function downOffer(s: ClimbState, p: Person, mem: MemberState, lg: Leg, fromT: n
   return {
     id: `down:${lg.id}`,
     action: 'descend',
-    label: `go down ${lg.name}`,
+    label: s.fieldRules && mem.pos.leg === lg.id ? `turn back down ${lg.name}` : `go down ${lg.name}`,
     placeId: lg.id,
     targetId: lg.from,
     duration: minutes,
@@ -584,6 +609,12 @@ export function offersFor(s: ClimbState, id: string, asking?: string): Affordanc
   // HF reads `relief` as relief from pain, not the toilet, and has no bladder (2.8.0 triage): from rules 2 there is
   // no "step aside" offer, since an offer that advertises nothing is only ever chosen as filler.
   if (!rules2(s)) out.push(stay(small('relieve', 'relieve', 'step aside', 4, { relief: 0.8 })));
+  // Optional HF storage/intake/choice faculty, never a host urge clock or pain relief.
+  // Only settled footing permits stepping aside; completion confirms actual voiding.
+  if (s.fieldRules?.bladder && readBladder(p) && !pos.leg && !mem.ropedTo)
+    out.push(
+      stay({ ...small('relieve', 'relieve', 'step aside behind the rocks', 4, {}), voidsBladder: true }),
+    );
   if (mem.rations > 0 || atHut) out.push(stay(small('eat', 'eat', 'eat something', 10, { food: 0.45 })));
   out.push(
     stay({
@@ -599,7 +630,30 @@ export function offersFor(s: ClimbState, id: string, asking?: string): Affordanc
     (asked === `gather:${mem.gather.with}` || p.activity?.affordanceId === `gather:${mem.gather.with}`) &&
     gatherRoute(s, mem, mem.gather.point).reduce((n, x) => n + x.minutes, 0) <= mem.gather.until - s.minute
   )
-    out.push(gatherOffer(s, mem, mem.gather));
+    out.push(
+      mem.escortMeeting
+        ? {
+            ...gatherOffer(s, mem, mem.gather),
+            label: `reach ${memberIn(s, mem.gather.with).name}, then consider going down together`,
+          }
+        : gatherOffer(s, mem, mem.gather),
+    );
+  if (
+    s.fieldRules &&
+    (asked === 'scout-route' || asked.startsWith('scout:') || p.activity?.affordanceId.startsWith('scout:'))
+  ) {
+    const lg = nextLegUp(s, mem);
+    if (lg && !mem.ropedTo && mem.homeAt === null) {
+      const walk = upOffer(s, p, mem, lg, mem.pos.leg ? mem.pos.t : 0);
+      out.push({
+        ...walk,
+        id: `scout:${lg.id}`,
+        label: `cross ${lg.name} and report what I find`,
+        advertises: { ...walk.advertises, belonging: 0.12 },
+        action: 'climb',
+      });
+    }
+  }
   for (const other of s.members) {
     if (other.id === id || asked !== `rope:${other.id}`) continue;
     if (mem.ropedTo === null && other.ropedTo === null && distance(s, pos, other.pos) < 40) {
@@ -635,6 +689,19 @@ export function queueInput(s: ClimbState, input: NewInput): number {
 }
 
 function line(s: ClimbState, who: string, input: number, r: SuggestionResolution): void {
+  const mission = memberState(s, who).escortMeeting;
+  if (
+    mission?.input === input &&
+    s.inputs[input]?.t === 'say' &&
+    (s.inputs[input] as Extract<Input, { t: 'say' }>).act === 'escort-reach' &&
+    !mission.activity
+  ) {
+    if (r.verdict === 'assented' || r.verdict === 'complied') mission.answer = structuredClone(r);
+    else if (r.verdict !== 'deferred') {
+      delete memberState(s, who).escortMeeting;
+      delete memberState(s, who).gather;
+    }
+  }
   const own = voiced(
     s.seed,
     who,
@@ -660,6 +727,52 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
     reason: r.reason,
     says,
   });
+  if (s.fieldRules && ['assented', 'complied'].includes(r.verdict)) {
+    const current = s.inputs[input];
+    if (current?.t === 'say' && ['climb', 'descend'].includes(current.act)) {
+      const opposite = current.act === 'climb' ? 'descend' : 'climb';
+      const previous = s.lines.findLast((l) => {
+        if (l.who === who || s.minute - l.at > 10 || !canHear(s, l.who)) return false;
+        const request = s.inputs[l.input];
+        return (
+          (opposite === 'descend' && l.reason === 'asks:company') ||
+          (request?.t === 'say' && request.act === opposite && ['assented', 'complied'].includes(l.verdict))
+        );
+      });
+      if (
+        previous &&
+        canHear(s, who) &&
+        distance(s, memberState(s, who).pos, memberState(s, previous.who).pos) <= earshot(s)
+      ) {
+        const key = `exchange:${[who, previous.who].sort().join(':')}`;
+        if (!s.beatsDone.includes(key)) {
+          s.beatsDone.push(key);
+          s.journal.push({
+            at: s.minute,
+            story: true,
+            text: `${memberIn(s, previous.who).name} had said: “${previous.says}” When you asked ${memberIn(s, who).name} to ${current.act === 'climb' ? 'climb on' : 'turn back'}, ${memberIn(s, who).they} answered: “${says}”`,
+          });
+          // Both utterances were actually spoken within reach, not read from either mind.
+          for (const [listener, speaker, words] of [
+            [who, previous.who, previous.says],
+            [previous.who, who, says],
+          ])
+            if (listener && speaker && words)
+              perceive(personOf(s, listener), [
+                {
+                  at: s.minute,
+                  channel: 'social',
+                  kind: 'speech',
+                  actorId: speaker,
+                  targetId: listener,
+                  summary: `${memberIn(s, speaker).name} said: “${words}”`,
+                  salience: 0.5,
+                },
+              ]);
+        }
+      }
+    }
+  }
   if (r.verdict !== 'assented')
     s.journal.push({ at: s.minute, who, text: journalFor(s, who, { ...r, says }) });
 }
@@ -711,6 +824,8 @@ function withCause(s: ClimbState, who: string, input: number, r: SuggestionResol
       return `${says} ${name} is too far away to attach to the same rope.`;
     return says;
   }
+  if (s.fieldRules && inp.act === 'pack' && distance(s, mem.pos, s.leader.pos) >= 40)
+    return `${says} You are too far away to take my pack. Walk closer first.`;
   if (inp.act === 'eat' && mem.rations <= 0) return `${says} I have no food left.`;
   return says;
 }
@@ -792,12 +907,22 @@ function suggestionFor(s: ClimbState, mem: MemberState, inp: Extract<Input, { t:
     case 'descend':
     case 'escort':
       return { ...base, action: 'descend' };
+    case 'escort-reach':
+      return {
+        ...base,
+        affordanceId: s.fieldRules ? `gather:${inp.with ?? ''}` : 'escort-unavailable',
+        appeal: 'belonging',
+      };
     case 'gather':
       return { ...base, affordanceId: `gather:${inp.with ?? ''}`, appeal: 'belonging' };
     case 'rope':
       return { ...base, affordanceId: `rope:${inp.with ?? ''}`, appeal: 'safety' };
     case 'pack':
       return { ...base, affordanceId: 'pack', appeal: 'rest' };
+    case 'scout-route': {
+      const lg = nextLegUp(s, mem);
+      return { ...base, affordanceId: lg && s.fieldRules ? `scout:${lg.id}` : 'scout-unavailable' };
+    }
     case 'ahead': {
       const lg = nextLegUp(s, mem, inp.via ?? s.leader.route);
       return lg ? { ...base, affordanceId: `up:${lg.id}` } : { ...base, action: 'climb' };
@@ -814,6 +939,13 @@ function applyInput(s: ClimbState, idx: number): void {
   const L = s.leader.pos;
   s.inputWhere[idx] = L.place ? placeOf(m, L.place).name : legOf(m, L.leg ?? '').name;
   switch (inp.t) {
+    case 'field-rules': {
+      // An explicit logged choice, never inferred from a package upgrade or loaded actor.
+      if (s.fieldRules || s.minute > s.startMinute + 1) return;
+      s.fieldRules = { bladder: inp.bladder };
+      if (inp.bladder) for (const p of s.people) enableBladder(p);
+      return;
+    }
     case 'say': {
       // A rope ties two: the request goes to both, each asked to rope up with the other.
       const targets =
@@ -822,6 +954,25 @@ function applyInput(s: ClimbState, idx: number): void {
           : (inp.act === 'rope' || inp.act === 'gather') && inp.with
             ? [inp.to, inp.with]
             : [inp.to];
+      for (const id of targets) {
+        const mem = memberState(s, id);
+        if (!mem.escortMeeting || !canHear(s, id) || mem.homeAt !== null) continue;
+        delete mem.escortMeeting;
+        if (mem.gather && personOf(s, id).activity?.affordanceId.startsWith('gather:'))
+          complete(s, m, mem, personOf(s, id), 'interrupted');
+        else delete mem.gather;
+      }
+      if (s.fieldRules && inp.act === 'escort-reach' && inp.to !== 'all' && inp.with && inp.to !== inp.with) {
+        const helper = memberState(s, inp.to);
+        const target = memberState(s, inp.with);
+        if (canHear(s, helper.id) && helper.homeAt === null && target.homeAt === null) {
+          const point = { ...target.pos };
+          const segments = gatherRoute(s, helper, point);
+          const until = s.minute + Math.ceil(segments.reduce((n, x) => n + x.minutes, 0)) + 10;
+          helper.gather = { with: target.id, point, segments, started: s.minute, until };
+          helper.escortMeeting = { with: target.id, input: idx, until };
+        }
+      }
       if (inp.act === 'gather' && inp.with && inp.to !== 'all' && inp.to !== inp.with) {
         const a = memberState(s, inp.to);
         const b = memberState(s, inp.with);
@@ -1257,6 +1408,10 @@ function factPercept(s: ClimbState, fact: FactId, to: string): Percept {
 function learn(s: ClimbState): void {
   const m = mountainOf(s);
   const add = (f: FactId) => {
+    if (s.fieldRules) {
+      s.fieldRules.observations ??= {};
+      s.fieldRules.observations[f] = { at: s.minute, source: 'direct' };
+    }
     if (!s.known.includes(f)) s.known.push(f);
   };
   const mod = minuteOfDay(s);
@@ -1292,6 +1447,10 @@ export function legReport(s: ClimbState, lg: Leg): string {
 /** Seeing a leg up close makes its route facts known (for telling the others). */
 function learnLeg(s: ClimbState, lg: Leg): void {
   const add = (f: FactId) => {
+    if (s.fieldRules) {
+      s.fieldRules.observations ??= {};
+      s.fieldRules.observations[f] = { at: s.minute, source: 'direct' };
+    }
     if (!s.known.includes(f)) s.known.push(f);
   };
   if (lg.id === 'ridge') add('ridge-solid');
@@ -1696,7 +1855,42 @@ function stepLeader(s: ClimbState, m: Mountain): void {
 
 function stepMember(s: ClimbState, m: Mountain, mem: MemberState): void {
   const p = personOf(s, mem.id);
+  const mission = mem.escortMeeting;
+  if (mission && s.minute > mission.until) {
+    delete mem.escortMeeting;
+    if (mem.pending?.input === mission.input) mem.pending = null;
+    if (mem.deferred?.input === mission.input) mem.deferred = null;
+    if (
+      mem.gather &&
+      p.activity?.affordanceId === mission.activity?.id &&
+      p.activity?.startedAt === mission.activity?.startedAt
+    )
+      complete(s, m, mem, p, 'interrupted');
+    else delete mem.gather;
+  }
   if (!p.body.alive) return;
+  if (mem.scoutReport && canHear(s, mem.id)) {
+    const report = mem.scoutReport;
+    s.journal.push({
+      at: s.minute,
+      who: mem.id,
+      text: `${p.name} reported the route crossed at ${clock(report.at)}: ${report.words}. Conditions may have changed.`,
+    });
+    if (report.fact && s.fieldRules) {
+      s.fieldRules.observations ??= {};
+      const observations = s.fieldRules.observations;
+      const related: FactId[] = report.fact.startsWith('gully-')
+        ? ['gully-loose', 'gully-quiet']
+        : [report.fact];
+      const newest = Math.max(-Infinity, ...related.map((f) => observations[f]?.at ?? -Infinity));
+      if (report.at > newest) {
+        s.known = s.known.filter((f) => !related.includes(f));
+        s.known.push(report.fact);
+        observations[report.fact] = { at: report.at, source: 'scout' };
+      }
+    }
+    delete mem.scoutReport;
+  }
   if (mem.gather && p.activity?.affordanceId === `gather:${mem.gather.with}`) gatherStep(s, m, mem);
   if (mem.move) mem.pos = movePos(mem.move, s.minute);
   let a = p.activity;
@@ -1741,6 +1935,18 @@ function stepMember(s: ClimbState, m: Mountain, mem: MemberState): void {
     else reviewed(p);
     return;
   }
+  if (aff.id.startsWith('down:') && mem.escortMeeting) {
+    const target = memberState(s, mem.escortMeeting.with);
+    if (
+      voice?.input === mem.escortMeeting.input &&
+      rec.suggestion &&
+      ['assented', 'complied'].includes(rec.suggestion.verdict) &&
+      s.minute <= mem.escortMeeting.until &&
+      distance(s, mem.pos, target.pos) < 40
+    )
+      mem.companyFor = target.id;
+    delete mem.escortMeeting;
+  }
   if (aff.id.startsWith('down:') && needsCompany(s, mem)) {
     // HF chose to go down; on a mountain nobody leaves the party alone without the leader's answer.
     askCompany(s, mem);
@@ -1760,11 +1966,12 @@ function needsCompany(s: ClimbState, mem: MemberState): boolean {
   if (mem.turnedAt !== null || mem.alone || s.leader.turnedAt !== null) return false;
   if (mem.high === mountainOf(s).hut && mem.pos.place === mountainOf(s).hut) return false;
   if (mem.escortFor) return false;
+  if (mem.companyFor && distance(s, mem.pos, memberState(s, mem.companyFor).pos) < 60) return false;
   return !s.members.some(
     (o) =>
       o.id !== mem.id &&
       o.homeAt === null &&
-      (o.turnedAt !== null || o.escortFor === mem.id) &&
+      (o.turnedAt !== null || o.escortFor === mem.id || o.companyFor === mem.id) &&
       distance(s, o.pos, mem.pos) < 60,
   );
 }
@@ -1801,6 +2008,8 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
   const p = personOf(s, mem.id);
   const end = p.activity?.endsAt ?? s.minute + aff.duration;
   if (aff.id.startsWith('gather:') && mem.gather) {
+    if (mem.escortMeeting?.answer && p.activity)
+      mem.escortMeeting.activity = { id: p.activity.affordanceId, startedAt: p.activity.startedAt };
     mem.gather.segments = gatherRoute(s, mem, mem.gather.point);
     mem.gather.started = s.minute;
     mem.gather.until = end;
@@ -1808,9 +2017,9 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
     gatherStep(s, m, mem);
     return;
   }
-  if (aff.id.startsWith('up:') || aff.id.startsWith('down:')) {
+  if (aff.id.startsWith('up:') || aff.id.startsWith('scout:') || aff.id.startsWith('down:')) {
     const lg = legOf(m, aff.placeId ?? '');
-    const up = aff.id.startsWith('up:');
+    const up = aff.id.startsWith('up:') || aff.id.startsWith('scout:');
     const fromT = mem.pos.leg ? mem.pos.t : up ? 0 : 1;
     if (up && mem.turnedAt !== null) {
       // Turned and then went up again: the turn no longer stands, so the day's record does not say both.
@@ -1820,6 +2029,18 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
         who: mem.id,
         text: `${memberIn(s, mem.id).name} changed ${memberIn(s, mem.id).they === 'she' ? 'her' : 'his'} mind and went up again.`,
       });
+    }
+    if (!up && mem.companyFor) {
+      const other = memberState(s, mem.companyFor);
+      if (distance(s, mem.pos, other.pos) < 60) {
+        other.asks = null;
+        s.journal.push({
+          at: s.minute,
+          who: mem.id,
+          text: `${memberIn(s, mem.id).name} went down with ${memberIn(s, other.id).name}${mem.ropedTo === other.id ? ', already roped together' : ''}.`,
+        });
+      }
+      delete mem.companyFor;
     }
     if (!up && mem.escortFor) {
       const o = memberState(s, mem.escortFor);
@@ -1983,6 +2204,37 @@ function complete(
     if (mem.move) mem.pos = movePos(mem.move, s.minute);
     mem.move = null;
     delete mem.gather;
+    const meeting = mem.escortMeeting;
+    if (
+      meeting &&
+      status === 'completed' &&
+      s.minute <= meeting.until &&
+      meeting.answer &&
+      ['assented', 'complied'].includes(meeting.answer.verdict) &&
+      meeting.activity?.id === a.affordanceId &&
+      meeting.activity.startedAt === a.startedAt &&
+      a.targetId === meeting.with
+    ) {
+      const other = memberState(s, meeting.with);
+      if (other.homeAt === null && distance(s, mem.pos, other.pos) < 40) {
+        s.journal.push({
+          at: s.minute,
+          who: mem.id,
+          text: `${p.name} reached ${memberIn(s, other.id).name}. They still choose whether to go down together.`,
+        });
+        mem.pending = {
+          s: { voiceId: LEADER, action: 'descend', strength: FORCE.ask, since: s.minute },
+          input: meeting.input,
+        };
+      } else {
+        s.journal.push({
+          at: s.minute,
+          who: mem.id,
+          text: `${p.name} reached the meeting place; ${memberIn(s, other.id).name} had moved. They have not met.`,
+        });
+        delete mem.escortMeeting;
+      }
+    } else if (meeting) delete mem.escortMeeting;
   }
   const mv = mem.move;
   if (mv) {
@@ -1992,6 +2244,21 @@ function complete(
       if (mv.dir === 'up') {
         mem.pos = at(lg.to);
         mem.path.push(lg.id);
+        if (a.affordanceId.startsWith('scout:'))
+          mem.scoutReport = {
+            leg: lg.id,
+            at: s.minute,
+            words: legReport(s, lg),
+            ...(lg.id === 'ridge'
+              ? { fact: 'ridge-solid' as const }
+              : lg.id === 'gully'
+                ? {
+                    fact: (lg.rockfall * sunAt(s.weather, s.minute) > 0.3
+                      ? 'gully-loose'
+                      : 'gully-quiet') as FactId,
+                  }
+                : {}),
+          };
         if (mem.ahead) {
           mem.ahead = false;
           const next = lg.to === m.summit ? null : nextLegUp(s, mem);
@@ -2037,6 +2304,7 @@ function complete(
       if (mem.pos.place !== m.hut) mem.rations = Math.max(0, mem.rations - 1);
       out.needs = { food: 0.45 };
     } else if (a.action === 'drink') out.needs = { water: 0.35 };
+    else if (a.action === 'relieve' && s.fieldRules?.bladder) out.voidedBladder = true;
     else if (a.action === 'relieve' && !rules2(s)) out.needs = { relief: 0.8 };
     else if (a.action === 'pack') {
       mem.pack = false;
@@ -2244,7 +2512,8 @@ function checkPromise(s: ClimbState): void {
     const p = personOf(s, id);
     const trust = voiceOf(p, LEADER)?.trust ?? 0.5;
     // Host step (docs/hf-requests.md 2): HF has no rule for a voice keeping its own promise.
-    adoptVoiceTrust(p, LEADER, Math.max(0, Math.min(1, trust + (kept ? 0.05 : -0.15))), 1);
+    if (s.fieldRules) noteVoicePromise(p, LEADER, { kept, at: s.minute, action: 'turn back' });
+    else adoptVoiceTrust(p, LEADER, Math.max(0, Math.min(1, trust + (kept ? 0.05 : -0.15))), 1);
     perceive(p, [
       {
         at: s.minute,

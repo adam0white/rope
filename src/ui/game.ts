@@ -43,6 +43,8 @@ import { exportClimb, nextClimb, type SeasonState, validateSeasonStart } from '.
 import { haltReason, hurtCall, namesOf, promiseDue } from './calls.ts';
 import { Continuity, type Ownership } from './continuity.ts';
 import { type Disclosure, has, markSeen, type Note, newDisclosure, nextNote } from './disclosure.ts';
+import { DisplaySession } from './display.ts';
+import { fieldNotice } from './field.ts';
 import { icon } from './icons.ts';
 import { lab } from './lab.ts';
 import { climbMilestones, climbScreen } from './labnames.ts';
@@ -112,6 +114,7 @@ export class Game {
   private answersInput = -1;
   private paceEl = h('div', 'clock-rate');
   private sceneEl = h('div', 'scene');
+  private display = new DisplaySession();
   private bubblesEl = h('div', 'bubbles');
   private noteEl = h('div', 'note');
   private movementEl = h('div', 'movement-status');
@@ -325,6 +328,7 @@ export class Game {
   }
 
   private begin(c: ClimbState, start: string, resumed = false): void {
+    this.branch = undefined;
     this.climb = c;
     this.start = start;
     this.continuity.attach({ season: this.season, climb: c });
@@ -549,6 +553,10 @@ export class Game {
         rope: `tie a rope between yourself and ${inp.with ? memberOf(inp.with).name : ''}`,
         pack: 'give me your pack',
         ahead: 'go on ahead and call down what you see',
+        'scout-route': 'cross the next leg and report what you find when we can hear you',
+        drink: 'drink',
+        relieve: 'step aside',
+        'escort-reach': `meet ${inp.with ? memberOf(inp.with).name : 'them'}, then consider going down together`,
         escort: `go down with ${inp.with ? memberOf(inp.with).name : 'them'}`,
         gather: 'come together and wait for each other',
       };
@@ -888,6 +896,11 @@ export class Game {
     if (this.panel === 'main' || this.panel === 'more' || this.panel === 'partner')
       targetControls.append(chips);
     sh.append(label, targetControls);
+    const notice = fieldNotice(c);
+    if (notice)
+      sh.append(
+        h('details', 'field-notice', `<summary>Route and weather warning</summary><p>${esc(notice)}</p>`),
+      );
     chips.scrollLeft = targetScroll;
     const calls = h('div', 'pending-calls');
     // Someone asks who will go down with them: the player's answer, as words to people.
@@ -950,7 +963,7 @@ export class Game {
           this.send({
             t: 'say',
             to: o.id,
-            act: 'escort',
+            act: c.fieldRules ? 'escort-reach' : 'escort',
             force: 'ask',
             with: asking.id,
           });
@@ -1108,7 +1121,16 @@ export class Game {
       this.verbBtn('wait', 'wait', 'wait', ok, choose('wait'), unheard),
     );
     if (has(this.disc, 'tell'))
-      g.append(this.verbBtn('ahead', 'go ahead', 'up', ok && one, choose('ahead'), chooseOne || unheard));
+      g.append(
+        this.verbBtn(
+          c.fieldRules ? 'scout-route' : 'ahead',
+          c.fieldRules ? 'scout crossing' : 'go ahead',
+          'up',
+          ok && one,
+          choose(c.fieldRules ? 'scout-route' : 'ahead'),
+          chooseOne || unheard,
+        ),
+      );
     if (has(this.disc, 'rope'))
       g.append(
         this.verbBtn(
@@ -1385,7 +1407,11 @@ export class Game {
           rope: 'rope up',
           pack: 'give you a pack',
           ahead: 'go ahead',
+          'scout-route': 'scout the crossing',
+          drink: 'drink',
+          relieve: 'step aside',
           escort: 'go down together',
+          'escort-reach': 'meet, then consider going down together',
           gather: 'close up',
         } as Record<string, string>
       )[act] ?? act
@@ -1449,6 +1475,10 @@ export class Game {
         pack: 'giving you a pack',
         ahead: 'going ahead',
         escort: 'going down together',
+        'escort-reach': 'meeting before going down together',
+        'scout-route': 'scouting the crossing',
+        drink: 'drinking',
+        relieve: 'stepping aside',
         gather: 'closing up',
       } as Record<string, string>
     )[input.act];
@@ -1677,6 +1707,8 @@ export class Game {
   // ------------------------------------------------------------ pages
 
   private pageEl: HTMLElement | null = null;
+  private pageGeneration = 0;
+  private debriefWorker: Worker | null = null;
 
   private pageOpen(): boolean {
     return this.pageEl !== null;
@@ -1697,6 +1729,9 @@ export class Game {
   }
 
   private closePage(): void {
+    this.pageGeneration++;
+    this.debriefWorker?.terminate?.();
+    this.debriefWorker = null;
     this.pageEl?.remove();
     this.pageEl = null;
     this.root.dataset.screen = 'climb';
@@ -2096,6 +2131,7 @@ export class Game {
     this.openPage(
       `<div class="page-body hut-sheet"><h1>${esc(m?.name ?? '')}</h1>
       <p class="sub">Climb ${c.climbNo} of ${SEASON.length} · ${clock(c.minute)}, at the hut</p>
+      ${!c.fieldRules && c.minute === c.startMinute ? '<details class="field-choice"><summary>New mountain plans</summary><p>Scouting costs a real crossing. Reports need hearing distance. The weather forecast is uncertain. People can refuse.</p><label><input type="checkbox" data-field> Use these plans and the new promise response</label><label><input type="checkbox" data-bladder> Also allow people to step aside when their body needs it</label></details>' : ''}
       <p class="hand">When do you turn back?</p>
       <p>They remember whether you keep your word.</p>
       <p class="plan">${[12, 13, 14]
@@ -2104,17 +2140,29 @@ export class Game {
 
       ${c.climbNo > 1 ? `<details><summary>So far ▸</summary>${lines}</details>` : ''}</div>`,
       (el) => {
+        const plans = (): NewInput | undefined => {
+          const field = el.querySelector<HTMLInputElement>('[data-field]')?.checked;
+          const bladder = el.querySelector<HTMLInputElement>('[data-bladder]')?.checked ?? false;
+          return field || bladder ? { t: 'field-rules', bladder } : undefined;
+        };
         el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => {
+          this.display.start();
+          const plan = plans();
+          if (plan) this.send(plan);
           this.closePage();
           lab.screen(climbScreen(c, 'climb'));
         });
         for (const b of el.querySelectorAll<HTMLElement>('[data-hour]'))
           b.addEventListener('click', () => {
+            this.display.start();
+            const plan = plans();
             this.closePage();
             lab.screen(climbScreen(c, 'climb'));
             // The first choice of the day, made at the hut where everyone hears it (owner playtest 2026-10-18).
             if (!this.disc.unlocked.includes('promise')) this.disc.unlocked.push('promise');
-            this.send({ t: 'promise', hour: Number(b.dataset.hour) });
+            const promise: NewInput = { t: 'promise', hour: Number(b.dataset.hour) };
+            if (plan) this.send(plan, promise);
+            else this.send(promise);
           });
       },
       'hut',
@@ -2248,34 +2296,21 @@ export class Game {
 
   /** Camp talk: a model may voice it from the climb's HF records and journal; its text is never read into state. */
   private runCamp(mountain: string): void {
-    const box = () => this.pageEl?.querySelector<HTMLElement>('[data-camp]');
+    // Owner input gate: core-fun acceptance must precede any camp inference.
+    // The Worker cap, kill switch and labelled fallback remain available downstream.
     const facts = campFacts(this.climb, mountain);
-    const show = (lines: string[], label: string) => {
-      const b = box();
-      if (b)
-        b.innerHTML = `${lines.map((l) => `<p class="hand">${esc(displayText(l))}</p>`).join('')}<p class="caption">${esc(label)}</p>`;
-    };
-    const fallback = () =>
-      show(campFallback(facts), 'These lines come from the journal. No language model was used.');
-    fetch('/api/camp', {
-      method: 'POST',
-      body: JSON.stringify(facts),
-      headers: { 'content-type': 'application/json' },
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((o: { lines?: string[] } | null) => {
-        if (o?.lines?.length)
-          show(
-            o.lines,
-            'A small language model wrote this conversation from the journal. It does not change what happened.',
-          );
-        else fallback();
-      })
-      .catch(fallback);
+    const box = this.pageEl?.querySelector<HTMLElement>('[data-camp]');
+    if (box)
+      box.innerHTML = `${campFallback(facts)
+        .map((line) => `<p class="hand">${esc(displayText(line))}</p>`)
+        .join('')}<p class="caption">These lines come from the journal. No language model was used.</p>`;
   }
 
   private runDebrief(): void {
+    const climb = this.climb;
+    const generation = this.pageGeneration;
     const show = (b: Branch | null) => {
+      if (this.climb !== climb || this.pageGeneration !== generation) return;
       this.branch = b;
       const el = this.pageEl?.querySelector<HTMLElement>('[data-branch]');
       if (!el) return;
@@ -2290,6 +2325,7 @@ export class Game {
     const w = new Worker(new URL('./debrief.worker.ts', import.meta.url), {
       type: 'module',
     });
+    this.debriefWorker = w;
     w.onmessage = (e: MessageEvent<{ branch: Branch | null }>) => {
       show(e.data.branch);
       w.terminate();

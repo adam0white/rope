@@ -166,3 +166,50 @@ it('Back from the journal after closing the season keeps the season closed', asy
   expect(document.querySelector('.page h1')?.textContent).toBe('The season');
   expect(document.querySelector('[data-a="next"]')).toBeNull();
 });
+
+it('late debrief replies cannot enter another climb or a superseding readback', async () => {
+  const workers: { onmessage?: (e: unknown) => void; terminate: () => void }[] = [];
+  vi.stubGlobal(
+    'Worker',
+    class {
+      onmessage?: (e: unknown) => void;
+      terminate = vi.fn();
+      postMessage() {
+        workers.push(this);
+      }
+    },
+  );
+  const driver = await atNight(true);
+  vi.advanceTimersByTime(2600);
+  driver.frame();
+  const old = workers.at(-1);
+  if (!old) throw new Error('Missing old Worker');
+  document.querySelector<HTMLButtonElement>('[data-a="journal"]')?.click();
+  document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
+  old.onmessage?.({ data: { branch: { sentence: 'OBSOLETE READBACK' } } });
+  expect(document.querySelector('[data-branch]')?.textContent).not.toContain('OBSOLETE READBACK');
+  const current = workers.at(-1);
+  if (!current) throw new Error('Missing current Worker');
+  document.querySelector<HTMLButtonElement>('[data-a="next"]')?.click();
+  current.onmessage?.({ data: { branch: { sentence: 'WRONG CLIMB' } } });
+  expect((driver as unknown as { branch: unknown }).branch).toBeUndefined();
+});
+
+it('camp uses its deterministic fallback without automatic inference', async () => {
+  const fetcher = vi.fn(async () => ({ ok: false }));
+  vi.stubGlobal('fetch', fetcher);
+  const driver = await atNight(true);
+  vi.advanceTimersByTime(2600);
+  driver.frame();
+  expect(document.querySelector('[data-camp]')?.textContent).toContain('No language model was used');
+  expect(fetcher.mock.calls).toHaveLength(0);
+});
+
+it('a new season never reuses the prior climb cached branch', async () => {
+  const driver = await atNight(true);
+  const internal = driver as unknown as { branch: unknown; begin(c: ClimbState, start: string): void };
+  internal.branch = { sentence: 'PRIOR SEASON' };
+  const next = newSeason(9);
+  internal.begin(next.climb, next.season.start ?? '');
+  expect(internal.branch).toBeUndefined();
+});

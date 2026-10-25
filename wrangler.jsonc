@@ -15,5 +15,5 @@
   },
   "ai": { "binding": "AI" },
   // Kill switch for the camp voice: set to "off" (and deploy) to stop all model calls.
-  "vars": { "CAMP_AI": "on" }
+  "vars": { "CAMP_AI": "off" }
 }

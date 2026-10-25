@@ -7,15 +7,33 @@
 
 ## Deferred (with targets)
 
-- Confirm the exact screen and page-navigation sequence behind owner run `r-4sha5x28jz`; the replay ends correctly and a journal-return trap is fixed, but the export has no navigation log (target 2026-10-21).
-- Scope asynchronous debrief Worker replies to their originating climb so a slow reply cannot populate a later read-back; found during transition review, predates this fix (target 2026-10-25).
-- Send ahead / scout a crossing as verbs: after first reviewer feedback (target 2026-10-25).
-- Camp conversation via Workers AI with caps, kill switch and labelled fallback: after the core is judged fun (target 2026-11-01).
-- Sheet height stays fixed so the camera does not jump when panels change: polish pass (2026-10-21).
-- Wake lock and fullscreen on start: polish pass (2026-10-21).
-- Colliding wants surfaced as short exchanges between members (Nell's call against Oskar's top), and two or three set-piece cruxes per peak with a visible storm clock: from the owner playtest consult 2026-10-18 (target 2026-10-28).
-- Late playtest polish (docs/playtests/latecasual-2026-10-18.md): stale bubbles after a new call, feedback for far take-pack, tutorial repeat at 360 px, name chips off the edge: polish pass (target 2026-10-21). Mood word saturation ("tired" on all by 08:53): next retune (target 2026-10-25).
+- Adam accepts feel and readiness on 2026-11-03. His exact old screen/page sequence for `r-4sha5x28jz` remains unavailable: the export contains no navigation log. Existing ending and journal-return regressions cover the reproduced trap; they cannot reconstruct unseen navigation. Source: owner report 2026-10-20.
+- Camp conversation through Workers AI waits for actual owner/player judgment that the core is fun (input gate, review 2026-11-03). Inference is off. The labelled deterministic journal fallback runs without a network request. The existing Worker cap, kill switch and $5 total budget remain for any later authorized prototype. This task makes no model calls.
+- Named owner acceptance journeys (opening answers, approaches, pair meetings, phone reading, pacing and carried Commonstead Oskar) remain acceptance work on 2026-11-03. Existing implementations and engineering controls do not establish Adam's judgment. No new player round is part of this task.
 
+## Explicit new mountain plans (2026-10-25)
+
+The hut offers an unchecked **New mountain plans** choice and a separate optional bodily choice. Choosing either records `field-rules` in the input log. Old inputs, starts and loaded admitted actors acquire no implicit fields or random draws. The initial admitted Person snapshots remain pinned. The explicit choice persists into later climbs in the season. Current full exports replay with the complete semantic history.
+
+In this path, **Scout crossing** asks one person through HF to cross the next connected leg. The offer carries its actual travel duration, effort, fall risk and descent forecast. A refusal or delay does not produce a report. Only completing the crossing stores an observation, stamped with its time. The leader receives it only within hearing range; the words warn that conditions can change. Opted-in observations retain their time and source. A newer report replaces older tellable knowledge, while an older delayed report cannot erase a newer direct observation. A report describes the leg crossed, not hidden future weather. The original `ahead` and leader scouting tapes retain their existing behavior.
+
+**Send** in a company call first offers the helper a real route to the asker's recorded meeting position. The asker remains free to move or leave. The mission retains its original HF assent, exact input, target and begun activity; refusal, replacement or expiry prevents an old mission from resuming. Reaching an empty meeting position does not satisfy the call. A reached helper gets a further HF choice about going down. Only actual nearby descent can answer the company call; it does not tie a rope. The old `escort` input retains its original continuation.
+
+Three authored crux locations per mountain describe existing ground and existing choices. A climb encounters two or three according to its route. Route and weather details retain the risks of loose rock, exposed ridges, ice, fatigue and time spent securing a rope. The broad 11:00–14:00 wind window is labelled an estimate and appears only after visible cloud is known. After that window passes the warning says so and describes current observed wind. It never displays the seeded storm onset or promises a safe deadline. Terrain and physical difficulty are unchanged.
+
+Nearby conflicting plans quote only answers and calls that were actually spoken. Both people receive those heard utterances as percepts. Their private goals are never quoted as knowledge. Further decisions remain HF's.
+
+Optional stepping aside uses released HF `enableBladder`, intake through actual completed water outcomes, `voidsBladder` offers and `Outcome.voidedBladder` only after completion. Settled footing and an untied person are required. HF owns filling, urgency and choice; the host has no generic urge clock or pain-relief substitute. Valley rest includes an actual toilet offer only for actors who opted in. The new leader-promise response uses released `noteVoicePromise` for the leader's own kept/broken turn-time promise. Old editions retain their exact host trust step. Scope/control: `scripts/field-control.ts`.
+
+## Deferred polish reconciliation (2026-10-25)
+
+Asynchronous counterfactual replies are scoped to their climb and page generation; leaving a readback terminates its Worker. A late result cannot populate another climb or a replacement readback. Camp uses no asynchronous model result while the core-fun gate is closed.
+
+Phone target chips wrap full names in three columns. The leader row has a fixed height, so request panels cannot resize the scene. The internally scrolling sheet retains full answers and existing tactical slowdown. Existing new-call bubble clearing, disabled far-pack explanation, close approach and tutorial seen-state remain in place. New-plan unavailable pack answers may name the factual distance after the actual HF refusal.
+
+A controlled seed334144833 morning at08:53 reproduces all five looking tired: HF fatigue is approximately0.60–0.67. This is real exertion after hours of climbing, not a stale or unconditional label. No artificial diversity or easier physiology is introduced; exhaustion still matters. Approximate subjective words and the body drawing stay intact.
+
+Starting from an explicit hut gesture requests supported native wake lock and phone-only fullscreen. Hidden pages release this task's wake lock; returning visible reacquires it. Denied or unsupported APIs keep ordinary play usable. Desktop fullscreen remains an explicit menu action. The immutable client/kit provide no display-session helper, so the host uses feature detection rather than a second platform layer.
 
 ## Legacy export narration (2026-10-20)
 

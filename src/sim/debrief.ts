@@ -97,6 +97,8 @@ export interface Branch {
 /** The phrase for an input, from the player's side: "insisted that Tamar climb". */
 export function inputPhrase(inp: Input): string {
   switch (inp.t) {
+    case 'field-rules':
+      return 'chose the new mountain plans';
     case 'say': {
       const who = inp.to === 'all' ? 'everyone' : memberOf(inp.to).name;
       const verb = inp.force === 'ask' ? 'asked' : inp.force === 'urge' ? 'urged' : 'insisted that';
@@ -112,6 +114,10 @@ export function inputPhrase(inp: Input): string {
             ? 'hand you their packs'
             : `hand you ${memberOf(inp.to).they === 'she' ? 'her' : 'his'} pack`,
         ahead: 'go on ahead',
+        'scout-route': 'cross the next leg and report conditions',
+        drink: 'drink',
+        relieve: 'step aside',
+        'escort-reach': `meet ${inp.with ? memberOf(inp.with).name : 'someone'} before going down`,
         escort: `go down with ${inp.with ? memberOf(inp.with).name : 'someone'}`,
         gather: `meet ${inp.with ? memberOf(inp.with).name : 'the other person'} and wait together`,
       };

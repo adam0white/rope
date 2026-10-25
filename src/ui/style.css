@@ -1500,7 +1500,7 @@ body {
 }
 @media (max-width: 759px) {
   #app {
-    grid-template-rows: 44px 36px minmax(100px, 1fr) minmax(216px, 34%) minmax(88px, auto);
+    grid-template-rows: 44px 36px minmax(100px, 1fr) minmax(216px, 34%) 104px;
   }
   .page-hut {
     top: min(380px, 48%);
@@ -1540,4 +1540,35 @@ body {
   display: flex;
   width: 100%;
   text-align: left;
+}
+
+/* Full authored names wrap inside the phone sheet; the camera keeps its box. */
+@media (max-width: 759px) {
+  .sheet .targets {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.targets .chip {
+  overflow-wrap: anywhere;
+}
+.field-choice label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+}
+.field-choice input {
+  min-width: 24px;
+  min-height: 24px;
+}
+.field-notice {
+  margin: 8px 0;
+}
+.field-notice summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.field-notice p {
+  margin: 0;
 }

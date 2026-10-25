@@ -36,3 +36,12 @@ it('names the tired person when teaching pack help', async () => {
   expect(note?.text).toContain('Oskar');
   expect(note?.text).not.toContain('Someone');
 });
+
+it('does not keep teaching a completed first request', async () => {
+  const { startClimb, queueInput, step } = await import('../src/sim/climb.ts');
+  const { nextNote } = await import('../src/ui/disclosure.ts');
+  const s = startClimb(4, 3);
+  queueInput(s, { t: 'say', act: 'rest', to: 'all', force: 'ask' });
+  step(s);
+  expect(nextNote({ unlocked: ['insist'], seen: ['lead'] }, s)?.id).not.toBe('ask');
+});

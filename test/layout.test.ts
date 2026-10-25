@@ -430,3 +430,18 @@ it('retains the manual playback control test behind lab=1', async () => {
   tap('[data-menu-close]');
   expect(document.querySelector('.menu-backdrop')).toBeNull();
 });
+
+it('opting into field plans cannot swallow the opening turn-back promise', async () => {
+  const d = await boot(false);
+  tap('[data-a="new"]');
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  query<HTMLInputElement>('[data-field]').checked = true;
+  query<HTMLInputElement>('[data-bladder]').checked = true;
+  tap('[data-hour="12"]');
+  expect(d.climb.fieldRules).toEqual({ bladder: true });
+  expect(d.climb.promise?.hour).toBe(12);
+  expect(d.climb.inputs.map((i) => i.t)).toEqual(['field-rules', 'promise']);
+  expect(query('.where').textContent).toContain('turn back at 12');
+});
