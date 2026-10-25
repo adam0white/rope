@@ -5,7 +5,7 @@
 import 'pixi.js/unsafe-eval';
 import { Application, Container, Graphics, Text } from 'pixi.js';
 import { type ClimbState, canHear, MOUNTAINS, memberState, personOf, posXY } from '../sim/climb.ts';
-import { coldAt, type Mountain, place, windAt } from '../sim/mountain.ts';
+import { coldAt, type Mountain, place, routeName, windAt } from '../sim/mountain.ts';
 import { MEMBERS } from '../sim/party.ts';
 import { hashUnit } from '../sim/rng.ts';
 import { lookOf } from './look.ts';
@@ -312,7 +312,7 @@ export class Scene {
       }
       let t = this.placeLabels.get(pl.id);
       if (!t) {
-        t = new Text({ text: pl.name, style: { fontFamily: 'Caveat', fontSize: 17, fill: P.soft } });
+        t = new Text({ text: routeName(pl), style: { fontFamily: 'Caveat', fontSize: 17, fill: P.soft } });
         t.anchor.set(0.5, 1);
         this.labels.addChild(t);
         this.placeLabels.set(pl.id, t);

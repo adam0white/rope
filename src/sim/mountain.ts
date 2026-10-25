@@ -11,6 +11,8 @@ export type LegKind = 'path' | 'scree' | 'snow' | 'ridge' | 'gully';
 export interface Place {
   id: string;
   name: string;
+  /** Reader-facing name. The original name remains in HF labels and saved semantic records. */
+  displayName?: string;
   /** Metres above sea level. */
   alt: number;
   /** Horizontal metres from the hut, for drawing and earshot. */
@@ -24,6 +26,8 @@ export interface Leg {
   /** Upper end. */
   to: string;
   name: string;
+  /** Reader-facing name. The original name remains in HF labels and saved semantic records. */
+  displayName?: string;
   kind: LegKind;
   /** Minutes for a fresh climber going up. Descending takes `DESCENT_FACTOR` of it. */
   minutes: number;
@@ -83,6 +87,43 @@ export const legsUp = (m: Mountain, from: string): Leg[] => m.legs.filter((l) =>
 /** Index of a leg, used as the place key of world draws. */
 export const legIndex = (m: Mountain, id: string): number => m.legs.findIndex((l) => l.id === id);
 
+/** Finite route vocabulary. Original names remain the labels stored by HF. */
+export const ROUTE_NAMES: Readonly<Record<string, string>> = {
+  'the larch wood': 'the forest',
+  'the wood path': 'the forest path',
+  'the notch': 'the gap in the ridge',
+  'the notch gully': 'the channel below the ridge gap',
+  'the moraine': 'the glacier rocks',
+  'the col': 'the low pass',
+  'the snow slope below the col': 'the snow slope below the pass',
+  'the gully top': 'the top of the rock channel',
+  'the gully': 'the rock channel',
+  'the last scramble': 'the final rocky climb',
+  'the screes': 'the loose stones',
+  'the north couloir': 'the north snow channel',
+  'the headwall': 'the steep snow face',
+  'the east arête': 'the east ridge',
+  'the gendarme': 'the rock tower',
+  'the tarn': 'the mountain lake',
+  'the bergschrund': 'the deep glacier crack',
+  'the tarn path': 'the lake path',
+  'the moraine and the ice': 'the glacier rocks and ice',
+  'the shoulder': 'the broad ledge',
+};
+
+export const routeName = (route: Pick<Place, 'name' | 'displayName'>): string =>
+  route.displayName ?? route.name;
+
+/** Only released route labels can occur inside HF-authored replies. */
+export function displayRouteLabels(text: string): string {
+  let result = text;
+  for (const [label, words] of Object.entries(ROUTE_NAMES).sort((a, b) => b[0].length - a[0].length))
+    result = result.replace(new RegExp(`(?<![\\p{L}\\p{N}_])${label}(?![\\p{L}\\p{N}_])`, 'giu'), (match) =>
+      match[0] === match[0]?.toUpperCase() ? words.replace(/^./u, (c) => c.toUpperCase()) : words,
+    );
+  return result;
+}
+
 /** The first climb of the season: Hollin Crag. Two ways from the col: the long ridge or the short gully. */
 export const HOLLIN: Mountain = {
   id: 'hollin',
@@ -100,11 +141,14 @@ export const HOLLIN: Mountain = {
     'The path grew steeper. People spoke less.',
   ],
   beats: [
-    { when: 'start', text: 'Ezra’s map was still pinned up in the hut, his pencil line going up the gully.' },
+    {
+      when: 'start',
+      text: 'Ezra’s map was still pinned up in the hut, his pencil line going up the rock channel.',
+    },
     {
       when: 'col',
       who: 'tamar',
-      text: 'At the col, the low point between peaks, Tamar looked at the gully for a long time and said nothing.',
+      text: 'At the low pass between peaks, Tamar looked at the rock channel for a long time and said nothing.',
     },
     {
       when: 'summit',
@@ -115,10 +159,16 @@ export const HOLLIN: Mountain = {
   places: [
     { id: 'hut', name: 'the hut', alt: 1400, x: 0 },
     { id: 'meadow', name: 'the meadow', alt: 1720, x: 1300 },
-    { id: 'moraine', name: 'the moraine', alt: 2060, x: 2500 },
-    { id: 'col', name: 'the col', alt: 2420, x: 3500 },
+    { id: 'moraine', name: 'the moraine', displayName: 'the glacier rocks', alt: 2060, x: 2500 },
+    { id: 'col', name: 'the col', displayName: 'the low pass', alt: 2420, x: 3500 },
     { id: 'tower', name: 'the tower', alt: 2680, x: 3900 },
-    { id: 'gully-top', name: 'the gully top', alt: 2790, x: 4250 },
+    {
+      id: 'gully-top',
+      name: 'the gully top',
+      displayName: 'the top of the rock channel',
+      alt: 2790,
+      x: 4250,
+    },
     { id: 'summit', name: 'the summit', alt: 2910, x: 4500 },
   ],
   legs: [
@@ -150,6 +200,7 @@ function l(
     from,
     to,
     name,
+    ...(ROUTE_NAMES[name] ? { displayName: ROUTE_NAMES[name] } : {}),
     kind,
     minutes: Math.round(
       minutes * 1.3,
@@ -225,7 +276,7 @@ export const TOOTH: Mountain = {
   startMinuteOfDay: 4 * 60 + 30,
   duskMinuteOfDay: 19 * 60 + 15,
   approach: [
-    'Soft larch needles covered the path in the dark.',
+    'Soft fallen needles covered the forest path in the dark.',
     'You briefly saw the Tooth through the trees, black against the grey sky.',
     'You crossed a stream on wobbling stones. Nobody fell in.',
     'The trees ended suddenly. Loose stones covered the slope ahead.',
@@ -237,7 +288,7 @@ export const TOOTH: Mountain = {
     {
       when: 'notch',
       who: 'wren',
-      text: 'Wren said Ezra had always called the arête, a narrow rock ridge, the honest way up.',
+      text: 'Wren said Ezra had always called the narrow east ridge the honest way up.',
     },
     {
       when: 'summit',
@@ -247,11 +298,11 @@ export const TOOTH: Mountain = {
   ],
   places: [
     { id: 'hut', name: 'the hut', alt: 1250, x: 0 },
-    { id: 'wood', name: 'the larch wood', alt: 1560, x: 1100 },
-    { id: 'screes', name: 'the screes', alt: 1950, x: 2100 },
-    { id: 'notch', name: 'the notch', alt: 2300, x: 2900 },
+    { id: 'wood', name: 'the larch wood', displayName: 'the forest', alt: 1560, x: 1100 },
+    { id: 'screes', name: 'the screes', displayName: 'the loose stones', alt: 1950, x: 2100 },
+    { id: 'notch', name: 'the notch', displayName: 'the gap in the ridge', alt: 2300, x: 2900 },
     { id: 'shelf', name: 'the snow shelf', alt: 2520, x: 3150 },
-    { id: 'gendarme', name: 'the gendarme', alt: 2480, x: 3400 },
+    { id: 'gendarme', name: 'the gendarme', displayName: 'the rock tower', alt: 2480, x: 3400 },
     { id: 'summit', name: 'the summit', alt: 2660, x: 3600 },
   ],
   legs: [
@@ -284,12 +335,12 @@ export const KESTREL: Mountain = {
   beats: [
     {
       when: 'start',
-      text: 'In the hut book, Ezra wrote two summers ago: “I turned back at the shoulder because of the wind. I will try again next year. E.”',
+      text: 'In the hut book, Ezra wrote two summers ago: “I turned back at the broad ledge because of the wind. I will try again next year. E.”',
     },
     {
       when: 'shoulder',
       who: 'tamar',
-      text: 'At the shoulder Tamar touched the rock where the book said he had turned.',
+      text: 'At the broad ledge Tamar touched the rock where the book said he had turned.',
     },
     {
       when: 'summit',
@@ -299,10 +350,10 @@ export const KESTREL: Mountain = {
   ],
   places: [
     { id: 'hut', name: 'the hut', alt: 1650, x: 0 },
-    { id: 'lake', name: 'the tarn', alt: 1900, x: 1000 },
+    { id: 'lake', name: 'the tarn', displayName: 'the mountain lake', alt: 1900, x: 1000 },
     { id: 'glacier', name: 'the glacier', alt: 2350, x: 2200 },
-    { id: 'schrund', name: 'the bergschrund', alt: 2700, x: 3100 },
-    { id: 'shoulder', name: 'the shoulder', alt: 3020, x: 3700 },
+    { id: 'schrund', name: 'the bergschrund', displayName: 'the deep glacier crack', alt: 2700, x: 3100 },
+    { id: 'shoulder', name: 'the shoulder', displayName: 'the broad ledge', alt: 3020, x: 3700 },
     { id: 'summit', name: 'the summit', alt: 3290, x: 4300 },
   ],
   legs: [

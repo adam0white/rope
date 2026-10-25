@@ -6,7 +6,7 @@
  * Covers only these three reads; the people's choices stay HF's and the host's.
  */
 import { type ClimbState, canHear, distance, forkOf, MOUNTAINS, waitingFor } from '../sim/climb.ts';
-import { legsUp } from '../sim/mountain.ts';
+import { legsUp, routeName } from '../sim/mountain.ts';
 import { memberOf } from '../sim/party.ts';
 
 /** A hurt is fresh for this long (game minutes), unless the leader reaches them first. */
@@ -30,7 +30,8 @@ export function hurtCall(s: ClimbState): HurtCall | null {
         best = { who: x.id, at: i.at, leg: i.leg };
   }
   if (!best) return null;
-  const where = m?.legs.find((l) => l.id === best.leg)?.name ?? 'the mountain';
+  const route = m?.legs.find((l) => l.id === best.leg);
+  const where = route ? routeName(route) : 'the mountain';
   return { who: best.who, where, near: canHear(s, best.who) };
 }
 
@@ -52,7 +53,7 @@ export function haltReason(s: ClimbState): string | null {
     return 'The path splits here. Tap Lead on to choose a route.';
   const fixable = ups.find((l) => l.fixable && !s.fixed.includes(l.id));
   if (fixable)
-    return `You stopped below ${fixable.name}. You can secure a rope here for others to use, or lead on.`;
+    return `You stopped below ${routeName(fixable)}. You can secure a rope here for others to use, or lead on.`;
   const out = s.members.filter((x) => x.homeAt === null);
   if (out.length > 0 && !out.some((x) => canHear(s, x.id))) {
     return `You stopped because nobody can hear you. ${names(out.map((x) => x.id))} ${out.length === 1 ? 'is' : 'are'} too far away.`;

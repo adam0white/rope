@@ -15,7 +15,7 @@ import {
   MOUNTAINS,
   replay,
 } from './climb.ts';
-import { place } from './mountain.ts';
+import { place, routeName } from './mountain.ts';
 import { MEMBERS, memberOf } from './party.ts';
 
 export interface PersonFacts {
@@ -57,11 +57,19 @@ export function factsOf(s: ClimbState): Facts {
       // The top outranks a turn: someone who stood on it is never read back as having turned below it.
       turnedWhere:
         mem.summitAt === null && mem.turnedAt !== null && turnedEntry
-          ? (turnedEntry.text.split('turned for home from ')[1]?.replace(/\.$/, '') ?? null)
+          ? originalRouteName(
+              m,
+              turnedEntry.text.split('turned for home from ')[1]?.replace(/\.$/, '') ?? null,
+            )
           : null,
     };
   }
   return out;
+}
+
+/** Journal wording is presentation; exported facts keep the original route identity. */
+function originalRouteName(m: (typeof MOUNTAINS)[string], text: string | null): string | null {
+  return [...m.places, ...m.legs].find((r) => routeName(r) === text)?.name ?? text;
 }
 
 /** How much one person's climb differs between two runs: the outcomes a player cares about weigh most. */
@@ -99,7 +107,10 @@ export function inputPhrase(inp: Input): string {
         eat: 'eat',
         wait: 'wait',
         rope: `rope up with ${inp.with ? memberOf(inp.with).name : 'someone'}`,
-        pack: 'hand you their pack',
+        pack:
+          inp.to === 'all'
+            ? 'hand you their packs'
+            : `hand you ${memberOf(inp.to).they === 'she' ? 'her' : 'his'} pack`,
         ahead: 'go on ahead',
         escort: `go down with ${inp.with ? memberOf(inp.with).name : 'someone'}`,
         gather: `meet ${inp.with ? memberOf(inp.with).name : 'the other person'} and wait together`,
@@ -109,9 +120,9 @@ export function inputPhrase(inp: Input): string {
         : `${verb} ${who} to ${what[inp.act]}`;
     }
     case 'release-person':
-      return `asked ${memberOf(inp.to).name} to end their mountain chapter`;
+      return `asked ${memberOf(inp.to).name} to end ${memberOf(inp.to).they === 'she' ? 'her' : 'his'} mountain chapter`;
     case 'ask-life':
-      return `asked ${memberOf(inp.to).name} about their life`;
+      return `asked ${memberOf(inp.to).name} about ${memberOf(inp.to).they === 'she' ? 'her' : 'his'} life`;
     case 'promise':
       return `promised to turn back at ${String(inp.hour).padStart(2, '0')}:00`;
     case 'tell':

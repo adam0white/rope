@@ -36,7 +36,7 @@ import {
 } from '../sim/climb.ts';
 import { ALTERNATIVE_CAPTION, type Branch, outcomeWords } from '../sim/debrief.ts';
 import { DISCOVERIES } from '../sim/discoveries.ts';
-import { coldAt, legsUp, SEASON } from '../sim/mountain.ts';
+import { coldAt, legsUp, routeName, SEASON } from '../sim/mountain.ts';
 import { CAST, FAMILY, MEMBERS, memberOf } from '../sim/party.ts';
 import { checkChapter } from '../sim/passport.ts';
 import { exportClimb, nextClimb, type SeasonState, validateSeasonStart } from '../sim/season.ts';
@@ -900,7 +900,7 @@ export class Game {
       const bar = h(
         'div',
         `ask-bar hurt${hurt.near ? '' : ' faint'}`,
-        `<span><b>${esc(nm)}</b> fell on ${esc(hurt.where)} and is hurt.${hurt.near ? '' : ' They are too far away to hear you.'}</span>`,
+        `<span><b>${esc(nm)}</b> fell on ${esc(hurt.where)} and is hurt.${hurt.near ? '' : ` ${memberOf(hurt.who).they === 'she' ? 'She' : 'He'} is too far away to hear you.`}</span>`,
       );
       const go = h('button', 'force', `go to ${obj}`);
       go.onclick = () => this.send({ t: 'lead', dir: 'with', who: hurt.who });
@@ -1064,10 +1064,14 @@ export class Game {
     const g = h('div', 'verbs');
     const ok = this.heardTarget();
     const one = this.target !== 'all';
+    const subject = one ? (memberOf(this.target).they === 'she' ? 'She' : 'He') : 'They';
+    const be = one ? 'is' : 'are';
+    const have = one ? 'has' : 'have';
+    const object = one ? (memberOf(this.target).they === 'she' ? 'her' : 'him') : 'them';
     const unheard =
       one && memberState(c, this.target).homeAt !== null
-        ? 'They are back at the hut for today.'
-        : 'They cannot hear you. Walk closer.';
+        ? `${subject} ${be} back at the hut for today.`
+        : `${subject} cannot hear you. Walk closer.`;
     const chooseOne = !one ? 'Pick one person.' : '';
     const near = one && distance(c, memberState(c, this.target).pos, c.leader.pos) < 40;
     // Match the offer builder: the hut provides food without consuming carried rations.
@@ -1094,8 +1098,8 @@ export class Game {
         !ok
           ? unheard
           : c.leader.rations > 0
-            ? 'They have no food left. You can share yours.'
-            : 'They have no food left. They can eat at the hut.',
+            ? `${subject} ${have} no food left. You can share yours.`
+            : `${subject} ${have} no food left. ${subject} can eat at the hut.`,
       ),
       this.verbBtn('wait', 'wait', 'wait', ok, choose('wait'), unheard),
     );
@@ -1109,7 +1113,7 @@ export class Game {
           'rope',
           ok && one && !memberState(c, this.target).ropedTo,
           choose('rope'),
-          chooseOne || (!ok ? unheard : 'They are already tied to a partner.'),
+          chooseOne || (!ok ? unheard : `${subject} ${be} already tied to a partner.`),
         ),
       );
     if (has(this.disc, 'pack')) {
@@ -1121,7 +1125,7 @@ export class Game {
           'pack',
           canPack,
           choose('pack'),
-          chooseOne || (!ok ? unheard : !near ? 'Walk to them first.' : 'You already carry this pack.'),
+          chooseOne || (!ok ? unheard : !near ? `Walk to ${object} first.` : 'You already carry this pack.'),
         ),
       );
     }
@@ -1134,7 +1138,7 @@ export class Game {
           'share',
           canShare,
           () => this.send({ t: 'share', to: this.target }),
-          chooseOne || (!near ? 'Walk to them first.' : 'Your food is gone.'),
+          chooseOne || (!near ? `Walk to ${object} first.` : 'Your food is gone.'),
         ),
       );
     }
@@ -1197,7 +1201,7 @@ export class Game {
             dir: one ? 'near' : 'with',
             who: one ? one.id : 'party',
           }),
-        'They are back at the hut for today.',
+        `${this.target === 'all' ? 'Everyone is' : memberOf(this.target).name + ' is'} back at the hut for today.`,
       ),
     );
     if (has(this.disc, 'tell')) {
@@ -1348,13 +1352,13 @@ export class Game {
           'p',
           'force-reason',
           this.target !== 'all' && memberState(this.climb, this.target).homeAt !== null
-            ? 'They are back at the hut for today. Cancel this request.'
-            : 'They are too far away to hear you. Cancel this request and walk to them.',
+            ? `${memberOf(this.target).name} is back at the hut for today. Cancel this request.`
+            : `${this.target === 'all' ? 'Everyone is' : memberOf(this.target).name + ' is'} too far away to hear you. Cancel this request and walk closer.`,
         ),
       );
     g.append(
       f('ask', 'ask', 'gently'),
-      f('urge', 'urge', 'press them'),
+      f('urge', 'urge', 'apply pressure'),
       f(
         'insist',
         'insist',
@@ -1375,7 +1379,7 @@ export class Game {
           eat: 'eat',
           wait: 'wait',
           rope: 'rope up',
-          pack: 'give you their pack',
+          pack: 'give you a pack',
           ahead: 'go ahead',
           escort: 'go down together',
           gather: 'close up',
@@ -1386,7 +1390,7 @@ export class Game {
 
   /** Acknowledges the latest request, using only its own HF answers and observed movement. */
   private answersButton(count: number, input: number): HTMLButtonElement {
-    const button = h('button', 'all-answers', `All ${count} answers ▸`);
+    const button = h('button', 'all-answers', count === 1 ? '1 answer ▸' : `All ${count} answers ▸`);
     button.onclick = () => {
       this.answersInput = input;
       this.panel = 'answers';
@@ -1438,7 +1442,7 @@ export class Game {
         eat: 'eating',
         wait: 'waiting',
         rope: 'roping up',
-        pack: 'giving you their pack',
+        pack: 'giving you a pack',
         ahead: 'going ahead',
         escort: 'going down together',
         gather: 'closing up',
@@ -1447,7 +1451,7 @@ export class Game {
     const response = (line: Line): string => {
       if (line.verdict === 'assented') return `agreed to ${label}`;
       if (line.verdict === 'complied') return `agreed under pressure to ${label}`;
-      if (line.verdict === 'deferred') return `asked to delay ${action}`;
+      if (line.verdict === 'deferred') return `wants to wait before ${action}`;
       if (line.verdict === 'refused') return `refused ${action}`;
       if (line.verdict === 'modified') return `offered another action instead of ${action}`;
       return `heard ${label}`;
@@ -1483,7 +1487,7 @@ export class Game {
           'request-acknowledgement',
           accepted.length
             ? `${esc(namesOf(accepted.map((line) => line.who)))} agreed to ${esc(label)}.`
-            : `You asked them to ${esc(label)}.`,
+            : `You asked ${input.to === 'all' ? 'everyone' : esc(memberOf(input.to).name)} to ${esc(label)}.`,
         ),
       );
     }
@@ -1492,7 +1496,7 @@ export class Game {
       const objection = h(
         'p',
         'request-objection',
-        `<b>${esc(memberOf(no.who).name)} ${esc(response(no))}</b>: “${esc(displayText(no.says))}”`,
+        `<b>${esc(memberOf(no.who).name)} ${esc(response(no))}.</b> “${esc(displayText(no.says))}”`,
       );
       if (collectiveTurn) box.append(objection);
       else box.prepend(objection);
@@ -1502,7 +1506,11 @@ export class Game {
         h(
           'p',
           '',
-          c.unheard.includes(index) ? 'Nobody heard the request.' : 'You are waiting for their answers.',
+          c.unheard.includes(index)
+            ? 'Nobody heard the request.'
+            : input.to === 'all'
+              ? 'You are waiting for everyone to answer.'
+              : `You are waiting for ${esc(memberOf(input.to).name)} to answer.`,
         ),
       );
     if (answers.length) {
@@ -1643,7 +1651,7 @@ export class Game {
       g.append(
         this.verbBtn(
           `route:${lg.id}`,
-          `${scout ? 'Inspect' : 'Take'} ${lg.name}${lg.name.includes('couloir') ? ' (snow channel)' : lg.name.includes('arête') ? ' (narrow rock ridge)' : lg.kind === 'scree' ? ' (loose stones)' : ''}`,
+          `${scout ? 'Inspect' : 'Take'} ${routeName(lg)}`,
           scout ? 'tell' : 'up',
           true,
           () => this.send(scout ? { t: 'scout', via: lg.id } : { t: 'lead', dir: 'up', via: lg.id }),
@@ -1805,7 +1813,7 @@ export class Game {
       assented: `agreed to ${action}`,
       complied: `agreed under pressure to ${action}`,
       refused: `refused to ${action}`,
-      deferred: `asked to delay the request to ${action}`,
+      deferred: `wants to wait before agreeing to ${action}`,
       modified: `offered another action when asked to ${action}`,
       heard: `${input?.t === 'promise' ? 'heard your promise to' : 'heard your request to'} ${action}`,
     };
@@ -1972,7 +1980,7 @@ export class Game {
     const back = () => (this.climb ? this.closePage() : this.titlePage());
     if (!this.labTools) return;
     this.openPage(
-      `<div class="page-body"><h1>The people</h1><p>${esc(this.continuity.status)}</p><p>Continuity stays in this browser. It is separate from lab recording. A loaded season keeps the people it was saved with.</p><label><input type="checkbox" data-continuity ${this.continuity.shelf.enabled ? 'checked' : ''}> Use continuing people in a new season</label><p><a href="https://human.adamwhite.work/lab/people/">Inspect or export browser histories</a></p>${CAST.map((c) => `<p><b>${esc(c.name)}</b> · ${c.age} · ${esc(c.work)} ${esc(FAMILY[c.castId.split('.')[2] ?? ''] ?? '')}</p>`).join('')}${this.climb ? `<h2>Ask in private</h2><p>Only people in earshot can answer. They may keep a subject private.</p>${MEMBERS.map((m) => `<button class="btn" data-life="${m.id}" ${canHear(this.climb, m.id) ? '' : 'disabled'}>${esc(m.name)}: ${esc(DISCOVERIES[m.id]?.displayTopic ?? DISCOVERIES[m.id]?.topic ?? 'talk')}</button>`).join('')}<h2>Leave this chapter</h2><p>Finish this climb before saving a person for another chapter. Injuries, unfinished tasks and responsibilities can still prevent departure. You can instead start a separate history. It does not continue an existing history.</p><select data-person>${CAST.map((c) => `<option value="${c.castId}">${esc(c.name)}</option>`).join('')}</select><button class="btn" data-release>Ask to end this person’s mountain chapter</button><button class="btn" data-checkpoint>Save this person at the finished climb</button><button class="btn" data-fork>Save an explicit fresh branch</button><button class="btn" data-export>Download this run</button>` : ''}<p><label>Load a current Rope run<input type="file" accept="application/json" data-import></label></p><p data-person-status role="status"></p><p>A run loaded from a file remains a file import after you save and reload it. Importing it does not give this run control over its people’s saved browser histories.</p></div><div class="page-actions"><button class="btn go" data-back>Back</button></div>`,
+      `<div class="page-body"><h1>The people</h1><p>${esc(this.continuity.status)}</p><p>Continuity stays in this browser. It is separate from lab recording. A loaded season keeps the people it was saved with.</p><label><input type="checkbox" data-continuity ${this.continuity.shelf.enabled ? 'checked' : ''}> Use continuing people in a new season</label><p><a href="https://human.adamwhite.work/lab/people/">Inspect or export browser histories</a></p>${CAST.map((c) => `<p><b>${esc(c.name)}</b> · ${c.age} · ${esc(c.work)} ${esc(FAMILY[c.castId.split('.')[2] ?? ''] ?? '')}</p>`).join('')}${this.climb ? `<h2>Ask in private</h2><p>Only people in earshot can answer. They may keep a subject private.</p>${MEMBERS.map((m) => `<button class="btn" data-life="${m.id}" ${canHear(this.climb, m.id) ? '' : 'disabled'}>${esc(m.name)}: ${esc(DISCOVERIES[m.id]?.displayTopic ?? DISCOVERIES[m.id]?.topic ?? 'talk')}</button>`).join('')}<h2>Leave this chapter</h2><p>Finish this climb before saving a person for another chapter. Injuries, unfinished tasks and responsibilities can still prevent departure. You can instead start a separate history. It does not continue an existing history.</p><select data-person>${CAST.map((c) => `<option value="${c.castId}">${esc(c.name)}</option>`).join('')}</select><button class="btn" data-release>Ask to end this person’s mountain chapter</button><button class="btn" data-checkpoint>Save this person at the finished climb</button><button class="btn" data-fork>Save a separate history</button><button class="btn" data-export>Download this run</button>` : ''}<p><label>Load a current Rope run<input type="file" accept="application/json" data-import></label></p><p data-person-status role="status"></p><p>A run loaded from a file remains a file import after you save and reload it. Importing it does not give this run control over its people’s saved browser histories.</p></div><div class="page-actions"><button class="btn go" data-back>Back</button></div>`,
       (el) => {
         const status = el.querySelector<HTMLElement>('[data-person-status]');
         if (!status) return;
@@ -2079,7 +2087,7 @@ export class Game {
       <p class="plan">${[12, 13, 14]
         .map((hr) => `<button class="btn" data-hour="${hr}">We turn at ${hr}:00</button>`)
         .join('')}<button class="btn" data-a="go">We'll see</button></p>
-      <details><summary>Route names</summary><p>${c.mountain === 'hollin' ? 'A moraine is a slope of rocks left by a glacier. A col is a low point between peaks. A gully is a narrow channel in the mountain.' : c.mountain === 'tooth' ? 'Screes are slopes of loose stones. A couloir is a steep snow channel. An arête is a narrow rock ridge. A gendarme is a tall rock tower on a ridge.' : 'A tarn is a small mountain lake. A moraine is a slope of rocks left by a glacier. A bergschrund is a deep gap in the glacier near the mountain.'}</p></details>
+
       ${c.climbNo > 1 ? `<details><summary>So far ▸</summary>${lines}</details>` : ''}</div>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => {

@@ -91,7 +91,7 @@ it('labels accepted rest as rest and retains each authentic HF answer', async ()
   const details = openAnswers();
   for (const line of answers) expect(details?.textContent).toContain(displayText(line.says));
   expect(details?.textContent).toContain('agreed to rest');
-  expect(details?.textContent).toContain('asked to delay the request to rest');
+  expect(details?.textContent).toContain('wants to wait before agreeing to rest');
   backToRequests();
   vi.advanceTimersByTime(8500);
   driver.renderSheet(true);
@@ -123,7 +123,7 @@ it('explains we all turn as your descent plus a new urge with renewed HF objecti
   const objection = c.lines.find((line) => line.input === latest && line.who === 'oskar');
   expect(objection?.verdict).toBe('deferred');
   expect(result()?.textContent).toContain('You turned downhill and urged everyone to turn back.');
-  expect(result()?.textContent).toContain('Oskar asked to delay turning back');
+  expect(result()?.textContent).toContain('Oskar wants to wait before turning back');
   expect(result()?.textContent).toContain(displayText(objection?.says ?? ''));
   expect(result()?.textContent).toContain('walking down.');
   const accepted = c.lines.filter((line) => line.input === latest && line.verdict === 'assented');
@@ -139,7 +139,7 @@ it('does not attribute an earlier answer to a new request for the same action', 
   expect(previous).toBeTruthy();
   queueInput(driver.climb, { t: 'say', to: 'oskar', act: 'rest', force: 'urge' });
   driver.renderSheet();
-  expect(result()?.textContent).toContain('waiting for their answers.');
+  expect(result()?.textContent).toContain('waiting for Oskar to answer.');
   expect(result()?.textContent).not.toContain(previous?.says);
 });
 
@@ -263,4 +263,13 @@ it('removes a distance gathering response as soon as the pair reaches one anothe
   nell.pos.t = 0.51;
   driver.renderSheet(true);
   expect(document.querySelector('.gather-pair')).toBeNull();
+});
+
+it('uses a singular answer caption for one person and plural for the party', async () => {
+  const driver = await boot();
+  driver.send({ t: 'say', to: 'tamar', act: 'rest', force: 'ask' });
+  expect(result()?.querySelector('.all-answers')?.textContent).toBe('1 answer ▸');
+  vi.advanceTimersByTime(500);
+  driver.send({ t: 'say', to: 'all', act: 'rest', force: 'ask' });
+  expect(result()?.querySelector('.all-answers')?.textContent).toBe('All 5 answers ▸');
 });

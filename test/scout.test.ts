@@ -7,7 +7,7 @@ it('scouting a leg from the col reports it from the world and makes its route fa
   while (s.leader.pos.place !== 'col' && s.minute % 1440 < 14 * 60) step(s);
   queueInput(s, { t: 'scout', via: 'gully' });
   for (let i = 0; i < 40; i++) step(s);
-  expect(s.journal.some((j) => j.text.startsWith('You came back from the gully'))).toBe(true);
+  expect(s.journal.some((j) => j.text.startsWith('You came back from the rock channel'))).toBe(true);
   expect(s.known.some((f) => f === 'gully-loose' || f === 'gully-quiet')).toBe(true);
 });
 

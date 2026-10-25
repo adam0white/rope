@@ -41,7 +41,7 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
     p.castRevision !== cast.revision ||
     p.terminal
   )
-    throw new Error('This person belongs to an unsupported identity or edition, or their history is closed.');
+    throw new Error('This person belongs to an unsupported identity or edition, or has a closed history.');
   if (!same(preparePersonaLife(p, input.clockMs).life, input.life))
     throw new Error('This person’s life history does not match the saved record.');
   const native =
@@ -87,7 +87,7 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
     )
   )
     throw new Error(
-      'This person has an obligation that they cannot fulfil here. Keep their history in the original game.',
+      'This person has an obligation that cannot be fulfilled here. Keep this history in the original game.',
     );
   const target = restore(snapshot(opening));
   const shifted = structuredClone(portable);
@@ -106,7 +106,7 @@ export function admitClimber(input: LifePreparation, opening: Person): Person {
   if (shifted.calendar.lapse) shifted.calendar.lapse.since += offset;
   const age = portable.person.source.now - portable.person.life.bornAt;
   if (age < cast.age * 525600)
-    throw new Error('The person’s recorded age does not match their established history.');
+    throw new Error('The person’s recorded age does not match the established history.');
   target.life.bornAt = portable.person.life.bornAt + offset;
   target.body.health = portable.person.health.health;
   target.body.fitness = portable.person.health.fitness;
@@ -162,7 +162,7 @@ export function checkChapter(chapter: Chapter) {
 export async function climberTransfer(person: Person) {
   if (person.body.injuries.length || person.body.illnesses.length || person.body.downed || !person.body.alive)
     throw new Error(
-      'This person has a health condition that must remain in the original game. Their health cannot recover during a transfer.',
+      'This person has a health condition that must remain in the original game. A transfer cannot heal the condition.',
     );
   const retained = person.agenda.commitments.filter((c) => isContinuingCommitment(person.agenda, c));
   const owed = person.agenda.owed ?? [];

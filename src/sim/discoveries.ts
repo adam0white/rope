@@ -12,7 +12,7 @@ export const DISCOVERIES: Record<
   },
   oskar: {
     topic: 'photographing a climb',
-    clue: 'One admired photograph combines two moments. The caption says the photograph was edited, but the story makes a volunteer seem to have stayed through the storm. They went home.',
+    clue: 'One admired photograph combines two moments. The caption says the photograph was edited, but the story makes a volunteer seem to have stayed through the storm. The volunteer went home.',
     outcome:
       'Oskar drafts an accurate mountain caption before taking a picture. The old publication still needs correction and the subject’s consent.',
   },

@@ -191,3 +191,10 @@ Resume this session: `01a17020-6825-7e33-aafa-be735803312b`. All evidence, fixtu
 
 ## Compact footer correction (2026-10-24)
 Remaining: required source lane/sign/push/exact CI and fresh delivery; owner accepts feel separately. The earlier54.781px wrapper wrapped at360 and did not meet the one-line requirement. Removed host padding, border and type overrides so the actual unchanged SDK node uses the full viewport. Browser footprint checks require one line at360, at least14px, node/wrapper at most40px, and natural wrapping with enlarged root text. Earlier receipts remain external and historical. No simulation, HF pin, copy, culture or consent changes; no extra review or screenshots.
+
+## Plain-English second reading pass (2026-10-25)
+Remaining: Adam accepts feel. This pass addresses reading audit 2, not a new acceptance playtest.
+
+Mountain data now declares reader-facing route names separately from immutable HF route labels. Journals, map labels, route controls and alerts use the reader-facing names. A finite, token-bounded display projection covers old text and route labels inside HF replies. Original route identities remain in HF offers, memories, input locations and debrief facts. Private-conversation refusal reports only that no discussion occurred; it does not assign unwillingness to physical inability. Single-person requests and debriefs use known pronouns or names. Overnight outcomes use literal wording.
+
+Focused regressions cover route-label token boundaries and capitalization, original semantic route labels, each private-conversation pronoun and neutral refusal, and plain scouting/request wording. Independent Codex review caught substring replacement, inferred unwillingness and remaining single-person request pronouns; all three were corrected. HF stays exactly 2.21.0, with plain narration enabled as before. No Workers AI calls were needed; spend is unchanged. Delivery evidence and the final on-screen dump live in `~/code/.lab-scratch/plain3/rope-report.md` and `rope-onscreen.txt`.

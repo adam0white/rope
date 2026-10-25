@@ -47,6 +47,7 @@ import {
   legsUp,
   type Mountain,
   place as placeOf,
+  routeName,
   SEASON,
   slipChance,
   sunAt,
@@ -975,10 +976,11 @@ function applyInput(s: ClimbState, idx: number): void {
       s.journal.push({
         at: s.minute,
         who: inp.to,
-        text: `You asked ${p.name} about ${clue.displayTopic ?? clue.topic}. ${yes ? clue.outcome : 'They kept it private this time.'}`,
+        text: `You asked ${p.name} about ${clue.displayTopic ?? clue.topic}. ${yes ? clue.outcome : `${memberIn(s, inp.to).they === 'she' ? 'She' : 'He'} did not discuss it this time.`}`,
         story: true,
       });
-      if (yes) s.journal.push({ at: s.minute, who: inp.to, text: `${p.name}: “${clue.clue}”`, story: true });
+      if (yes)
+        s.journal.push({ at: s.minute, who: inp.to, text: `${p.name} said, “${clue.clue}”`, story: true });
       return;
     }
     case 'promise': {
@@ -1036,7 +1038,7 @@ function applyInput(s: ClimbState, idx: number): void {
         reaction(s, id, idx, FACTS[inp.fact].bears, `told:${inp.fact}`);
       }
       s.told[inp.fact] = [...(s.told[inp.fact] ?? []), ...hearers];
-      s.journal.push({ at: s.minute, text: `You told them: ${FACTS[inp.fact].words}` });
+      s.journal.push({ at: s.minute, text: `You told the party, “${FACTS[inp.fact].words}”` });
       return;
     }
     case 'lead':
@@ -1088,7 +1090,7 @@ function applyInput(s: ClimbState, idx: number): void {
         return;
       }
       L.scouting = { leg: lg.id, until: s.minute + Math.max(10, Math.round(lg.minutes * 0.4)) };
-      s.journal.push({ at: s.minute, text: `You went a little way up ${lg.name} to look.` });
+      s.journal.push({ at: s.minute, text: `You went a little way up ${routeName(lg)} to look.` });
       return;
     }
     case 'fix': {
@@ -1104,7 +1106,7 @@ function applyInput(s: ClimbState, idx: number): void {
         return;
       }
       L.fixing = { leg: lg.id, until: s.minute + 25 };
-      s.journal.push({ at: s.minute, text: `You began fixing a rope on ${lg.name}.` });
+      s.journal.push({ at: s.minute, text: `You began fixing a rope on ${routeName(lg)}.` });
       return;
     }
     case 'share': {
@@ -1143,15 +1145,14 @@ export const FACTS: Record<FactId, { words: string; short: string; bears: 'climb
     words: 'Clouds are building in the west. The wind will get stronger this afternoon.',
   },
   'gully-quiet': {
-    short: 'gully quiet',
+    short: 'shaded rock channel',
     bears: 'climb',
-    words:
-      'The gully, a narrow channel in the mountain, is shaded and quiet. From its top, the summit is about half an hour away.',
+    words: 'The rock channel is shaded and quiet. From its top, the summit is about half an hour away.',
   },
   'gully-loose': {
-    short: 'gully loose',
+    short: 'falling stones',
     bears: 'descend',
-    words: 'The sun is on the gully. Stones are falling.',
+    words: 'The sun is on the rock channel. Stones are falling.',
   },
   'ridge-solid': {
     short: 'ridge solid',
@@ -1282,9 +1283,10 @@ export function legReport(s: ClimbState, lg: Leg): string {
   if (lg.rockfall * sun > 0.3) bits.push('stones were coming down');
   if (lg.exposure * wind > 0.4) bits.push('strong wind blew across it');
   if (lg.footing > 0.015) bits.push('it was difficult to keep a secure foothold');
+  const name = routeName(lg);
   return bits.length
-    ? `On ${lg.name}, ${bits.join(', ').replace(/, ([^,]*)$/, ' and $1')}`
-    : `${lg.name[0]?.toUpperCase()}${lg.name.slice(1)} looked safe to walk on`;
+    ? `On ${name}, ${bits.join(', ').replace(/, ([^,]*)$/, ' and $1')}`
+    : `${name[0]?.toUpperCase()}${name.slice(1)} looked safe to walk on`;
 }
 
 /** Seeing a leg up close makes its route facts known (for telling the others). */
@@ -1398,7 +1400,7 @@ function leaderGo(s: ClimbState, m: Mountain, dir: 'up' | 'down' | 'stop', via?:
       const ups = legsUp(m, pos.place ?? '');
       lg = ups.find((x) => x.id === (via ?? L.route)) ?? ups[0];
       if (lg && ups.length > 1) {
-        if (L.route !== lg.id) s.journal.push({ at: s.minute, text: `You chose ${lg.name}.` });
+        if (L.route !== lg.id) s.journal.push({ at: s.minute, text: `You chose ${routeName(lg)}.` });
         L.route = lg.id;
       }
     }
@@ -1645,13 +1647,13 @@ function stepLeader(s: ClimbState, m: Mountain): void {
   const L = s.leader;
   if (L.scouting && s.minute >= L.scouting.until) {
     const lg = legOf(m, L.scouting.leg);
-    s.journal.push({ at: s.minute, text: `You came back from ${lg.name}: ${legReport(s, lg)}.` });
+    s.journal.push({ at: s.minute, text: `You came back from ${routeName(lg)}. ${legReport(s, lg)}.` });
     learnLeg(s, lg);
     L.scouting = null;
   }
   if (L.fixing && s.minute >= L.fixing.until) {
     s.fixed.push(L.fixing.leg);
-    s.journal.push({ at: s.minute, text: `The rope on ${legOf(m, L.fixing.leg).name} was fixed.` });
+    s.journal.push({ at: s.minute, text: `The rope on ${routeName(legOf(m, L.fixing.leg))} was fixed.` });
     L.fixing = null;
   }
   if (L.near && !L.fixing && !L.scouting) {
@@ -1816,7 +1818,7 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
       s.journal.push({
         at: s.minute,
         who: mem.id,
-        text: `${memberIn(s, mem.id).name} changed their mind and went up again.`,
+        text: `${memberIn(s, mem.id).name} changed ${memberIn(s, mem.id).they === 'she' ? 'her' : 'his'} mind and went up again.`,
       });
     }
     if (!up && mem.escortFor) {
@@ -1952,8 +1954,8 @@ function beat(s: ClimbState, when: string, arriving?: string): void {
 }
 
 function here(m: Mountain, mem: MemberState): string {
-  if (mem.pos.place) return placeOf(m, mem.pos.place).name;
-  return legOf(m, mem.pos.leg ?? '').name;
+  if (mem.pos.place) return routeName(placeOf(m, mem.pos.place));
+  return routeName(legOf(m, mem.pos.leg ?? ''));
 }
 
 /** End the running activity with an HF outcome built from what the world did. */
@@ -1997,7 +1999,7 @@ function complete(
             s.journal.push({
               at: s.minute,
               who: mem.id,
-              text: `${memberIn(s, mem.id).name} called down from ${placeOf(m, lg.to).name}: ${legReport(s, next)}.`,
+              text: `${memberIn(s, mem.id).name} called down from ${routeName(placeOf(m, lg.to))}. ${legReport(s, next)}.`,
             });
             learnLeg(s, next);
           }
@@ -2115,7 +2117,7 @@ function slips(s: ClimbState, m: Mountain): void {
       s.journal.push({
         at: s.minute,
         who: mem.id,
-        text: `${name} slipped on ${lg.name}; ${memberIn(s, partner.id).name} held the rope.`,
+        text: `${name} slipped on ${routeName(lg)}; ${memberIn(s, partner.id).name} held the rope.`,
       });
       perceive(p, [
         {
@@ -2135,10 +2137,10 @@ function slips(s: ClimbState, m: Mountain): void {
         who: mem.id,
         text:
           hurtLevel(sev) === 'badly'
-            ? `${name} fell on ${lg.name} and lay still for a long minute.`
+            ? `${name} fell on ${routeName(lg)} and lay still for a long minute.`
             : hurtLevel(sev) === 'hurt'
-              ? `${name} slipped on ${lg.name} and got up hurt.`
-              : `${name} slipped on ${lg.name} and got up, shaken.`,
+              ? `${name} slipped on ${routeName(lg)} and got up hurt.`
+              : `${name} slipped on ${routeName(lg)} and got up, shaken.`,
       });
     }
     if (sev >= 0.1) {
@@ -2290,7 +2292,7 @@ function quietLines(s: ClimbState, m: Mountain): void {
   if (mod !== 19 * 60 + 5) return;
   const bilal = s.members.find((x) => x.id === 'bilal');
   if (!bilal) return;
-  const where = bilal.pos.place ? placeOf(m, bilal.pos.place).name : 'the path';
+  const where = bilal.pos.place ? routeName(placeOf(m, bilal.pos.place)) : 'the path';
   s.journal.push({
     at: s.minute,
     who: 'bilal',

@@ -12,7 +12,7 @@ const at = (hhmm: string) => {
 
 it("Wren's fall at 14:31 calls the leader, and the call fades after 45 minutes", () => {
   const c = replay(ex.start, ex.inputs, at('14:35'));
-  expect(hurtCall(c)).toMatchObject({ who: 'wren', where: 'the last scramble' });
+  expect(hurtCall(c)).toMatchObject({ who: 'wren', where: 'the final rocky climb' });
   const later = replay(ex.start, ex.inputs, at('15:30'));
   expect(hurtCall(later)?.who).not.toBe('wren');
 });

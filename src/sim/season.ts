@@ -103,8 +103,8 @@ export function newSeason(seed: number, chapter?: Chapter): { season: SeasonStat
         text:
           life.line +
           (!life.availableForExtraWork
-            ? ' They take a few minutes at the hut to check their own gear.'
-            : ' They have time to help with preparations.'),
+            ? ` ${MEMBERS.find((m) => m.id === id)?.they === 'she' ? 'She checks her' : 'He checks his'} gear at the hut for a few minutes.`
+            : ` ${MEMBERS.find((m) => m.id === id)?.they === 'she' ? 'She has' : 'He has'} time to help with preparations.`),
         story: true,
       });
     }
@@ -173,7 +173,7 @@ function aftermath(climb: ClimbState, facts: Facts): void {
         .replace(
           /, ([^,]*)$/,
           ' and $1',
-        )} spent the night out. The hut warden's party brought ${out.length > 1 ? 'them' : out[0]?.they === 'she' ? 'her' : 'him'} down at first light.`,
+        )} stayed on the mountain overnight. The hut warden's party brought ${out.length > 1 ? 'them' : out[0]?.they === 'she' ? 'her' : 'him'} down at first light.`,
       undefined,
     ]);
   for (const p of climb.people) {

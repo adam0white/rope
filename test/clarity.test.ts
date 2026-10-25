@@ -233,7 +233,7 @@ it('updates take-pack availability at the actual forty-metre boundary', async ()
   expect(button('take pack').disabled).toBe(false);
   standAt(41);
   expect(button('take pack').disabled).toBe(true);
-  expect(button('take pack').parentElement?.textContent).toContain('Walk to them first');
+  expect(button('take pack').parentElement?.textContent).toContain('Walk to her first');
 });
 
 it('keeps eating available without carried rations at the hut, for one person or the group', async () => {
