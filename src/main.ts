@@ -11,3 +11,5 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
+
+if (import.meta.hot) import.meta.hot.dispose(() => game.destroy());

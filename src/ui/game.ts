@@ -53,6 +53,7 @@ import { PACE } from './pace.ts';
 import { displayText } from './plain-english.ts';
 import { attentionNeeded, eventStamp, playbackRate, skipEventStamp } from './playback.ts';
 import { Scene } from './scene.ts';
+import { RopeStage } from './stage.ts';
 
 const SAVE_KEY = 'rope.save.cast.v1';
 const SLOW_MS = PACE.slowMs;
@@ -95,12 +96,26 @@ const esc = (t: string): string =>
 const bold = (t: string): string => esc(displayText(t)).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 
 export class Game {
+  private static owners = new WeakMap<HTMLElement, Game>();
+  private savedText: string | null;
+
+  private current(): boolean {
+    return !this.disposed && Game.owners.get(this.root) === this;
+  }
   private continuity = new Continuity(lab, personaChannel());
   private starting = false;
   private root: HTMLElement;
   private readonly labTools = new URLSearchParams(location.search).get('lab') === '1';
   private noticeFooter = h('footer', 'recording-footer');
   private scene = new Scene();
+  private stage: RopeStage | null = null;
+  private disposed = false;
+  private booted = false;
+  private lifetime = new AbortController();
+  private footerObserver: ResizeObserver | null = null;
+  private untrack: (() => void) | undefined;
+  private unwatch: (() => void) | undefined;
+  private frameId = 0;
   private top = h('div', 'top');
   private whereEl = h('div', 'where');
   private speed: 'auto' | 'slow' | 'normal' | 'fast' = 'auto';
@@ -149,10 +164,23 @@ export class Game {
 
   constructor(root: HTMLElement) {
     this.root = root;
+    try {
+      this.savedText = localStorage.getItem(SAVE_KEY);
+    } catch {
+      this.savedText = null;
+    }
   }
 
   async boot(): Promise<void> {
+    if (this.booted || this.disposed) return;
+    const predecessor = Game.owners.get(this.root);
+    predecessor?.destroy();
+    // Adopt only the predecessor's owned save, including its final progress flush.
+    if (predecessor) this.savedText = predecessor.savedText;
+    Game.owners.set(this.root, this);
+    this.booted = true;
     await document.fonts?.ready;
+    if (!this.current()) return;
     const info = h('button', 'top-info', 'i');
     info.setAttribute('aria-label', 'About this part of the climb');
     info.onclick = () => this.openInfo();
@@ -192,20 +220,29 @@ export class Game {
     this.root.append(this.top, this.dayStrip, this.sceneEl, this.sheet, this.leaderBar, this.noticeFooter);
     const notice = telemetryNotice();
     if (notice) this.noticeFooter.append(notice);
-    new ResizeObserver(() => {
+    this.footerObserver = new ResizeObserver(() => {
       this.root.style.setProperty('--footer-height', `${this.noticeFooter.getBoundingClientRect().height}px`);
-    }).observe(this.noticeFooter);
+    });
+    this.footerObserver.observe(this.noticeFooter);
     await this.scene.mount(this.sceneEl);
+    if (!this.current()) {
+      this.scene.destroy();
+      return;
+    }
     this.scene.onTap = (id) => {
       if (id === 'leader') return;
       this.pickTarget(id);
     };
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.save();
-    });
-    window.addEventListener('pagehide', () => this.save());
-    requestAnimationFrame(() => this.frame());
-    lab.trackRun(
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (document.hidden) this.save();
+      },
+      { signal: this.lifetime.signal },
+    );
+    window.addEventListener('pagehide', () => this.save(), { signal: this.lifetime.signal });
+    this.frameId = requestAnimationFrame(() => this.frame());
+    this.untrack = lab.trackRun(
       () => {
         if (!this.climb || !this.season) return null;
         const saved = this.load();
@@ -224,13 +261,61 @@ export class Game {
             : [],
       },
     );
-    watchPersonaCheckpoint(() => {
+    this.unwatch = watchPersonaCheckpoint(() => {
       if (this.climb?.over) void this.continuity.checkpointAll().then(() => this.save());
     });
-    window.addEventListener('storage', (event) => {
-      if (event.key === null) this.continuity.invalidate();
-    });
+    window.addEventListener(
+      'storage',
+      (event) => {
+        if (event.key === null) this.continuity.invalidate();
+      },
+      { signal: this.lifetime.signal },
+    );
     this.titlePage();
+  }
+
+  private syncStage(): void {
+    if (!this.current() || (this.pageOpen() && this.pageKind === 'title')) {
+      this.stage?.destroy();
+      this.stage = null;
+      return;
+    }
+    this.stage ??= new RopeStage(this.root, (width, height) => this.scene.resize(width, height));
+    this.stage.show(this.pageOpen() ? this.pageKind : this.panel, this.pageOpen() ? 'full' : 'fit');
+  }
+
+  destroy(): void {
+    if (this.disposed) return;
+    this.save();
+    this.disposed = true;
+    this.continuity.generation++;
+    this.lifetime.abort();
+    this.footerObserver?.disconnect();
+    this.untrack?.();
+    this.unwatch?.();
+    cancelAnimationFrame(this.frameId);
+    this.stage?.destroy();
+    this.stage = null;
+    this.debriefWorker?.terminate();
+    this.scene.destroy();
+    this.display.destroy();
+    for (const node of [
+      this.top,
+      this.dayStrip,
+      this.sceneEl,
+      this.sheet,
+      this.leaderBar,
+      this.noticeFooter,
+      this.pageEl,
+      this.menuEl,
+      this.infoEl,
+    ])
+      node?.remove();
+    if (Game.owners.get(this.root) === this) {
+      Game.owners.delete(this.root);
+      delete this.root.dataset.screen;
+      this.root.style.removeProperty('--footer-height');
+    }
   }
 
   // ------------------------------------------------------------ season and saves
@@ -246,7 +331,12 @@ export class Game {
   }
 
   private save(): void {
-    if (!this.climb || !this.season) return;
+    if (!this.current() || !this.climb || !this.season) return;
+    try {
+      if (localStorage.getItem(SAVE_KEY) !== this.savedText) return;
+    } catch {
+      return;
+    }
     const s: Save = {
       v: 1,
       engine: ENGINE_VERSION,
@@ -262,6 +352,7 @@ export class Game {
     try {
       const text = JSON.stringify(s);
       localStorage.setItem(SAVE_KEY, text);
+      this.savedText = text;
       lab.captureSave(this.recordingSave(JSON.parse(text)));
     } catch {
       // Storage full or blocked: the game plays on without a save.
@@ -269,16 +360,18 @@ export class Game {
   }
 
   private async newGame(localOnly = false): Promise<void> {
-    if (this.starting) return;
+    if (!this.current() || this.starting) return;
     this.starting = true;
     try {
       const seed = (Date.now() % 1_000_000_007) | 0;
       const { season, climb } = await this.continuity.fresh(seed, localOnly);
+      if (!this.current()) return;
       this.season = season;
       this.disc = newDisclosure();
       this.begin(climb, season.start ?? snapshot(climb));
       await this.continuity.recording();
     } catch (error) {
+      if (!this.current()) return;
       console.error('Season start failed', error);
       this.openPage(
         `<div class="page-body"><h1>The season has not begun</h1><p>The game could not start this season. Your saved season has not been replaced.</p><p>Try again, or send Feedback if this keeps happening.</p>${this.labTools ? `<pre>${esc(String(error))}</pre>` : ''}</div><div class="page-actions">${this.labTools ? '<button class="btn" data-local>Begin fresh locally</button>' : '<button class="btn" data-retry>Try again</button>'}<button class="btn" data-back>Back</button><button class="btn" data-word>Feedback</button></div>`,
@@ -296,6 +389,7 @@ export class Game {
   }
 
   private async resume(sv: Save): Promise<void> {
+    if (!this.current()) return;
     try {
       if (sv.engine !== ENGINE_VERSION)
         throw new Error('This save comes from an older edition. Start a new game.');
@@ -304,13 +398,16 @@ export class Game {
       validateSeasonStart(sv.season.seed, sv.season.chapter, sv.season.past ?? [], start);
       const c = replay(start, sv.inputs, sv.minute);
       await this.continuity.restoreOwnership({ season: sv.season, climb: c }, sv.ownership);
+      if (!this.current()) return;
       this.season = sv.season;
       this.disc = sv.disclosure;
       this.begin(c, start, true);
       await this.continuity.recording();
+      if (!this.current()) return;
       lab.screen(climbScreen(c, 'climb'));
       if (c.over || sv.over) this.endClimb();
     } catch (error) {
+      if (!this.current()) return;
       console.error('Resume failed', error);
       if (this.labTools) {
         this.continuity.status = String(error);
@@ -328,6 +425,7 @@ export class Game {
   }
 
   private begin(c: ClimbState, start: string, resumed = false): void {
+    if (!this.current()) return;
     this.branch = undefined;
     this.climb = c;
     this.start = start;
@@ -364,6 +462,11 @@ export class Game {
   // ------------------------------------------------------------ the loop
 
   private frame(): void {
+    if (!this.current()) return;
+    if (!this.root.isConnected) {
+      this.destroy();
+      return;
+    }
     const now = performance.now();
     const elapsed = Math.max(0, now - this.last);
     const dt = Math.min(0.1, elapsed / 1000);
@@ -444,7 +547,7 @@ export class Game {
         this.save();
       }
     }
-    requestAnimationFrame(() => this.frame());
+    this.frameId = requestAnimationFrame(() => this.frame());
   }
 
   private afterStep(): void {
@@ -496,6 +599,7 @@ export class Game {
   private sentAt = -Infinity;
 
   private send(inp: NewInput, also?: NewInput): void {
+    if (!this.current()) return;
     const c = this.climb;
     if (performance.now() - this.sentAt < 450) return;
     // Nothing stays focused after a send, so no key press can repeat the order.
@@ -834,7 +938,8 @@ export class Game {
     if (ifChanged && key === this.sheetKey) return;
     this.sheetKey = key;
     const sh = this.sheet;
-    sh.className = `sheet sheet-${this.panel}`;
+    sh.className = `sheet lk-sheet sheet-${this.panel}`;
+    this.syncStage();
     const targetScroll = sh.querySelector('.targets')?.scrollLeft ?? 0;
     const previousResult = sh.querySelector<HTMLElement>('.request-result');
     const answersOpen = previousResult?.querySelector('details')?.open;
@@ -1715,6 +1820,7 @@ export class Game {
   }
 
   private openPage(html: string, bind: (el: HTMLElement) => void = () => {}, kind = 'journal'): void {
+    if (!this.current()) return;
     this.infoEl?.remove();
     this.infoEl = null;
     this.closePage();
@@ -1723,23 +1829,27 @@ export class Game {
     const el = h('div', `page page-${kind}`, `<div class="inner">${html}</div>`);
     this.root.append(el);
     this.pageEl = el;
+    this.syncStage();
     bind(el);
     if (this.climb) this.renderTop();
     else this.whereEl.innerHTML = '<a href="https://human.adamwhite.work/games/">All games</a>';
   }
 
   private closePage(): void {
+    if (!this.current()) return;
     this.pageGeneration++;
     this.debriefWorker?.terminate?.();
     this.debriefWorker = null;
     this.pageEl?.remove();
     this.pageEl = null;
     this.root.dataset.screen = 'climb';
+    this.syncStage();
     if (this.climb) this.renderTop();
     this.last = performance.now();
   }
 
   private openInfo(): void {
+    if (!this.current()) return;
     if (this.infoEl) {
       this.infoEl.remove();
       this.infoEl = null;
@@ -1777,6 +1887,7 @@ export class Game {
   }
 
   private gameMenu(): void {
+    if (!this.current()) return;
     if (this.menuEl) return;
     this.infoEl?.remove();
     this.infoEl = null;
@@ -2097,6 +2208,7 @@ export class Game {
             const file = (event.target as HTMLInputElement).files?.[0];
             if (!file) return;
             const raw = JSON.parse(await file.text());
+            if (!this.current()) return;
             if (raw.game !== 'rope' || raw.engine !== FRAMEWORK_VERSION)
               throw new Error('This export comes from an unsupported edition. Start a new game.');
             if (raw.chapter) checkChapter(raw.chapter);
@@ -2109,6 +2221,7 @@ export class Game {
               { runId: crypto.randomUUID(), heads: [], fileOrigin: true, sources: raw.castSources ?? [] },
               true,
             );
+            if (!this.current()) return;
             this.season = season;
             this.disc = newDisclosure();
             this.begin(c, raw.start, true);

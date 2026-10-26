@@ -47,6 +47,7 @@ export interface ScreenPoint {
 
 export class Scene {
   app = new Application();
+  private lifetime = new AbortController();
   private ground = new Graphics();
   private weather = new Graphics();
   private figures = new Graphics();
@@ -67,7 +68,8 @@ export class Scene {
 
   async mount(el: HTMLElement): Promise<void> {
     await this.app.init({
-      resizeTo: el,
+      width: Math.max(1, el.clientWidth),
+      height: Math.max(1, el.clientHeight),
       // WebGL only: Pixi's WebGPU path still checks for unsafe-eval, which the CSP forbids (the console error on load).
       preference: 'webgl',
       backgroundAlpha: 0,
@@ -76,30 +78,48 @@ export class Scene {
       autoDensity: true,
     });
     el.prepend(this.app.canvas);
-    // Pixi's resizeTo follows window resizes only; the scene box also changes when the sheet grows.
-    new ResizeObserver(() => this.app.resize()).observe(el);
+
     this.app.stage.addChild(this.weather, this.ground, this.labels, this.figures);
-    this.app.canvas.addEventListener('pointerdown', (e) => {
-      const r = this.app.canvas.getBoundingClientRect();
-      const x = e.clientX - r.left;
-      const y = e.clientY - r.top;
-      let best: string | null = null;
-      let bd = 34;
-      for (const [id, p] of this.at) {
-        const d = Math.hypot(p.x - x, p.y - 12 - y);
-        if (d < bd) {
-          bd = d;
-          best = id;
+    this.app.canvas.addEventListener(
+      'pointerdown',
+      (e) => {
+        const r = this.app.canvas.getBoundingClientRect();
+        const x = e.clientX - r.left;
+        const y = e.clientY - r.top;
+        let best: string | null = null;
+        let bd = 34;
+        for (const [id, p] of this.at) {
+          const d = Math.hypot(p.x - x, p.y - 12 - y);
+          if (d < bd) {
+            bd = d;
+            best = id;
+          }
         }
-      }
-      if (best) this.onTap(best);
-    });
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      this.pal = readPalette();
-      for (const t of [...this.names.values(), ...this.placeLabels.values()]) t.destroy();
-      this.names.clear();
-      this.placeLabels.clear();
-    });
+        if (best) this.onTap(best);
+      },
+      { signal: this.lifetime.signal },
+    );
+    matchMedia('(prefers-color-scheme: dark)').addEventListener(
+      'change',
+      () => {
+        this.pal = readPalette();
+        for (const t of [...this.names.values(), ...this.placeLabels.values()]) t.destroy();
+        this.names.clear();
+        this.placeLabels.clear();
+      },
+      { signal: this.lifetime.signal },
+    );
+  }
+
+  /** The shared stage supplies the actual host scene box, including sheet-driven resizes. */
+  resize(width: number, height: number): void {
+    if (this.app.renderer && (this.app.screen.width !== width || this.app.screen.height !== height))
+      this.app.renderer.resize(width, height);
+  }
+
+  destroy(): void {
+    this.lifetime.abort();
+    if (this.app.renderer) this.app.destroy(true, { children: true });
   }
 
   /** Gentle zoom-out (down to 0.6) so a spread party fits; eased, never snapping. */

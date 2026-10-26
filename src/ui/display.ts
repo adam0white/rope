@@ -4,16 +4,30 @@
 export class DisplaySession {
   private lock: WakeLockSentinel | null = null;
   private active = false;
+  private disposed = false;
+  private lifetime = new AbortController();
   private requesting = false;
   constructor() {
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        void this.lock?.release();
-        this.lock = null;
-      } else if (this.active) void this.keepAwake();
-    });
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (document.hidden) {
+          void this.lock?.release();
+          this.lock = null;
+        } else if (this.active) void this.keepAwake();
+      },
+      { signal: this.lifetime.signal },
+    );
+  }
+  destroy(): void {
+    this.disposed = true;
+    this.active = false;
+    this.lifetime.abort();
+    void this.lock?.release();
+    this.lock = null;
   }
   start(): void {
+    if (this.disposed) return;
     this.active = true;
     void this.keepAwake();
     if (
@@ -23,11 +37,11 @@ export class DisplaySession {
       void document.documentElement.requestFullscreen?.().catch(() => {});
   }
   private async keepAwake(): Promise<void> {
-    if (!navigator.wakeLock || this.lock || this.requesting || document.hidden) return;
+    if (this.disposed || !navigator.wakeLock || this.lock || this.requesting || document.hidden) return;
     this.requesting = true;
     try {
       const lock = await navigator.wakeLock.request('screen');
-      if (document.hidden) {
+      if (this.disposed || document.hidden) {
         await lock.release();
         return;
       }

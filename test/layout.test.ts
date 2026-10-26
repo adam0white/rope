@@ -43,6 +43,8 @@ vi.mock('../src/ui/scene.ts', () => ({
     at = new Map();
     mount = async () => {};
     draw = () => {};
+    resize = () => {};
+    destroy = () => {};
   },
 }));
 interface Driver {
@@ -444,4 +446,140 @@ it('opting into field plans cannot swallow the opening turn-back promise', async
   expect(d.climb.promise?.hour).toBe(12);
   expect(d.climb.inputs.map((i) => i.t)).toEqual(['field-rules', 'promise']);
   expect(query('.where').textContent).toContain('turn back at 12');
+});
+
+it('publishes the actual request panel and tears the stage down on title and disposal', async () => {
+  const game = await boot();
+  const root = query('#app');
+  expect(root.dataset.sheetId).toBe('main');
+  tap('.more-actions');
+  expect(root.dataset.sheetId).toBe('more');
+  tap('.sheet-back');
+  expect(root.dataset.sheetId).toBe('main');
+  const lifecycle = game as unknown as { titlePage(): void; closePage(): void; destroy(): void };
+  lifecycle.titlePage();
+  expect(root.dataset.sheetId).toBeUndefined();
+  lifecycle.closePage();
+  expect(root.dataset.sheetId).toBe('main');
+  lifecycle.destroy();
+  expect(root.dataset.sheetId).toBeUndefined();
+});
+
+it('replacement boot removes stale shell', async () => {
+  const old = (await boot(false)) as unknown as Game;
+  old.destroy();
+  const replacement = new Game(query('#app'));
+  await replacement.boot();
+  const scene = query('.scene');
+  vi.spyOn(scene, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 60,
+    width: 390,
+    height: 401,
+  } as DOMRect);
+  (replacement as unknown as { closePage(): void }).closePage();
+  expect(query('#app').style.getPropertyValue('--lk-scene-height')).toBe('401px');
+  expect(document.querySelectorAll('.top')).toHaveLength(1);
+  expect(document.querySelectorAll('.scene')).toHaveLength(1);
+  replacement.destroy();
+});
+it('REVIEW disposed pending resume protects replacement save', async () => {
+  const old = await boot();
+  old.save();
+  const saved = JSON.parse(localStorage.getItem('rope.save.cast.v1')!);
+  let finish!: () => void;
+  old.continuity.restoreOwnership = () =>
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+  const pending = old.resume(saved);
+  (old as unknown as Game).destroy();
+  localStorage.setItem('rope.save.cast.v1', 'replacement-save');
+  finish();
+  await pending;
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe('replacement-save');
+});
+
+it('flushes current progress on destroy but preserves a foreign replacement', async () => {
+  const game = await boot();
+  step(game.climb);
+  const minute = game.climb.minute;
+  (game as unknown as Game).destroy();
+  expect(JSON.parse(localStorage.getItem('rope.save.cast.v1')!).minute).toBe(minute);
+  const next = await boot(false);
+  const state = newSeason(7);
+  next.season = state.season;
+  next.begin(state.climb, state.season.start ?? snapshot(state.climb));
+  localStorage.setItem('rope.save.cast.v1', 'foreign');
+  (next as unknown as Game).destroy();
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe('foreign');
+});
+
+it('does not install a pending new season after destroy', async () => {
+  const game = await boot(false);
+  let finish!: (state: ReturnType<typeof newSeason>) => void;
+  game.continuity.fresh = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  tap('[data-a="new"]');
+  (game as unknown as Game).destroy();
+  localStorage.setItem('rope.save.cast.v1', 'replacement');
+  finish(newSeason(4));
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe('replacement');
+  expect(document.querySelector('.scene')).toBeNull();
+});
+
+it('does not save a pending checkpoint after destroy', async () => {
+  history.replaceState(null, '', '/?lab=1');
+  const game = await boot();
+  tap('.menu-trigger');
+  tap('[data-menu-people]');
+  let finish!: () => void;
+  game.continuity.checkpoint = () =>
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+  tap('[data-checkpoint]');
+  (game as unknown as Game).destroy();
+  localStorage.setItem('rope.save.cast.v1', 'replacement');
+  finish();
+  await Promise.resolve();
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe('replacement');
+  expect(document.querySelector('.page')).toBeNull();
+});
+
+it('persists successor progress after boot flushes the live predecessor', async () => {
+  const old = await boot();
+  old.save();
+  step(old.climb);
+  const flushedMinute = old.climb.minute;
+  const replacement = new Game(query('#app'));
+  await replacement.boot();
+  expect(JSON.parse(localStorage.getItem('rope.save.cast.v1')!).minute).toBe(flushedMinute);
+  tap('[data-a="continue"]');
+  const next = replacement as unknown as Driver;
+  await vi.waitFor(() => expect(next.climb?.minute).toBe(flushedMinute));
+  step(next.climb);
+  next.save();
+  expect(JSON.parse(localStorage.getItem('rope.save.cast.v1')!).minute).toBe(next.climb.minute);
+  replacement.destroy();
+});
+
+it('never adopts foreign bytes during predecessor teardown', async () => {
+  const old = await boot();
+  old.save();
+  step(old.climb);
+  const replacement = new Game(query('#app'));
+  localStorage.setItem('rope.save.cast.v1', 'foreign');
+  await replacement.boot();
+  const next = replacement as unknown as Driver;
+  const state = newSeason(9);
+  next.season = state.season;
+  next.begin(state.climb, state.season.start ?? snapshot(state.climb));
+  next.save();
+  replacement.destroy();
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe('foreign');
 });
