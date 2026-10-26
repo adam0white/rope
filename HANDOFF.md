@@ -1,3 +1,16 @@
+# Current source and delivery (2026-10-26)
+
+Remaining: Adam accepts feel on 2026-11-03. GD owns design/ledger reconciliation. Named owner journeys and broader follow-ups remain open in the design Deferred list. Technical delivery does not establish owner acceptance.
+
+- Current application source: `23fd3b11820708e3dcb09685741786341d4a2c53`; exact CI `40250936771` succeeded. Normal deployment `ad628bd1-de34-4d63-817a-fee10bce709a` is recorded in `~/code/.lab-scratch/v3/rope-feedback/report.md`. This docs pass independently fetched live `/release.json`: that exact source, framework `3.0.0`, app `0.1.0`, `dirty:false`. A later docs-only commit does not change that deployed application receipt.
+- The host now adopts immutable lab-client `0.4.11` / kit `0.5.12`. Shared quiet **I'm stopping** / **I'm confused** choices prefill ordinary Feedback notes. Selection sends nothing. Changing or clearing a choice retains edited text. Ordinary **Submit**, verdicts, privacy link, optional unchecked recording-off sharing and saved-note receipt semantics remain unchanged. SDK npm publication remains excluded by the owner's release-artifact guardrail.
+- Baseline mechanics documentation at `6f0c440` remains current. Field rules, old inputs and raw histories, HF `3.0.0` / engine `2.23.0`, deterministic replay, continuity boundaries and `CAMP_AI` off are unchanged. No model calls were made; historical spend estimates below remain estimates.
+- README/HANDOFF only. No dedicated About/Credits app surface exists. This source-only delta runs no browser or playtest round and needs no app deployment. The coordinator's open-round deployment hold remains. Owner acceptance and the SDK delivery report's bounded synthetic checks remain separate.
+
+# Prior mechanics documentation snapshot (2026-10-25)
+
+The following snapshot predates SDK adoption. Its application receipt and unadopted-SDK claim describe that documentation pass, not the current application. Its mechanics descriptions remain current.
+
 # Current source and delivery (2026-10-25)
 
 Remaining: Adam accepts feel on 2026-11-03. Named owner journeys and broader follow-ups remain open in the design Deferred list. Technical delivery does not establish owner acceptance.

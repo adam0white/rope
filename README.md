@@ -15,6 +15,10 @@ A browser game built on the [Human Framework](https://github.com/adam0white/huma
 
 Time advances automatically during play. It slows for answers and calls. Opening the menu or an information panel stops time. **Menu** offers **Feedback**, **Full screen**, **All games**, a **Recording** switch and **New game**. **Resume** closes the menu. When an unfinished season is available, **New game** asks for confirmation before replacing it.
 
+### Feedback
+
+Open **Menu → Feedback**. The shared **I'm stopping** and **I'm confused** choices prefill the note. Selecting, changing or clearing a choice sends nothing and retains your edits. Use **Submit** to send the note. The existing verdict choices, **Lab privacy** link and recording controls remain available. When Recording is off, the optional sharing checkbox starts unchecked; leaving it unchecked sends the note alone. After a successful send, the page says **Sent. Your note is stored.**
+
 ### Optional mountain plans
 
 At the hut, open **New mountain plans** before choosing a turn time or **We'll see**. Both options start unchecked. **Use these plans and the new promise response** enables field rules. **Also allow people to step aside when their body needs it** also enables field rules and separately opts people into HF's bladder model.
@@ -42,6 +46,8 @@ The script reports whether the saved answers and journal text match. It is not a
 ## What Human Framework contributes
 
 The game pins the published npm package `@adam0white/human-framework` to exactly **3.0.0**. That package reports engine **2.23.0**; the package version and engine stamp are different values. Fresh climbs use Rope simulation rules **2**. The native history format uses `rope-cast/1`, rules stamp `rope-cast-1` and calendar mapping `rope-calendar/1`.
+
+The host uses immutable lab-client **0.4.11** and lab-kit **0.5.12** release artifacts.
 
 HF supplies each person's traits, values, bodily needs, goals, relationships, memories, decisions and decision-based replies. Rope supplies the mountains, weather, movement, ropes, available actions and physical consequences. Rope presents offers to HF rather than writing a person's refusal itself. The simulation runs locally and deterministically from its starting state and input log. The deployed configuration has `CAMP_AI` off. The debrief uses the labelled deterministic journal fallback. Optional Workers AI conversation, when enabled, does not decide what happens in the climb.
 
