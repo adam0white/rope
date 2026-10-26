@@ -5,7 +5,7 @@
  */
 
 import { ENGINE_VERSION, FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
-import { personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
+import { FEEDBACK_LABELS, personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
 import {
   feedbackPersonaControl,
   feedbackSharePlay,
@@ -1894,7 +1894,14 @@ export class Game {
       /* storage unavailable */
     }
     this.openPage(
-      `<div class="page-body feedback-body"><button class="btn" data-feedback-back>← Back</button><h1>Feedback</h1><p>Send a note about this game.</p><div class="feedback-verdicts">${[
+      `<div class="page-body feedback-body"><button class="btn" data-feedback-back>← Back</button><h1>Feedback</h1><p>Send a note about this game.</p><div class="feedback-verdicts">${Object.values(
+        FEEDBACK_LABELS,
+      )
+        .map(
+          (label) =>
+            `<button class="chip" data-feedback-label="${esc(label)}" aria-pressed="false">${esc(label)}</button>`,
+        )
+        .join('')}${[
         ['keep', "I'd keep playing"],
         ['mixed', 'I am not sure'],
         ['quit', "I'd stop here"],
@@ -1908,6 +1915,7 @@ export class Game {
         )}</div><label class="feedback-note">What happened? What did you want to do? What got in the way?<textarea rows="4" data-feedback-note></textarea></label><div class="feedback-name"><label>Name (optional)<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to use an unnamed identifier for this device.</p></div><div><p>We send your note and any verdict or name you add. When Recording is on, we also include this run. Recorded play is linked across games on this device.</p>${this.labTools ? `<pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre>` : ''}<a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><div data-feedback-consent></div><p data-feedback-status role="status"></p>${this.labTools ? `<button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Download this run</button>` : ''}</div><div class="page-actions"><button class="btn go" data-feedback-send>Submit</button></div>`,
       (el) => {
         let verdict = '';
+        let selectedLabel = '';
         let sent = false;
         const send = el.querySelector<HTMLButtonElement>('[data-feedback-send]');
         const consent = el.querySelector<HTMLElement>('[data-feedback-consent]');
@@ -1921,6 +1929,22 @@ export class Game {
         update();
         el.querySelector('[data-feedback-back]')?.addEventListener('click', back);
         el.querySelector('[data-feedback-copy]')?.addEventListener('click', () => this.exportRun());
+        el.querySelectorAll<HTMLButtonElement>('[data-feedback-label]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const note = el.querySelector<HTMLTextAreaElement>('[data-feedback-note]');
+            if (!note) return;
+            let text = note.value;
+            if (selectedLabel && text === selectedLabel) text = '';
+            else if (selectedLabel && text.startsWith(`${selectedLabel}\n\n`))
+              text = text.slice(selectedLabel.length + 2);
+            selectedLabel =
+              selectedLabel === button.dataset.feedbackLabel ? '' : (button.dataset.feedbackLabel ?? '');
+            note.value = [selectedLabel, text].filter(Boolean).join('\n\n');
+            el.querySelectorAll<HTMLButtonElement>('[data-feedback-label]').forEach((item) => {
+              item.setAttribute('aria-pressed', String(item.dataset.feedbackLabel === selectedLabel));
+            });
+          });
+        });
         el.querySelectorAll<HTMLElement>('[data-verdict]').forEach((button) => {
           button.addEventListener('click', () => {
             verdict = verdict === button.dataset.verdict ? '' : (button.dataset.verdict ?? '');
