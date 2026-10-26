@@ -57,10 +57,10 @@ Use your browser's install option where supported. Offline use requires an initi
 
 ## Development
 
-Use Node 24 or later.
+Use shared Node 26.12.0 (`.node-version` and `.nvmrc`) and pnpm 12.14.0.
 
 ```sh
-npm install
+pnpm install --frozen-lockfile
 npm run dev     # local game
 npm run check:lane # lint, typecheck, tests (this repo runs the full check)
 ```
@@ -72,3 +72,5 @@ npm run check:lane # lint, typecheck, tests (this repo runs the full check)
 - Type: Literata (OFL) and Caveat (OFL) from Google Fonts.
 - World randomness pattern from HF's game _The Night Watch_.
 - Code MIT; see LICENSE.
+
+Dependency changes use pnpm and the committed `pnpm-lock.yaml`. The npm lock was imported with exact dependency versions preserved. Do not regenerate an npm lock or install a separate runtime per worktree. The pnpm policy uses strict engines/peers, no hoisting, hardlinks, a 24-hour third-party release delay and a scoped exemption for owned `@adam0white/*` packages.

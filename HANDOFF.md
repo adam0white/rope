@@ -1,3 +1,7 @@
+# Dependency installation — 2026-10-26
+
+The dependency configuration uses pnpm 12.14.0 and shared Node 26.12.0. Install with `pnpm install --frozen-lockfile`; `npm run` still runs existing scripts. `pnpm-lock.yaml` imports the npm lock without intended dependency changes. Overrides and exact native build permissions live in `pnpm-workspace.yaml`. Keep the exact HF override aligned with the direct dependency. Do not regenerate an npm lock or install a runtime per worktree. Configuration delivery requires the full lane, unchanged raw build outputs against the npm baseline, signed source and exact green CI. This conversion does not deploy the app or establish game-readiness acceptance.
+
 # Current source and delivery (2026-10-26)
 
 Remaining: Adam accepts feel on 2026-11-03. GD owns design/ledger reconciliation. Named owner journeys and broader follow-ups remain open in the design Deferred list. Technical delivery does not establish owner acceptance.

@@ -18,7 +18,7 @@ You lead five Human Framework (HF) people up a mountain and back. Every one of t
 - Workers AI may voice camp conversation only, from HF decision records and journal facts. It never emits state. Hard caps in the Worker, a kill switch and a labelled deterministic fallback. Budget $5 total; track spend in HANDOFF.md.
 - No server infrastructure beyond one Worker with static assets (no Durable Objects, no databases).
 - Phones first: Galaxy S26 360x780 CSS px, about 690 px visible; thumb actions in the bottom 40%.
-- `npm run check` (lint, typecheck, tests) passes before every commit. Node >= 24, `/opt/homebrew/bin` first on PATH.
+- `npm run check` (lint, typecheck, tests) passes before every commit. shared Node 26.12.0 from `.node-version` / `.nvmrc`, `/opt/homebrew/bin` first on PATH.
 - Deferred work goes into the Deferred section of docs/design.md with a target. Playtesters' words go verbatim into `docs/playtest-*.md`.
 
 ## Delivery
@@ -26,3 +26,5 @@ You lead five Human Framework (HF) people up a mountain and back. Every one of t
 - Repository `adam0white/rope` (public). Site: https://rope.adamwhite.work (Cloudflare Worker static assets, `wrangler.jsonc`). The owner authorized commit, push and `npm run deploy`. Verify the live site against the commit after each deploy.
 
 - Player-facing copy follows [Plain English](docs/lab/plain-english.md).
+
+Use the exact pnpm 12.14.0 package-manager pin. Install with `pnpm install --frozen-lockfile`; keep `pnpm-lock.yaml`. Keep npm overrides and native build permissions in `pnpm-workspace.yaml`, not package metadata. `npm run` remains valid for scripts. Wrap the full lane once with HF `scripts/suite-lock.ts`; Rope scripts do not acquire it. The installer conversion requires reviewed source, full lane, byte-identical raw build outputs, signed commit and exact green CI; it does not deploy the app or establish game readiness.
