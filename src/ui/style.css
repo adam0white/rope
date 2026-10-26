@@ -1572,3 +1572,28 @@ body {
 .field-notice p {
   margin: 0;
 }
+
+/* Let enlarged action labels reflow instead of splitting words into fixed columns. */
+.sheet .people-verbs,
+.leader-bar .movement-verbs {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 3em), 1fr));
+}
+
+.sheet > .label,
+.leader-bar .you-label {
+  height: auto;
+  line-height: 1.4;
+}
+
+/* Keep the mountain visible while the complete tutorial remains scrollable. */
+.note {
+  max-height: 40%;
+  padding-block: max(4px, 0.2em);
+  overflow: auto;
+  align-items: flex-start;
+}
+.note button {
+  align-self: flex-start;
+  position: sticky;
+  top: 0;
+}
