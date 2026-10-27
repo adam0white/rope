@@ -1,3 +1,15 @@
+# Public gameplay candidate (2026-10-27)
+
+Remaining: director-launched independent review, signed source integration, exact CI, clean deployment and live viewport verification. Adam separately accepts feel on 2026-11-03. No panel or retest is authorized.
+
+Base: origin/main `8ff481e`. HF stays exactly3.0.0; client0.4.15/kit0.5.17 stay byte-identical. Ordinary hut starts log field rules and real HF bodily needs. Pace controls are public. Debug starts collapsed beside Lab privacy. Cast controls link to the central shelf; fresh native seasons enable the public channel before transactional preparation. Loaded histories retain pinned actors. The old cast panel and alternate import handler are removed. Debug links to the existing native-preserving file-session importer.
+
+Receipts and remaining mappings: `~/code/.lab-scratch/games-deferred/gd-resume-rope-report.md`. This is a source candidate, not a live receipt. No model calls or spend. No browser storage clearing or queue retirement.
+
+The SDK11 held statement below is historical. Client15 publishes preservation and run-source APIs. File startup has not adopted preservation mode: `src/ui/lab.ts` still uses ordinary createLab. Whole-profile preservation, existing SW behavior, stored delivery receipts and actual owner admission remain follow-up work. They are not blocked on an absent SDK11 API anymore.
+
+---
+
 # Dependency installation — 2026-10-26
 
 The dependency configuration uses pnpm 12.14.0 and shared Node 26.12.0. Install with `pnpm install --frozen-lockfile`; `npm run` still runs existing scripts. `pnpm-lock.yaml` imports the npm lock without intended dependency changes. Overrides and exact native build permissions live in `pnpm-workspace.yaml`. Keep the exact HF override aligned with the direct dependency. Do not regenerate an npm lock or install a runtime per worktree. Configuration delivery requires the full lane, unchanged raw build outputs against the npm baseline, signed source and exact green CI. This conversion does not deploy the app or establish game-readiness acceptance.

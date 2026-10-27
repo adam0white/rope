@@ -19,21 +19,21 @@ Time advances automatically during play. It slows for answers and calls. Opening
 
 Open **Menu → Feedback**. The shared **I'm stopping** and **I'm confused** choices prefill the note. Selecting, changing or clearing a choice sends nothing and retains your edits. Use **Submit** to send the note. The existing verdict choices, **Lab privacy** link and recording controls remain available. When Recording is off, the optional sharing checkbox starts unchecked; leaving it unchecked sends the note alone. After a successful send, the page says **Sent. Your note is stored.**
 
-### Optional mountain plans
+### Mountain plans
 
-At the hut, open **New mountain plans** before choosing a turn time or **We'll see**. Both options start unchecked. **Use these plans and the new promise response** enables field rules. **Also allow people to step aside when their body needs it** also enables field rules and separately opts people into HF's bladder model.
+The ordinary hut start records installed field rules automatically. **Scout crossing** asks a person to cross the next leg. HF can refuse. A crossing costs real travel time, effort and risk. Reports require hearing distance and name their time; conditions may have changed. Older reports cannot replace newer direct observations.
 
-With field rules on, **scout crossing** asks a person to cross the next leg. HF can refuse. An accepted crossing takes real travel time, effort and risk. The person reports observed conditions only after coming within hearing distance. Reports name when the crossing happened; conditions may have changed. An older report cannot replace a newer direct observation. **Route and weather warning** describes terrain costs and an uncertain forecast, not a safe deadline.
+An escort must actually meet the person before considering descent together. Arrival does not guarantee agreement. Terrain notices and uncertain weather estimates reveal no hidden storm deadline. HF handles bodily needs and responses to the leader's kept or broken promise.
 
-An escort request asks the helper to meet the other person before considering descent together. It requires an accepted HF plan, an actual nearby meeting and an unexpired request. Arrival does not guarantee agreement to descend. Public request answers remain available; a promise to turn back concerns the leader's turn, not everyone's arrival at the hut. Field rules use HF's response to a kept or broken voice promise.
-
-These are explicit logged choices. Old starts and inputs retain their rules and raw histories. Fresh climbs still use rules **2**; field rules are an optional addition, not a new chapter format. Current exports replay the selected options. Replay checks do not establish ownership of browser histories or player acceptance.
+The input log records these rules. Existing tapes keep their recorded behavior. Complete current exports replay exactly. Replay does not establish browser-history ownership or owner acceptance.
 
 ## Saves and replay
 
 The game saves automatically in this browser during play and when the page is hidden or left. **Resume** on the title page reconstructs an unfinished saved season. Browser storage must be available; clearing it removes the local save. Saves from an incompatible edition may not load.
 
-Diagnostic controls require [the lab view](https://rope.adamwhite.work/?lab=1). With a climb underway, **Feedback → Download this run** exports its starting state, inputs and saved state as JSON. The finished-climb and season pages also offer that download in the lab view. **Menu → Lab tools → Load a current Rope run** imports a current export and checks its replay against the saved state. Importing a file does not give the run control over its people's saved browser histories. Playback speed and browser-history tools also live in this diagnostic view.
+**Menu → Playback speed** offers Auto, Slow, Normal and Fast. **Debug**, beside **Lab privacy**, starts collapsed and contains a run download, a link to the separate file-session importer and the title page. File sessions keep progress in memory and require a download before closing. They preserve the native saved season and acquire no browser-history ownership.
+
+Fresh seasons automatically prepare shared people through the released browser shelf contract. Failed admission preserves your saved season. **People in this browser** opens the central shelf for cast controls. End screens also link there. Loaded seasons retain pinned actors.
 
 To print an exported run's timeline locally:
 
@@ -47,7 +47,7 @@ The script reports whether the saved answers and journal text match. It is not a
 
 The game pins the published npm package `@adam0white/human-framework` to exactly **3.0.0**. That package reports engine **2.23.0**; the package version and engine stamp are different values. Fresh climbs use Rope simulation rules **2**. The native history format uses `rope-cast/1`, rules stamp `rope-cast-1` and calendar mapping `rope-calendar/1`.
 
-The host uses immutable lab-client **0.4.11** and lab-kit **0.5.12** release artifacts.
+The host uses immutable lab-client **0.4.15** and lab-kit **0.5.17** release artifacts.
 
 HF supplies each person's traits, values, bodily needs, goals, relationships, memories, decisions and decision-based replies. Rope supplies the mountains, weather, movement, ropes, available actions and physical consequences. Rope presents offers to HF rather than writing a person's refusal itself. The simulation runs locally and deterministically from its starting state and input log. The deployed configuration has `CAMP_AI` off. The debrief uses the labelled deterministic journal fallback. Optional Workers AI conversation, when enabled, does not decide what happens in the climb.
 

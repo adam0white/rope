@@ -77,12 +77,12 @@ it('keeps real turn-time choices and offers no tally preference or live total', 
     'We turn at 13:00',
     'We turn at 14:00',
   ]);
+  button("We'll see")?.click();
   const before = snapshot(d.climb);
   const saved = localStorage.getItem('rope.save.v1');
   document.querySelector<HTMLButtonElement>('[aria-label="Game menu"]')?.click();
   expect(document.querySelector('[data-reckoning]')).toBeNull();
   document.querySelector<HTMLButtonElement>('[data-menu-close]')?.click();
-  button("We'll see")?.click();
   expect(document.querySelector('[data-see-tally]')).toBeNull();
   d.journalPage();
   expect(document.querySelector('[data-see-tally]')).toBeNull();
