@@ -114,10 +114,12 @@ export class Game {
   private current(): boolean {
     return !this.disposed && Game.owners.get(this.root) === this;
   }
-  private readonly entry = fileEntry(location.search);
-  private continuity = new Continuity(lab, this.entry === 'native' ? personaChannel() : null);
+  private readonly entry = fileEntry(location.search, location.pathname);
+  private continuity = new Continuity(lab!, this.entry === 'native' ? personaChannel() : null);
   private originalFile: { text: string; sha256: string; ownership?: Ownership } | null = null;
   private fileGeneration = 0;
+  private recordingGeneration = 0;
+  private recordingBlocked = false;
   private starting = false;
   private root: HTMLElement;
   private noticeFooter = h('footer', 'recording-footer');
@@ -199,6 +201,10 @@ export class Game {
     this.booted = true;
     await document.fonts?.ready;
     if (!this.current()) return;
+    if (this.entry === 'invalid') {
+      this.filePage();
+      return;
+    }
     const info = h('button', 'top-info', 'i');
     info.setAttribute('aria-label', 'About this part of the climb');
     info.onclick = () => this.openInfo();
@@ -236,7 +242,7 @@ export class Game {
     this.sceneEl.addEventListener('pointerdown', stopSkip);
     this.sheet.addEventListener('pointerdown', stopSkip);
     this.root.append(this.top, this.dayStrip, this.sceneEl, this.sheet, this.leaderBar, this.noticeFooter);
-    const notice = telemetryNotice();
+    const notice = telemetryNotice(undefined, this.entry === 'file' ? { preservation: 'preserve' } : {});
     if (notice) this.noticeFooter.append(notice);
     this.footerObserver = new ResizeObserver(() => {
       this.root.style.setProperty('--footer-height', `${this.noticeFooter.getBoundingClientRect().height}px`);
@@ -258,7 +264,15 @@ export class Game {
       },
       { signal: this.lifetime.signal },
     );
-    window.addEventListener('pagehide', () => this.save(), { signal: this.lifetime.signal });
+    window.addEventListener(
+      'pagehide',
+      () => {
+        this.fileGeneration++;
+        this.save();
+        // The active SDK owns its asynchronous final snapshot. Do not dispose it here.
+      },
+      { signal: this.lifetime.signal },
+    );
     this.frameId = requestAnimationFrame(() => this.frame());
     if (this.entry === 'native') this.trackRun();
     if (this.entry === 'native')
@@ -275,20 +289,33 @@ export class Game {
     this.titlePage();
   }
 
+  private recordingAllowed(): boolean {
+    if (this.entry === 'native') return true;
+    if (this.entry !== 'file' || this.recordingBlocked) return false;
+    if (lab!.preservationStatus === 'existing-local') return true;
+    this.recordingBlocked = true;
+    lab!.dispose();
+    return false;
+  }
+
   private trackRun(): void {
     this.untrack?.();
-    this.untrack = lab.trackRun(
+    const generation = ++this.recordingGeneration;
+    if (!this.current() || !this.recordingAllowed()) return;
+    const current = () =>
+      this.current() && generation === this.recordingGeneration && this.recordingAllowed();
+    this.untrack = lab!.trackRun(
       () => {
-        if (!this.climb || !this.season) return null;
+        if (!current() || !this.climb || !this.season) return null;
         const saved = this.load();
         if (saved?.season.seed === this.season.seed && saved.season.climbNo === this.season.climbNo)
-          lab.captureSave(this.recordingSave(saved));
+          lab!.captureSave(this.recordingSave(saved));
         return structuredClone(this.recordingExport());
       },
       {
         runKey: () => (this.climb ? `${this.climb.seed}:${this.climb.climbNo}` : 'title'),
         getLogs: () =>
-          this.climb
+          current() && this.climb
             ? [
                 ...this.climb.journal.slice(-20).map((line) => line.text),
                 ...this.climb.lines.slice(-20).map((line) => `${line.who}: ${line.says}`),
@@ -312,6 +339,7 @@ export class Game {
     if (this.disposed) return;
     this.save();
     this.disposed = true;
+    this.recordingGeneration++;
     this.fileGeneration++;
     this.continuity.generation++;
     this.lifetime.abort();
@@ -359,7 +387,7 @@ export class Game {
   private save(): void {
     if (!this.current() || !this.climb || !this.season) return;
     if (this.entry !== 'native') {
-      if (this.originalFile) lab.captureSave(this.fileSession());
+      if (this.originalFile && this.recordingAllowed()) lab!.captureSave(this.fileSession());
       return;
     }
     try {
@@ -383,7 +411,7 @@ export class Game {
       const text = JSON.stringify(s);
       localStorage.setItem(SAVE_KEY, text);
       this.savedText = text;
-      lab.captureSave(this.recordingSave(JSON.parse(text)));
+      lab!.captureSave(this.recordingSave(JSON.parse(text)));
     } catch {
       // Storage full or blocked: the game plays on without a save.
     }
@@ -434,7 +462,7 @@ export class Game {
       this.begin(c, start, true);
       await this.continuity.recording();
       if (!this.current()) return;
-      lab.screen(climbScreen(c, 'climb'));
+      lab!.screen(climbScreen(c, 'climb'));
       if (c.over || sv.over) this.endClimb();
     } catch (error) {
       if (!this.current()) return;
@@ -1937,7 +1965,7 @@ export class Game {
     const menu = h(
       'div',
       'menu-backdrop',
-      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div><a class="menu-link" data-cast-shelf href="https://human.adamwhite.work/lab/people/">People in this browser</a><fieldset class="menu-pacing"><legend>Playback speed</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset><div class="privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a><details data-debug><summary>Debug</summary><p>Human Framework ${FRAMEWORK_VERSION}</p><button class="btn" data-debug-export ${this.climb ? '' : 'disabled'}>Download this run</button><a class="menu-link" href="?file=1">Open a run file</a><button class="btn" data-menu-title>Title page</button></details></div></div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
+      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div><a class="menu-link" data-cast-shelf href="https://human.adamwhite.work/lab/people/">People in this browser</a><fieldset class="menu-pacing"><legend>Playback speed</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset><div class="privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a><details data-debug><summary>Debug</summary><p>Human Framework ${FRAMEWORK_VERSION}</p><button class="btn" data-debug-export ${this.climb ? '' : 'disabled'}>Download this run</button><a class="menu-link" href="/file/">Open a run file</a><button class="btn" data-menu-title>Title page</button></details></div></div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
     );
     const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => {
@@ -1953,7 +1981,7 @@ export class Game {
       if (e.target === menu) close();
     };
     this.menuEl = menu;
-    menu.querySelector('[data-recording]')?.append(telemetryToggle(lab));
+    menu.querySelector('[data-recording]')?.append(telemetryToggle(lab!));
     menu.querySelector('[data-menu-new]')?.addEventListener('click', () => {
       menu.querySelector<HTMLElement>('[data-menu-confirm]')?.removeAttribute('hidden');
     });
@@ -2072,7 +2100,7 @@ export class Game {
         const consent = el.querySelector<HTMLElement>('[data-feedback-consent]');
         const status = el.querySelector<HTMLElement>('[data-feedback-status]');
         if (!send || !consent || !status) return;
-        const choice = feedbackPersonaControl(lab);
+        const choice = feedbackPersonaControl(lab!);
         if (choice) consent.append(choice);
         const update = () => {
           send.disabled = false;
@@ -2121,7 +2149,7 @@ export class Game {
               /* A broken export must not block feedback. */
             }
             const sharePlay = feedbackSharePlay(choice);
-            await lab.sendFeedback(note, { name, run, sharePlay });
+            await lab!.sendFeedback(note, { name, run, sharePlay });
             try {
               if (name) localStorage.setItem('hf-lab-feedback-name', name);
               else localStorage.removeItem('hf-lab-feedback-name');
@@ -2250,42 +2278,50 @@ export class Game {
   private filePage(): void {
     if (this.entry === 'invalid') {
       this.openPage(
-        '<div class="page-body"><h1>File mode could not start</h1><p>Use exactly ?file=1. No season was opened.</p></div>',
+        '<div class="page-body"><h1>File mode could not start</h1><p>The file selector is invalid or repeated. Open /file/ without a file selector. No season was opened.</p></div>',
         undefined,
         'title',
       );
       return;
     }
+    const recording = this.recordingAllowed();
     this.openPage(
-      `<div class="page-body file-controls"><h1>Choose a Rope file</h1><p>Progress stays in memory. Download before closing or reloading. Reloading opens this chooser.</p><p>This mode keeps the host’s native season separate. Lab recording and an already active service worker have separate preservation limits.</p><div data-recording></div><label data-file-label>${this.climb ? 'Choose another file' : 'Choose a file'}<input type="file" accept="application/json" data-file-input></label><p data-file-status role="status"></p></div><div class="page-actions">${this.climb ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-resume>Resume current file</button>' : ''}</div>`,
+      `<div class="page-body file-controls"><h1>Choose a Rope file</h1><p>Progress stays in memory. Download before closing or reloading. Reloading opens this chooser.</p><p>This mode keeps the host’s native season separate. Lab recording and an already active service worker have separate preservation limits.</p><div data-recording></div><p data-file-recording-status>${recording ? 'Recording follows your current privacy and Recording choices.' : 'Recording is unavailable because the existing local Lab session could not be preserved. You can play in memory.'}</p><label data-file-label>${this.climb ? 'Choose another file' : 'Choose a file'}<input type="file" accept="application/json" data-file-input></label><p data-file-status role="status"></p></div><div class="page-actions">${this.climb ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-resume>Resume current file</button>' : ''}</div>`,
       (el) => {
-        el.querySelector('[data-recording]')?.append(telemetryToggle(lab));
+        el.querySelector('[data-recording]')?.append(telemetryToggle(lab!));
         el.querySelector('[data-file-resume]')?.addEventListener('click', () => this.closePage());
         el.querySelector('[data-file-export]')?.addEventListener('click', () => this.exportRun());
         el.querySelector<HTMLInputElement>('[data-file-input]')?.addEventListener('change', async (event) => {
           const status = el.querySelector<HTMLElement>('[data-file-status]')!;
           const generation = ++this.fileGeneration;
+          const current = () => this.current() && generation === this.fileGeneration;
           try {
+            if (!current()) return;
             const file = (event.target as HTMLInputElement).files?.[0];
-            if (!file) return;
+            if (!file) {
+              status.textContent = '';
+              return;
+            }
             if (file.size > SESSION_BYTES) throw new Error('This file is too large to preserve completely.');
             status.textContent = 'Loading…';
             const bytes = new Uint8Array(await file.arrayBuffer());
+            if (!current()) return;
             if (bytes.byteLength > SESSION_BYTES)
               throw new Error('This file is too large to preserve completely.');
             // Bind the selected bytes before decoding. Retain a UTF8 BOM as source text.
             const selectedDigest = await fileByteDigest(bytes);
+            if (!current()) return;
             const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
             const prepared = await decodeFile(text, selectedDigest);
-            if (!this.current() || generation !== this.fileGeneration) return;
+            if (!current()) return;
             // Validate everything on detached data before changing the active file or caller arguments.
-            const continuity = new Continuity(lab, null);
+            const continuity = new Continuity(lab!, null);
             await continuity.restoreOwnership(
               { season: prepared.save.season, climb: prepared.climb },
               prepared.save.ownership,
               true,
             );
-            if (!this.current() || generation !== this.fileGeneration) return;
+            if (!current()) return;
             this.continuity.generation++;
             this.continuity = continuity;
             this.originalFile = prepared.original;
@@ -2309,7 +2345,7 @@ export class Game {
       this.filePage();
       return;
     }
-    lab.screen('title');
+    lab!.screen('title');
     const sv = this.load();
     const cont = sv && !sv.season.over;
     this.openPage(
@@ -2333,7 +2369,7 @@ export class Game {
 
   private climbIntro(): void {
     const c = this.climb;
-    lab.screen(climbScreen(c, 'hut'));
+    lab!.screen(climbScreen(c, 'hut'));
     const m = MOUNTAINS[c.mountain];
     const lines = c.journal
       .map((j) => `<p class="${j.story ? 'hand' : ''}">${esc(displayText(j.text))}</p>`)
@@ -2360,14 +2396,14 @@ export class Game {
           const plan = plans();
           if (plan) this.send(plan);
           this.closePage();
-          lab.screen(climbScreen(c, 'climb'));
+          lab!.screen(climbScreen(c, 'climb'));
         });
         for (const b of el.querySelectorAll<HTMLElement>('[data-hour]'))
           b.addEventListener('click', () => {
             this.display.start();
             const plan = plans();
             this.closePage();
-            lab.screen(climbScreen(c, 'climb'));
+            lab!.screen(climbScreen(c, 'climb'));
             // The first choice of the day, made at the hut where everyone hears it (owner playtest 2026-10-18).
             if (!this.disc.unlocked.includes('promise')) this.disc.unlocked.push('promise');
             const promise: NewInput = { t: 'promise', hour: Number(b.dataset.hour) };
@@ -2446,8 +2482,8 @@ export class Game {
     this.endAt = 0;
     const c = this.climb;
     this.reckoningFacts = c.over ? [factsOf(c)] : [];
-    lab.screen(climbScreen(c, 'debrief'));
-    for (const name of climbMilestones(c)) lab.milestone(name);
+    lab!.screen(climbScreen(c, 'debrief'));
+    for (const name of climbMilestones(c)) lab!.milestone(name);
     const m = MOUNTAINS[c.mountain];
     const outcomes = c.members
       .map((mem) => {
@@ -2559,8 +2595,8 @@ export class Game {
 
   private seasonPage(): void {
     this.reckoningFacts = this.season.over ? this.season.history.map((day) => day.facts) : [];
-    lab.screen('season');
-    lab.milestone('season done');
+    lab!.screen('season');
+    lab!.milestone('season done');
     const hist = this.season.history
       .map((x) => {
         const m = MOUNTAINS[x.mountain];

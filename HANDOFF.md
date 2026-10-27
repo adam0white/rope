@@ -1,3 +1,17 @@
+# Public file entry and SDK preservation candidate (2026-10-27)
+
+Remaining: director-owned independent exact-source review, signed integration and exact CI, director merge, clean exact-main deployment and live viewport verification. Adam separately accepts feel. This is one safety batch, not whole-Rope completion.
+
+`/file/` is a built public entry using the complete Game and existing file controller. Valid `?file=1` becomes canonical before SDK startup. Invalid or repeated values refuse without a client, Game, native season or new service-worker registration. Public Debug links to `/file/`. Ordinary startup remains ordinary.
+
+File startup uses immutable client0.4.15 `preservation:'preserve'` and kit0.5.17 informational notice. Only public `existing-local` status admits host run recording; missing, incompatible, identity mismatch and unknown statuses dispose before tracking and leave memory play available. Recording follows the actual existing OFF/DNT/GPC policy and persistent menu switch. Attribution uses the public SDK contract only. SDK storage activity is separate from zero host-native save/Shelf/publication access. Existing active service-worker controllers remain a runtime limit. No owner loss or profile change is established.
+
+Selection cancellation includes pagehide and checks after bytes, digest and detached validation before installation. Retired recording callbacks refuse successor state. Active SDK is not synchronously disposed on pagehide; its final asynchronous capture remains SDK-owned. Existing close/destroy guards, production codec, full/compact reconstruction, complete provenance, precommit capacity checks and source retention remain in place. Original text retains BOM and exact UTF8 SHA; downloads are file sessions, with no original File metadata claim. FiniteJSON still measures UTF8 bytes (native16MiB/session64MiB); native archive capacity remains one million serialized UTF16 units. No schema, vendor, framework or simulation change.
+
+Current evidence and delivery gates: `~/code/.lab-scratch/games-deferred/gd-resume-rope-file-READY.json` and its subsequent director review/delivery receipts. No panel, retest, owner data, profile action, Submit or model call is authorized in this batch.
+
+---
+
 # Public gameplay candidate (2026-10-27)
 
 Remaining: director-launched independent review, signed source integration, exact CI, clean deployment and live viewport verification. Adam separately accepts feel on 2026-11-03. No panel or retest is authorized.
