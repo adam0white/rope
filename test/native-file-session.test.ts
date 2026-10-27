@@ -801,3 +801,102 @@ it('binds chooser provenance to selected BOM bytes and rejects invalid UTF8 with
   expect(root.querySelector('[data-file-status]')?.textContent).toMatch(/UTF-?8|round.trip/i);
   expect(JSON.stringify(active.runExport())).toBe(before);
 });
+
+it('file chooser exposes the shipped Recording control under DNT without opting in at startup', async () => {
+  vi.spyOn(navigator, 'doNotTrack', 'get').mockReturnValue('1');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('', { status: 503 })),
+  );
+  control.lab = createLab({
+    game: 'rope',
+    build: { c: 'source-DNT-control' },
+    captureErrors: false,
+    sendFromLocalhost: true,
+  });
+  expect(control.lab.privacySignalOn).toBe(true);
+  expect(control.lab.telemetryOn).toBe(false);
+  const { root } = await open();
+  const checkbox = root.querySelector<HTMLInputElement>('[data-recording] input[type="checkbox"]');
+  expect(checkbox).not.toBeNull();
+  expect(checkbox?.checked).toBe(false);
+  checkbox!.click();
+  expect(control.lab.telemetryOn).toBe(true);
+  expect(checkbox?.checked).toBe(true);
+  checkbox!.click();
+  expect(control.lab.telemetryOn).toBe(false);
+  expect(checkbox?.checked).toBe(false);
+  await choose(root, fixture);
+  root.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+  expect(root.querySelector('[data-recording]')?.textContent).toContain('Recording');
+  expect(root.textContent).not.toMatch(/acknowledged|delivered|stored receipt/i);
+});
+
+it('Resume and Journal cancel an in-flight file replacement without changing the accepted run', async () => {
+  const { root, game } = await open();
+  await choose(root, fixture);
+  const g = inspect(game);
+  const replacementBytes = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(fixture)]);
+  for (const dismiss of ['resume', 'journal']) {
+    root.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+    let finish!: (bytes: ArrayBuffer) => void;
+    const pending = new NodeFile([replacementBytes], 'delayed-replacement.json');
+    vi.spyOn(pending, 'arrayBuffer').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const input = root.querySelector<HTMLInputElement>('[data-file-input]')!;
+    Object.defineProperty(input, 'files', { configurable: true, value: [pending] });
+    input.dispatchEvent(new Event('change'));
+    expect(root.querySelector('[data-file-status]')?.textContent).toBe('Loading…');
+    if (dismiss === 'resume') root.querySelector<HTMLButtonElement>('[data-file-resume]')!.click();
+    else root.querySelector<HTMLButtonElement>('.journal-trigger')!.click();
+    g.sentAt = -Infinity;
+    g.send({ t: 'lead', dir: 'up' });
+    const accepted = JSON.stringify(g.runExport());
+    finish(Uint8Array.from(replacementBytes).buffer);
+    // Let the real asynchronous hash/decoder/validator finish; no game clock is advanced here.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(JSON.stringify(g.runExport())).toBe(accepted);
+    if (dismiss === 'journal') {
+      expect(root.textContent).toContain('The journal');
+      root.querySelector<HTMLButtonElement>('[data-a="close"]')!.click();
+    }
+  }
+});
+
+it('file page declares scoped 44px input label and selector-button targets', async () => {
+  const style = document.createElement('style');
+  style.textContent = readFileSync('src/ui/style.css', 'utf8');
+  document.head.append(style);
+  try {
+    const { root } = await open();
+    const label = root.querySelector<HTMLElement>('.file-controls label[data-file-label]');
+    const input = root.querySelector<HTMLInputElement>('.file-controls [data-file-input]');
+    expect(label).not.toBeNull();
+    expect(input).not.toBeNull();
+    expect(getComputedStyle(label!).minHeight).toBe('44px');
+    expect(getComputedStyle(input!).minHeight).toBe('44px');
+    expect(getComputedStyle(input!).maxWidth).toBe('100%');
+    // happy-dom has no layout engine: inspect the actual CSS pseudo-element rule, not a fake rectangle.
+    const selector = [...style.sheet!.cssRules].find(
+      (rule) =>
+        (rule as CSSStyleRule).selectorText === '.file-controls [data-file-input]::file-selector-button',
+    ) as CSSStyleRule;
+    expect(selector.style.minHeight).toBe('44px');
+    document.documentElement.style.fontSize = '32px';
+    expect(getComputedStyle(label!).minHeight).toBe('44px');
+    expect(getComputedStyle(input!).minHeight).toBe('44px');
+    expect(getComputedStyle(document.documentElement).fontSize).toBe('32px');
+    // This source DOM does not resolve rem changes like a browser layout engine.
+    const inputRule = [...style.sheet!.cssRules].find(
+      (rule) => (rule as CSSStyleRule).selectorText === '.file-controls [data-file-input]',
+    ) as CSSStyleRule;
+    expect(inputRule.style.fontSize).toBe('1rem');
+  } finally {
+    style.remove();
+    document.documentElement.style.removeProperty('font-size');
+  }
+});

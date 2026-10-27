@@ -1882,6 +1882,7 @@ export class Game {
   private closePage(): void {
     if (!this.current()) return;
     this.pageGeneration++;
+    if (this.entry === 'file') this.fileGeneration++;
     this.debriefWorker?.terminate?.();
     this.debriefWorker = null;
     this.pageEl?.remove();
@@ -2346,8 +2347,9 @@ export class Game {
       return;
     }
     this.openPage(
-      `<div class="page-body"><h1>Choose a Rope file</h1><p>Progress stays in memory. Download before closing or reloading. Reloading opens this chooser.</p><p>This mode keeps the host’s native season separate. Lab recording and an already active service worker have separate preservation limits.</p><label>${this.climb ? 'Choose another file' : 'Choose a file'}<input type="file" accept="application/json" data-file-input></label><p data-file-status role="status"></p></div><div class="page-actions">${this.climb ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-resume>Resume current file</button>' : ''}</div>`,
+      `<div class="page-body file-controls"><h1>Choose a Rope file</h1><p>Progress stays in memory. Download before closing or reloading. Reloading opens this chooser.</p><p>This mode keeps the host’s native season separate. Lab recording and an already active service worker have separate preservation limits.</p><div data-recording></div><label data-file-label>${this.climb ? 'Choose another file' : 'Choose a file'}<input type="file" accept="application/json" data-file-input></label><p data-file-status role="status"></p></div><div class="page-actions">${this.climb ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-resume>Resume current file</button>' : ''}</div>`,
       (el) => {
+        el.querySelector('[data-recording]')?.append(telemetryToggle(lab));
         el.querySelector('[data-file-resume]')?.addEventListener('click', () => this.closePage());
         el.querySelector('[data-file-export]')?.addEventListener('click', () => this.exportRun());
         el.querySelector<HTMLInputElement>('[data-file-input]')?.addEventListener('change', async (event) => {
