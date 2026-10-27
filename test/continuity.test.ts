@@ -1,4 +1,4 @@
-import type { Lab, PersonaRequest } from '@adam0white/lab-client';
+import { acceptPersona, type Lab, type PersonaRequest, type PersonaShelfState } from '@adam0white/lab-client';
 import { expect, it, vi } from 'vitest';
 import { queueInput, step } from '../src/sim/climb.ts';
 import { newSeason } from '../src/sim/season.ts';
@@ -23,6 +23,7 @@ function control(enabled = false) {
     build: () => ({ c: 'control' }),
   };
   const requests: PersonaRequest[] = [];
+  let data: PersonaShelfState = { heads: {}, revisions: [] };
   const shelf = {
     enabled,
     ready: Promise.resolve(true),
@@ -36,7 +37,11 @@ function control(enabled = false) {
           inputs: [],
           blocked: [],
         } as T;
-      if (r.action === 'putBatch' || r.action === 'put') return {} as T;
+      if (r.action === 'put') {
+        data = acceptPersona(data, r.envelope!, r.fork);
+        return {} as T;
+      }
+      if (r.action === 'putBatch') return {} as T;
       if (r.action === 'recordingBatch')
         return {
           sameEpoch: false,
@@ -158,4 +163,125 @@ it('ordinary fresh seasons enable the public channel before transactional cast p
   await continuity.fresh(8);
   expect(shelf.setEnabled).toHaveBeenCalledWith(true);
   expect(requests.map((r) => r.action)).toEqual(['prepareBatch', 'putBatch']);
+});
+
+// Synthetic played sources through the real transfer adapter and SDK reducer, not a live transfer.
+async function finishedControl() {
+  const h = control(true);
+  const state = await h.continuity.fresh(13);
+  queueInput(state.climb, { t: 'lead', dir: 'up' });
+  while (!state.climb.over) step(state.climb);
+  queueInput(state.climb, { t: 'release-person', to: 'oskar' });
+  step(state.climb);
+  return { ...h, state };
+}
+it('refuses a complete next archive before put without discarding prior source or raw fields', async () => {
+  const { continuity: c, state, requests, lab } = await finishedControl();
+  await c.checkpoint('hf.cast.oskar.rope');
+  const prior = c.sources[0]!;
+  const extended = Object.assign(prior, { raw: '' });
+  extended.raw = '界'.repeat(1_000_000 - JSON.stringify(c.sources).length);
+  expect(JSON.stringify(c.sources).length).toBe(1_000_000);
+  await c.restoreOwnership(state, c.ownership());
+  const before = JSON.stringify(c.ownership());
+  const world = JSON.stringify(state);
+  const puts = requests.filter((r) => r.action === 'put').length;
+  lab.setPersonaRecording.mockClear();
+  await expect(c.checkpoint('hf.cast.oskar.rope')).rejects.toThrow(/archive|capacity/i);
+  expect(JSON.stringify(c.ownership())).toBe(before);
+  expect(JSON.stringify(state)).toBe(world);
+  expect(requests.filter((r) => r.action === 'put')).toHaveLength(puts);
+  expect(lab.setPersonaRecording).not.toHaveBeenCalled();
+});
+it('retains a complete failed CAS source when the full archive fits', async () => {
+  const { continuity: c, shelf, state } = await finishedControl();
+  await c.checkpoint('hf.cast.oskar.rope');
+  const before = structuredClone(c.sources);
+  const heads = structuredClone(c.heads);
+  const world = JSON.stringify(state);
+  const request = shelf.request;
+  shelf.request = async <T>(r: PersonaRequest): Promise<T> => {
+    if (r.action === 'put') throw new Error('synthetic CAS conflict');
+    return request<T>(r);
+  };
+  await expect(c.checkpoint('hf.cast.oskar.rope')).rejects.toThrow('CAS conflict');
+  expect(c.sources.slice(0, -1)).toEqual(before);
+  expect(c.sources.at(-1)?.snapshot).toEqual(
+    JSON.parse(JSON.stringify(state.climb.people.find((p) => p.id === 'oskar'))),
+  );
+  expect(c.heads).toEqual(heads);
+  expect(JSON.stringify(state)).toBe(world);
+});
+it('cancelled batch rejection cannot publish remaining cast or change a successor', async () => {
+  const { continuity: c, shelf, lab, requests } = await finishedControl();
+  const changed = vi.fn();
+  Object.assign(c, { changed });
+  let rejectPut: (error: Error) => void = () => {};
+  const started = Promise.withResolvers<void>();
+  const request = shelf.request;
+  shelf.request = async <T>(r: PersonaRequest): Promise<T> => {
+    if (r.action !== 'put') return request<T>(r);
+    requests.push(r);
+    started.resolve();
+    return new Promise<T>((_resolve, reject) => {
+      rejectPut = reject;
+    });
+  };
+  const pending = c.checkpointAll();
+  await started.promise;
+  c.clear();
+  const successor = await c.fresh(42, true);
+  c.status = 'successor status';
+  const before = JSON.stringify(c.ownership());
+  const world = JSON.stringify(successor);
+  changed.mockClear();
+  lab.setPersonaRecording.mockClear();
+  rejectPut(new Error('old put failed'));
+  await pending;
+  expect(c.status).toBe('successor status');
+  expect(JSON.stringify(c.ownership())).toBe(before);
+  expect(JSON.stringify(successor)).toBe(world);
+  expect(requests.filter((r) => r.action === 'put')).toHaveLength(1);
+  expect(changed).not.toHaveBeenCalled();
+  expect(lab.setPersonaRecording).not.toHaveBeenCalled();
+});
+it('cancelled death closure rejection cannot overwrite successor status', async () => {
+  const { continuity: c, shelf, state } = await finishedControl();
+  await c.checkpoint('hf.cast.oskar.rope');
+  state.climb.people.find((p) => p.id === 'oskar')!.body.alive = false;
+  const started = Promise.withResolvers<void>();
+  let rejectPut: (error: Error) => void = () => {};
+  shelf.request = async <T>(): Promise<T> => {
+    started.resolve();
+    return new Promise<T>((_resolve, reject) => {
+      rejectPut = reject;
+    });
+  };
+  c.closeDeaths();
+  await started.promise;
+  c.clear();
+  await c.fresh(42, true);
+  c.status = 'successor status';
+  const before = JSON.stringify(c.ownership());
+  rejectPut(new Error('old death failed'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(c.status).toBe('successor status');
+  expect(JSON.stringify(c.ownership())).toBe(before);
+});
+
+it('a changed callback cancelling source staging prevents public put', async () => {
+  const { continuity: c, requests } = await finishedControl();
+  let armed = true;
+  Object.assign(c, {
+    changed: () => {
+      if (armed) {
+        armed = false;
+        c.clear();
+      }
+    },
+  });
+  await expect(c.checkpoint('hf.cast.oskar.rope')).rejects.toThrow(/changed/);
+  expect(requests.some((r) => r.action === 'put')).toBe(false);
+  expect(c.sources).toEqual([]);
+  expect(c.heads).toEqual([]);
 });
