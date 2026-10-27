@@ -43,7 +43,7 @@ import {
 import { ALTERNATIVE_CAPTION, type Branch, outcomeWords } from '../sim/debrief.ts';
 import { DISCOVERIES } from '../sim/discoveries.ts';
 import { coldAt, legsUp, routeName, SEASON } from '../sim/mountain.ts';
-import { CAST, FAMILY, MEMBERS, memberOf } from '../sim/party.ts';
+import { MEMBERS, memberOf } from '../sim/party.ts';
 import { checkChapter } from '../sim/passport.ts';
 import {
   exportClimb,
@@ -120,7 +120,6 @@ export class Game {
   private fileGeneration = 0;
   private starting = false;
   private root: HTMLElement;
-  private readonly labTools = new URLSearchParams(location.search).get('lab') === '1';
   private noticeFooter = h('footer', 'recording-footer');
   private scene = new Scene();
   private stage: RopeStage | null = null;
@@ -390,12 +389,12 @@ export class Game {
     }
   }
 
-  private async newGame(localOnly = false): Promise<void> {
+  private async newGame(): Promise<void> {
     if (this.entry !== 'native' || !this.current() || this.starting) return;
     this.starting = true;
     try {
       const seed = (Date.now() % 1_000_000_007) | 0;
-      const { season, climb } = await this.continuity.fresh(seed, localOnly);
+      const { season, climb } = await this.continuity.fresh(seed);
       if (!this.current()) return;
       this.season = season;
       this.disc = newDisclosure();
@@ -405,10 +404,9 @@ export class Game {
       if (!this.current()) return;
       console.error('Season start failed', error);
       this.openPage(
-        `<div class="page-body"><h1>The season has not begun</h1><p>The game could not start this season. Your saved season has not been replaced.</p><p>Try again, or send Feedback if this keeps happening.</p>${this.labTools ? `<pre>${esc(String(error))}</pre>` : ''}</div><div class="page-actions">${this.labTools ? '<button class="btn" data-local>Begin fresh locally</button>' : '<button class="btn" data-retry>Try again</button>'}<button class="btn" data-back>Back</button><button class="btn" data-word>Feedback</button></div>`,
+        `<div class="page-body"><h1>The season has not begun</h1><p>The game could not start this season. Your saved season has not been replaced.</p><p>Try again, or send Feedback if this keeps happening.</p><details><summary>Debug</summary><pre>${esc(String(error))}</pre></details></div><div class="page-actions"><button class="btn" data-retry>Try again</button><button class="btn" data-back>Back</button><button class="btn" data-word>Feedback</button></div>`,
         (el) => {
           el.querySelector('[data-retry]')?.addEventListener('click', () => void this.newGame());
-          el.querySelector('[data-local]')?.addEventListener('click', () => void this.newGame(true));
           el.querySelector('[data-back]')?.addEventListener('click', () => this.titlePage());
           el.querySelector('[data-word]')?.addEventListener('click', () => this.feedbackPage());
         },
@@ -441,18 +439,14 @@ export class Game {
     } catch (error) {
       if (!this.current()) return;
       console.error('Resume failed', error);
-      if (this.labTools) {
-        this.continuity.status = String(error);
-        this.continuityPage();
-      } else
-        this.openPage(
-          '<div class="page-body"><h1>The game could not resume</h1><p>Your saved season has not been replaced. Return and try again, or send Feedback.</p><button class="btn" data-back>Back</button><button class="btn" data-feedback>Feedback</button></div>',
-          (el) => {
-            el.querySelector('[data-back]')?.addEventListener('click', () => this.titlePage());
-            el.querySelector('[data-feedback]')?.addEventListener('click', () => this.feedbackPage());
-          },
-          'title',
-        );
+      this.openPage(
+        '<div class="page-body"><h1>The game could not resume</h1><p>Your saved season has not been replaced. Return and try again, or send Feedback.</p><button class="btn" data-back>Back</button><button class="btn" data-feedback>Feedback</button></div>',
+        (el) => {
+          el.querySelector('[data-back]')?.addEventListener('click', () => this.titlePage());
+          el.querySelector('[data-feedback]')?.addEventListener('click', () => this.feedbackPage());
+        },
+        'title',
+      );
     }
   }
 
@@ -1943,7 +1937,7 @@ export class Game {
     const menu = h(
       'div',
       'menu-backdrop',
-      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div>${this.labTools ? `<button class="btn" data-menu-people>Lab tools</button><button class="btn" data-menu-title>Title page</button><fieldset class="menu-pacing"><legend>Playback speed</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset>` : ''}</div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
+      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div><a class="menu-link" data-cast-shelf href="https://human.adamwhite.work/lab/people/">People in this browser</a><fieldset class="menu-pacing"><legend>Playback speed</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset><div class="privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a><details data-debug><summary>Debug</summary><p>Human Framework ${FRAMEWORK_VERSION}</p><button class="btn" data-debug-export ${this.climb ? '' : 'disabled'}>Download this run</button><a class="menu-link" href="?file=1">Open a run file</a><button class="btn" data-menu-title>Title page</button></details></div></div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
     );
     const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => {
@@ -1978,10 +1972,7 @@ export class Game {
       close();
       this.journalPage();
     });
-    menu.querySelector('[data-menu-people]')?.addEventListener('click', () => {
-      close();
-      this.continuityPage();
-    });
+    menu.querySelector('[data-debug-export]')?.addEventListener('click', () => this.exportRun());
     menu.querySelector('[data-menu-send]')?.addEventListener('click', () => {
       close();
       this.feedbackPage();
@@ -2072,7 +2063,7 @@ export class Game {
         )
         .join(
           '',
-        )}</div><label class="feedback-note">What happened? What did you want to do? What got in the way?<textarea rows="4" data-feedback-note></textarea></label><div class="feedback-name"><label>Name (optional)<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to use an unnamed identifier for this device.</p></div><div><p>We send your note and any verdict or name you add. When Recording is on, we also include this run. Recorded play is linked across games on this device.</p>${this.labTools ? `<pre data-feedback-preview>${esc(this.climb ? JSON.stringify({ mountain: this.climb.mountain, minute: this.climb.minute, inputs: this.climb.inputs.length }, null, 2) : 'No climb has begun.')}</pre>` : ''}<a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><div data-feedback-consent></div><p data-feedback-status role="status"></p>${this.labTools ? `<button class="btn" data-feedback-copy ${this.climb ? '' : 'disabled'}>Download this run</button>` : ''}</div><div class="page-actions"><button class="btn go" data-feedback-send>Submit</button></div>`,
+        )}</div><label class="feedback-note">What happened? What did you want to do? What got in the way?<textarea rows="4" data-feedback-note></textarea></label><div class="feedback-name"><label>Name (optional)<input type="text" data-feedback-name maxlength="60" value="${esc(remembered)}"></label><p class="caption">A name labels your linked play history on this device, including past and future runs. Leave it empty to use an unnamed identifier for this device.</p></div><div><p>We send your note and any verdict or name you add. When Recording is on, we also include this run. Recorded play is linked across games on this device.</p><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a></div><div data-feedback-consent></div><p data-feedback-status role="status"></p></div><div class="page-actions"><button class="btn go" data-feedback-send>Submit</button></div>`,
       (el) => {
         let verdict = '';
         let selectedLabel = '';
@@ -2088,7 +2079,6 @@ export class Game {
         };
         update();
         el.querySelector('[data-feedback-back]')?.addEventListener('click', back);
-        el.querySelector('[data-feedback-copy]')?.addEventListener('click', () => this.exportRun());
         el.querySelectorAll<HTMLButtonElement>('[data-feedback-label]').forEach((button) => {
           button.addEventListener('click', () => {
             const note = el.querySelector<HTMLTextAreaElement>('[data-feedback-note]');
@@ -2144,9 +2134,8 @@ export class Game {
             send.disabled = false;
           } catch (error) {
             console.error('Feedback failed', error);
-            status.textContent = this.labTools
-              ? String(error)
-              : 'Your feedback could not be sent. Your note is still here. Try Submit again.';
+            status.textContent =
+              'Your feedback could not be sent. Your note is still here. Try Submit again.';
             send.disabled = false;
           }
         });
@@ -2175,7 +2164,7 @@ export class Game {
   }
 
   private footer(): string {
-    return this.labTools ? `<div class="footer">Human Framework ${FRAMEWORK_VERSION}</div>` : '';
+    return '';
   }
 
   private peaksSvg(done: number): string {
@@ -2213,85 +2202,6 @@ export class Game {
       ...exportClimb(this.start, this.climb, FRAMEWORK_VERSION, this.season.chapter, this.season.past),
       castSources: structuredClone(this.continuity.sources),
     };
-  }
-
-  private continuityPage(): void {
-    const back = () => (this.climb ? this.closePage() : this.titlePage());
-    if (this.entry !== 'native') {
-      this.filePage();
-      return;
-    }
-    if (!this.labTools) return;
-    this.openPage(
-      `<div class="page-body"><h1>The people</h1><p>${esc(this.continuity.status)}</p><p>Continuity stays in this browser. It is separate from lab recording. A loaded season keeps the people it was saved with.</p><label><input type="checkbox" data-continuity ${this.continuity.shelf?.enabled ? 'checked' : ''}> Use continuing people in a new season</label><p><a href="https://human.adamwhite.work/lab/people/">Inspect or export browser histories</a></p>${CAST.map((c) => `<p><b>${esc(c.name)}</b> · ${c.age} · ${esc(c.work)} ${esc(FAMILY[c.castId.split('.')[2] ?? ''] ?? '')}</p>`).join('')}${this.climb ? `<h2>Ask in private</h2><p>Only people in earshot can answer. They may keep a subject private.</p>${MEMBERS.map((m) => `<button class="btn" data-life="${m.id}" ${canHear(this.climb, m.id) ? '' : 'disabled'}>${esc(m.name)}: ${esc(DISCOVERIES[m.id]?.displayTopic ?? DISCOVERIES[m.id]?.topic ?? 'talk')}</button>`).join('')}<h2>Leave this chapter</h2><p>Finish this climb before saving a person for another chapter. Injuries, unfinished tasks and responsibilities can still prevent departure. You can instead start a separate history. It does not continue an existing history.</p><select data-person>${CAST.map((c) => `<option value="${c.castId}">${esc(c.name)}</option>`).join('')}</select><button class="btn" data-release>Ask to end this person’s mountain chapter</button><button class="btn" data-checkpoint>Save this person at the finished climb</button><button class="btn" data-fork>Save a separate history</button><button class="btn" data-export>Download this run</button>` : ''}<p><label>Load a current Rope run<input type="file" accept="application/json" data-import></label></p><p data-person-status role="status"></p><p>A run loaded from a file remains a file import after you save and reload it. Importing it does not give this run control over its people’s saved browser histories.</p></div><div class="page-actions"><button class="btn go" data-back>Back</button></div>`,
-      (el) => {
-        const status = el.querySelector<HTMLElement>('[data-person-status]');
-        if (!status) return;
-        el.querySelector('[data-back]')?.addEventListener('click', back);
-        el.querySelector<HTMLInputElement>('[data-continuity]')?.addEventListener('change', (event) => {
-          void this.continuity.setEnabled((event.target as HTMLInputElement).checked).then(() => {
-            status.textContent = this.continuity.status;
-          });
-        });
-        el.querySelectorAll<HTMLElement>('[data-life]').forEach((b) => {
-          b.addEventListener('click', () => {
-            this.send({ t: 'ask-life', to: b.dataset.life ?? '' });
-            this.closePage();
-          });
-        });
-        el.querySelector('[data-release]')?.addEventListener('click', () => {
-          const castId = el.querySelector<HTMLSelectElement>('[data-person]')?.value;
-          const id = castId?.split('.')[2];
-          if (!id) return;
-          this.send({ t: 'release-person', to: id });
-          this.save();
-          status.textContent = this.climb.journal.at(-1)?.text ?? '';
-        });
-        for (const fork of [false, true])
-          el.querySelector(fork ? '[data-fork]' : '[data-checkpoint]')?.addEventListener('click', () => {
-            const id = el.querySelector<HTMLSelectElement>('[data-person]')?.value;
-            if (!id) return;
-            void this.continuity
-              .checkpoint(id, fork)
-              .then(() => {
-                this.save();
-                status.textContent = this.continuity.status;
-              })
-              .catch((error) => {
-                status.textContent = String(error);
-              });
-          });
-        el.querySelector('[data-export]')?.addEventListener('click', () => this.exportRun());
-        el.querySelector<HTMLInputElement>('[data-import]')?.addEventListener('change', async (event) => {
-          try {
-            const file = (event.target as HTMLInputElement).files?.[0];
-            if (!file) return;
-            const raw = JSON.parse(await file.text());
-            if (!this.current()) return;
-            if (raw.game !== 'rope' || raw.engine !== FRAMEWORK_VERSION)
-              throw new Error('This export comes from an unsupported edition. Start a new game.');
-            if (raw.chapter) checkChapter(raw.chapter);
-            const c = replay(raw.start, raw.inputs, JSON.parse(raw.state).minute);
-            if (snapshot(c) !== raw.state)
-              throw new Error('Replaying this export produced a different result.');
-            const season = validateSeasonStart(c.seed, raw.chapter, raw.past ?? [], raw.start);
-            await this.continuity.restoreOwnership(
-              { season, climb: c },
-              { runId: crypto.randomUUID(), heads: [], fileOrigin: true, sources: raw.castSources ?? [] },
-              true,
-            );
-            if (!this.current()) return;
-            this.season = season;
-            this.disc = newDisclosure();
-            this.begin(c, raw.start, true);
-            if (c.over) this.endClimb();
-          } catch (error) {
-            status.textContent = String(error);
-          }
-        });
-      },
-      'people',
-    );
   }
 
   /** Complete host-native download. SDK queues and an already active SW remain separate gates. */
@@ -2431,7 +2341,7 @@ export class Game {
     this.openPage(
       `<div class="page-body hut-sheet"><h1>${esc(m?.name ?? '')}</h1>
       <p class="sub">Climb ${c.climbNo} of ${SEASON.length} · ${clock(c.minute)}, at the hut</p>
-      ${!c.fieldRules && c.minute === c.startMinute ? '<details class="field-choice"><summary>New mountain plans</summary><p>Scouting costs a real crossing. Reports need hearing distance. The weather forecast is uncertain. People can refuse.</p><label><input type="checkbox" data-field> Use these plans and the new promise response</label><label><input type="checkbox" data-bladder> Also allow people to step aside when their body needs it</label></details>' : ''}
+
       <p class="hand">When do you turn back?</p>
       <p>They remember whether you keep your word.</p>
       <p class="plan">${[12, 13, 14]
@@ -2441,9 +2351,9 @@ export class Game {
       ${c.climbNo > 1 ? `<details><summary>So far ▸</summary>${lines}</details>` : ''}</div>`,
       (el) => {
         const plans = (): NewInput | undefined => {
-          const field = el.querySelector<HTMLInputElement>('[data-field]')?.checked;
-          const bladder = el.querySelector<HTMLInputElement>('[data-bladder]')?.checked ?? false;
-          return field || bladder ? { t: 'field-rules', bladder } : undefined;
+          return !c.fieldRules && c.minute === c.startMinute
+            ? { t: 'field-rules', bladder: true }
+            : undefined;
         };
         el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => {
           this.display.start();
@@ -2493,7 +2403,6 @@ export class Game {
           else if (c.over) this.debriefPage();
           else this.closePage();
         });
-        el.querySelector<HTMLElement>('[data-a="export"]')?.addEventListener('click', () => this.exportRun());
         el.querySelector<HTMLElement>('[data-a="send"]')?.addEventListener('click', () => this.sendRun());
       },
     );
@@ -2562,12 +2471,11 @@ export class Game {
       <h2>One thing you said</h2>
       <div class="branch" data-branch><p class="caption">Checking how the outcome changes when one input is removed…</p></div>
       <button class="btn" data-a="journal">The journal ▸</button></div>
-      <div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Feedback</button>${this.labTools ? '<button class="btn" data-a="export">Download this run</button>' : ''}</div><button class="btn go" data-a="next">${c.climbNo < SEASON.length ? `On to ${esc(SEASON[c.climbNo]?.name ?? '')}` : 'Close the season'}</button></div>`,
+      <div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Feedback</button><a class="menu-link" href="https://human.adamwhite.work/lab/people/">Continue with these people</a></div><button class="btn go" data-a="next">${c.climbNo < SEASON.length ? `On to ${esc(SEASON[c.climbNo]?.name ?? '')}` : 'Close the season'}</button></div>`,
       (el) => {
         el.querySelector<HTMLElement>('[data-a="journal"]')?.addEventListener('click', () => {
           this.journalPage();
         });
-        el.querySelector<HTMLElement>('[data-a="export"]')?.addEventListener('click', () => this.exportRun());
         el.querySelector<HTMLElement>('[data-a="send"]')?.addEventListener('click', () => this.sendRun());
         el.querySelector<HTMLElement>('[data-a="next"]')?.addEventListener('click', () => this.advance());
       },
@@ -2672,7 +2580,7 @@ export class Game {
       ${hist}
       <div data-reckoning-result></div>
       ${this.entry === 'file' ? '<p>Progress stays in memory. Download before closing.</p>' : '<div data-season-confirm hidden><p>A new game replaces this season’s saved notebook.</p><button class="btn" data-season-yes>Start new game</button><button class="btn" data-season-no>Keep this game</button></div>'}
-      </div><div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Feedback</button>${this.labTools ? '<button class="btn" data-a="export">Download this run</button>' : ''}</div>${this.entry === 'file' ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-choose>Choose another file</button>' : '<button class="btn go" data-a="new">New game</button>'}</div>`,
+      </div><div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Feedback</button><a class="menu-link" href="https://human.adamwhite.work/lab/people/">Continue with these people</a></div>${this.entry === 'file' ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-choose>Choose another file</button>' : '<button class="btn go" data-a="new">New game</button>'}</div>`,
       (el) => {
         el.querySelector('[data-file-export]')?.addEventListener('click', () => this.exportRun());
         el.querySelector('[data-file-choose]')?.addEventListener('click', () => this.filePage());

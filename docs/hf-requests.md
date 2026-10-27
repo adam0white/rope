@@ -23,3 +23,12 @@ The optional `field-rules` path uses published HF3.0.0, never sibling source. `b
 The optional bladder faculty is now used through `enableBladder`, real water outcomes and completed voiding, with no `relief` advertisement. HF owns bodily dynamics. `scripts/field-control.ts` exercises actual host intake, one completed void, unchanged Person RNG and exact full replay. This supersedes the historical claim that HF has no bladder, not the old reproduction evidence.
 
 In the new path, reversing the currently occupied leg is labelled **turn back down** in the host offer. HF retains the complete reason and deferral. It has no terrain-specific template. Existing saved semantic labels remain unchanged. No generic HF gap is closed by inventing a game-local reasoning system.
+
+## Current source reconciliation (2026-10-27)
+
+The requests above record historical evidence.
+
+- Request 2: field rules use released `noteVoicePromise` in `src/sim/climb.ts`. Older tapes keep their recorded host trust behavior. The ordinary hut start now records field rules automatically.
+- Request 6 / F-012: field rules use released HF bladder state, completed water outcomes and completed voiding outcomes. Settled footing and an untied person gate the offer. `test/field.test.ts` and `scripts/field-control.ts` cover this. Historical owner exports stay unchanged.
+- Request 7: field-rule descent offers say turn back when they concern the current leg. HF still owns the early goal; the host does not replace it with a rule.
+- Request 1: Rope advertises bounded physical forecasts. Broader generic future-body reasoning belongs in HF. This batch adds no framework logic to Rope.

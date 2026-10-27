@@ -3,7 +3,7 @@
 import { preparePersonaLife } from '@adam0white/lab-client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { type ClimbState, MOUNTAINS, queueInput, snapshot, step } from '../src/sim/climb.ts';
-import { newSeason, type SeasonState } from '../src/sim/season.ts';
+import { exportClimb, newSeason, replayExport, type SeasonState } from '../src/sim/season.ts';
 import type { Continuity } from '../src/ui/continuity.ts';
 import { Game } from '../src/ui/game.ts';
 
@@ -96,6 +96,7 @@ async function boot(play = true) {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
+    await vi.waitFor(() => expect(document.querySelector('[data-hour="12"]')).not.toBeNull());
     tap('[data-hour="12"]');
   }
   return game as unknown as Driver;
@@ -141,9 +142,7 @@ it('keeps the ordinary menu bounded and confirms a new game inline', async () =>
   await boot();
   tap('.menu-trigger');
   expect(query('[data-menu-send]').textContent).toBe('Feedback');
-  expect(
-    document.querySelectorAll('[data-pace], [data-menu-people], [data-menu-title], [data-menu-journal]'),
-  ).toHaveLength(0);
+  expect(document.querySelectorAll('[data-menu-people], [data-menu-journal]')).toHaveLength(0);
   expect(query('[data-menu-fullscreen]')).toBeTruthy();
   expect(document.querySelectorAll('[data-recording] input')).toHaveLength(1);
   tap('[data-menu-new]');
@@ -152,16 +151,19 @@ it('keeps the ordinary menu bounded and confirms a new game inline', async () =>
   expect(query('[data-menu-confirm]').hidden).toBe(true);
 });
 
-it.each(['1', 'true', '0', '01'])('shows diagnostic tools only with exact lab=1 (%s)', async (flag) => {
-  history.replaceState(null, '', `/?lab=${flag}`);
-  await boot(false);
+it('offers public pacing and collapsed run diagnostics beside privacy without cast controls', async () => {
+  const d = await boot();
+  expect(d.climb.fieldRules?.bladder).toBe(true);
+  expect(d.climb.inputs[0]?.t).toBe('field-rules');
+  expect(document.querySelector('[data-field]')).toBeNull();
   tap('.menu-trigger');
-  expect(document.querySelectorAll('[data-menu-people]')).toHaveLength(flag === '1' ? 1 : 0);
-  expect(document.querySelectorAll('[data-pace]')).toHaveLength(flag === '1' ? 4 : 0);
-  if (flag === '1') {
-    tap('[data-menu-people]');
-    expect(document.querySelector('[data-import]')).not.toBeNull();
-  }
+  expect(document.querySelectorAll('[data-pace]')).toHaveLength(4);
+  const debug = query('[data-debug]') as HTMLDetailsElement;
+  expect(debug.open).toBe(false);
+  expect(debug.parentElement?.querySelector('a')?.textContent).toBe('Lab privacy');
+  expect(debug.querySelector('[data-debug-export]')).not.toBeNull();
+  expect(document.querySelector('[data-menu-people], [data-continuity], [data-fork]')).toBeNull();
+  expect(query('[data-cast-shelf]').getAttribute('href')).toBe('https://human.adamwhite.work/lab/people/');
 });
 
 it('a company call opens from its banner and a promised hour takes over the sheet', async () => {
@@ -293,7 +295,7 @@ it('a failed real admission keeps the saved season and ownership, without silent
   );
   expect(localStorage.getItem('rope.save.cast.v1')).toBe(saved);
   expect(game.continuity.ownership()).toEqual(ownership);
-  expect(document.querySelector('.page-title')?.textContent).not.toContain('Shelf unavailable');
+  expect(document.querySelector('.page-title details')?.textContent).toContain('Shelf unavailable');
   expect(document.querySelector('[data-local]')).toBeNull();
   expect(document.querySelector('[data-retry]')).not.toBeNull();
   shelf.enabled = false;
@@ -433,18 +435,19 @@ it('retains the manual playback control test behind lab=1', async () => {
   expect(document.querySelector('.menu-backdrop')).toBeNull();
 });
 
-it('opting into field plans cannot swallow the opening turn-back promise', async () => {
+it('public field plans cannot swallow the opening turn-back promise', async () => {
   const d = await boot(false);
   tap('[data-a="new"]');
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
-  query<HTMLInputElement>('[data-field]').checked = true;
-  query<HTMLInputElement>('[data-bladder]').checked = true;
+  await vi.waitFor(() => expect(document.querySelector('[data-hour="12"]')).not.toBeNull());
   tap('[data-hour="12"]');
   expect(d.climb.fieldRules).toEqual({ bladder: true });
   expect(d.climb.promise?.hour).toBe(12);
   expect(d.climb.inputs.map((i) => i.t)).toEqual(['field-rules', 'promise']);
+  const exported = exportClimb(d.season.start ?? '', d.climb, '3.0.0');
+  expect(snapshot(replayExport(exported))).toBe(exported.state);
   expect(query('.where').textContent).toContain('turn back at 12');
 });
 
@@ -530,25 +533,6 @@ it('does not install a pending new season after destroy', async () => {
   await Promise.resolve();
   expect(localStorage.getItem('rope.save.cast.v1')).toBe('replacement');
   expect(document.querySelector('.scene')).toBeNull();
-});
-
-it('does not save a pending checkpoint after destroy', async () => {
-  history.replaceState(null, '', '/?lab=1');
-  const game = await boot();
-  tap('.menu-trigger');
-  tap('[data-menu-people]');
-  let finish!: () => void;
-  game.continuity.checkpoint = () =>
-    new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-  tap('[data-checkpoint]');
-  (game as unknown as Game).destroy();
-  localStorage.setItem('rope.save.cast.v1', 'replacement');
-  finish();
-  await Promise.resolve();
-  expect(localStorage.getItem('rope.save.cast.v1')).toBe('replacement');
-  expect(document.querySelector('.page')).toBeNull();
 });
 
 it('persists successor progress after boot flushes the live predecessor', async () => {

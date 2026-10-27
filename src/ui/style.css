@@ -1632,3 +1632,18 @@ body {
 .page-title .file-controls > * {
   flex-shrink: 0;
 }
+
+/* Privacy and the small diagnostics disclosure share one row. */
+.privacy-debug {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.privacy-debug details {
+  flex: 1;
+  min-width: 0;
+}
+.privacy-debug summary {
+  cursor: pointer;
+}

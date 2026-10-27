@@ -26,7 +26,7 @@ function control(enabled = false) {
   const shelf = {
     enabled,
     ready: Promise.resolve(true),
-    setEnabled: vi.fn(),
+    setEnabled: vi.fn<(value: boolean) => void>(),
     request: async <T>(r: PersonaRequest): Promise<T> => {
       requests.push(r);
       if (r.action === 'recording') return { recordingEpoch: 'control-epoch' } as T;
@@ -148,4 +148,14 @@ it('recording linkage survives permission-service failure', async () => {
   await continuity.recording();
   expect(lab.personaRecordingAllowed).toBe(true);
   expect(requests).toEqual([]);
+});
+
+it('ordinary fresh seasons enable the public channel before transactional cast preparation', async () => {
+  const { continuity, shelf, requests } = control(false);
+  shelf.setEnabled.mockImplementation((value: boolean) => {
+    shelf.enabled = value;
+  });
+  await continuity.fresh(8);
+  expect(shelf.setEnabled).toHaveBeenCalledWith(true);
+  expect(requests.map((r) => r.action)).toEqual(['prepareBatch', 'putBatch']);
 });

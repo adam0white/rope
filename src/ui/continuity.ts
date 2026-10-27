@@ -76,6 +76,11 @@ export class Continuity {
     const generation = this.generation;
     try {
       await shelf.ready;
+      if (!localOnly && generation === this.generation && !shelf.enabled) {
+        // Owner 2026-10-27: shared people continue automatically through the public channel.
+        shelf.setEnabled(true);
+        await shelf.ready;
+      }
       if (generation !== this.generation)
         throw new Error('The run changed before its people could be prepared.');
       let chapter: Chapter | undefined;
