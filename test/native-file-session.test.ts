@@ -37,9 +37,19 @@ vi.mock('@adam0white/lab-client', async (original) => {
   };
 });
 beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('{}', { status: 200 })),
+  );
   localStorage.setItem('hf-lab-recording-off', '1');
   control.channels = 0;
-  control.lab = createLab({ game: 'rope', build: { c: 'synthetic-host-control' }, captureErrors: false });
+  localStorage.setItem('hf-lab-player', 'a'.repeat(32));
+  control.lab = createLab({
+    game: 'rope',
+    preservation: 'preserve',
+    build: { c: 'synthetic-host-control' },
+    captureErrors: false,
+  });
 });
 // Rendering is outside this host storage control. The Lab and all simulation/decoding remain real.
 vi.mock('../src/ui/scene.ts', () => ({
@@ -408,12 +418,13 @@ const games: Game[] = [];
 afterEach(() => {
   for (const game of games.splice(0)) game.destroy();
   control.lab.setTelemetryOff(true);
+  control.lab.dispose();
   document.body.innerHTML = '';
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-async function open(search = '?file=1') {
-  history.replaceState(null, '', `/${search}`);
+async function open(search = '/file/') {
+  history.replaceState(null, '', search.startsWith('/') ? search : `/${search}`);
   vi.stubGlobal('requestAnimationFrame', () => 0);
   const root = document.createElement('main');
   document.body.append(root);
@@ -608,6 +619,11 @@ it('foreign native packet survives Rope lifecycle without replacing owner season
   replacement.destroy();
   again.game.destroy();
   expect(track).toHaveBeenCalled();
+  const finalCapture = vi.spyOn(control.lab, 'captureSave');
+  const retiredCapture = track.mock.calls[0]?.[0];
+  finalCapture.mockClear();
+  expect(await retiredCapture?.()).toBeNull();
+  expect(finalCapture).not.toHaveBeenCalled();
   expect(control.channels).toBe(0);
   expect(writes.mock.calls.filter(([key]) => key === 'rope.save.cast.v1')).toEqual([]);
   expect(removes.mock.calls.filter(([key]) => key === 'rope.save.cast.v1')).toEqual([]);
@@ -808,28 +824,47 @@ it('file chooser exposes the shipped Recording control under DNT without opting 
     'fetch',
     vi.fn(async () => new Response('', { status: 503 })),
   );
+  control.lab.dispose();
   control.lab = createLab({
     game: 'rope',
     build: { c: 'source-DNT-control' },
     captureErrors: false,
     sendFromLocalhost: true,
+    preservation: 'preserve',
   });
   expect(control.lab.privacySignalOn).toBe(true);
   expect(control.lab.telemetryOn).toBe(false);
-  const { root } = await open();
+  const { root, game } = await open();
   const checkbox = root.querySelector<HTMLInputElement>('[data-recording] input[type="checkbox"]');
   expect(checkbox).not.toBeNull();
   expect(checkbox?.checked).toBe(false);
   checkbox!.click();
   expect(control.lab.telemetryOn).toBe(true);
   expect(checkbox?.checked).toBe(true);
-  checkbox!.click();
-  expect(control.lab.telemetryOn).toBe(false);
-  expect(checkbox?.checked).toBe(false);
+  const dispose = vi.spyOn(control.lab, 'dispose');
+  const capture = vi.spyOn(control.lab, 'captureSave');
   await choose(root, fixture);
+  capture.mockClear();
+  window.dispatchEvent(new Event('pagehide'));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  expect(capture).toHaveBeenCalled();
+  expect(dispose).not.toHaveBeenCalled();
+  expect(control.lab.telemetryOn).toBe(true);
   root.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+  const menuToggle = root.querySelector<HTMLInputElement>('[data-recording] input[type="checkbox"]')!;
+  menuToggle.click();
+  expect(control.lab.telemetryOn).toBe(false);
+  expect(menuToggle.checked).toBe(false);
   expect(root.querySelector('[data-recording]')?.textContent).toContain('Recording');
   expect(root.textContent).not.toMatch(/acknowledged|delivered|stored receipt/i);
+  const retained = JSON.stringify(inspect(game).runExport());
+  capture.mockClear();
+  localStorage.removeItem('hf-lab-player'); // synthetic status-change control, not an owner-profile action
+  inspect(game).save();
+  expect(control.lab.preservationStatus).toBe('identity-mismatch');
+  expect(dispose).toHaveBeenCalledOnce();
+  expect(capture).not.toHaveBeenCalled();
+  expect(JSON.stringify(inspect(game).runExport())).toBe(retained);
 });
 
 it('Resume and Journal cancel an in-flight file replacement without changing the accepted run', async () => {
@@ -899,4 +934,24 @@ it('file page declares scoped 44px input label and selector-button targets', asy
     style.remove();
     document.documentElement.style.removeProperty('font-size');
   }
+});
+
+it('pagehide cancels the selected file before installation without disposing active SDK capture', async () => {
+  const { root, game } = await open('?file=1');
+  let finish!: (bytes: ArrayBuffer) => void;
+  const file = new NodeFile([fixture], 'late.json');
+  vi.spyOn(file, 'arrayBuffer').mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const input = root.querySelector<HTMLInputElement>('[data-file-input]')!;
+  Object.defineProperty(input, 'files', { value: [file] });
+  input.dispatchEvent(new Event('change'));
+  window.dispatchEvent(new Event('pagehide'));
+  finish(Uint8Array.from(Buffer.from(fixture)).buffer);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(root.querySelector('[data-file-input]')).not.toBeNull();
+  expect((game as unknown as { originalFile: unknown }).originalFile).toBeNull();
 });
