@@ -262,10 +262,19 @@ export class Continuity {
       if (!current()) throw new Error('The run changed before the history could be saved.');
       // Preserve full actual source before publication, including failed CAS attempts, local only.
       if (raw) {
-        this.sources.push({ revision: envelope.revision, source: envelope.source, snapshot: raw });
-        while (JSON.stringify(this.sources).length > maxArchive) this.sources.shift();
+        const retained = [
+          ...this.sources,
+          { revision: envelope.revision, source: envelope.source, snapshot: raw },
+        ];
+        // Capacity is serialized JSON UTF16 code units, as in the native loader.
+        if (JSON.stringify(retained).length > maxArchive)
+          throw new Error(
+            'Complete source archive exceeds capacity. Download this run. This history was not published.',
+          );
+        this.sources = retained;
         this.changed();
       }
+      if (!current()) throw new Error('The run changed before the history could be saved.');
       await shelf.request({
         action: 'put',
         envelope,
@@ -279,39 +288,51 @@ export class Continuity {
       this.lab.setPersonaRecording(this.key);
       this.status = `${person.name}: ${envelope.terminal ? 'This history has ended.' : 'The current history has been saved.'} Details that other games cannot use remain in the local export.`;
       this.changed();
-      await this.recording();
+      if (current()) await this.recording();
     });
     this.operation = task.catch(() => {});
     return task;
   }
-  private closing = new Set<string>();
+  private closing = new Map<string, () => boolean>();
   closeDeaths() {
     if (this.fileOrigin || !this.shelf) return;
+    const generation = this.generation,
+      state = this.state,
+      runId = this.runId;
+    const current = () => generation === this.generation && state === this.state && runId === this.runId;
     for (const head of this.heads) {
       if (
         head.terminal ||
-        this.closing.has(head.castId) ||
+        this.closing.get(head.castId)?.() ||
         this.state?.climb.people.find((p) => castIdOf(p.id) === head.castId)?.body.alive !== false
       )
         continue;
-      this.closing.add(head.castId);
+      this.closing.set(head.castId, current);
       void this.checkpoint(head.castId)
         .catch((error) => {
-          this.status = String(error);
+          if (current()) this.status = String(error);
         })
-        .finally(() => this.closing.delete(head.castId));
+        .finally(() => {
+          if (this.closing.get(head.castId) === current) this.closing.delete(head.castId);
+        });
     }
   }
   async checkpointAll() {
     if (this.fileOrigin || !this.shelf) return;
+    const generation = this.generation,
+      state = this.state,
+      runId = this.runId;
+    const current = () => generation === this.generation && state === this.state && runId === this.runId;
     for (const c of CAST) {
+      if (!current()) return;
       try {
         await this.checkpoint(c.castId);
       } catch (error) {
+        if (!current()) return;
         this.status = String(error);
       }
     }
-    this.changed();
+    if (current()) this.changed();
   }
 }
 
