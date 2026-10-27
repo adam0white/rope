@@ -1623,3 +1623,12 @@ body {
   font: inherit;
   white-space: normal;
 }
+
+/* File content scrolls above the actions within the existing measured footer space. */
+.page-title .file-controls {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+.page-title .file-controls > * {
+  flex-shrink: 0;
+}
