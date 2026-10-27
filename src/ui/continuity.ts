@@ -36,10 +36,16 @@ export class Continuity {
   private state: State | null = null;
   constructor(
     readonly lab: Lab,
-    readonly shelf: Shelf,
+    readonly shelf: Shelf | null,
     readonly changed: () => void = () => {},
   ) {
+    this.fileOrigin = shelf === null;
     // No run exists on the title. Fresh/load closes the gate before attaching any actor.
+  }
+  private requireShelf(): Shelf {
+    if (this.fileOrigin || !this.shelf)
+      throw new Error('File play cannot create or publish browser histories.');
+    return this.shelf;
   }
   source(): PersonaEnvelope['source'] {
     return {
@@ -56,24 +62,26 @@ export class Continuity {
     this.changed();
   }
   clear() {
+    this.requireShelf();
     this.invalidate();
     this.state = null;
     this.heads = [];
     this.sources = [];
   }
   async fresh(seed: number, localOnly = false) {
+    const shelf = this.requireShelf();
     if (this.busy) throw new Error('A chapter is already being prepared.');
     this.busy = true;
     this.invalidate();
     const generation = this.generation;
     try {
-      await this.shelf.ready;
+      await shelf.ready;
       if (generation !== this.generation)
         throw new Error('The run changed before its people could be prepared.');
       let chapter: Chapter | undefined;
-      if (this.shelf.enabled && !localOnly) {
+      if (shelf.enabled && !localOnly) {
         const result = await claimCastChapterBatch(
-          this.shelf,
+          shelf,
           CAST.map((c) => c.castId),
           this.source(),
           async (inputs: LifePreparation[]) => {
@@ -123,7 +131,6 @@ export class Continuity {
       );
   }
   async restoreOwnership(state: State, saved?: Ownership, file = false) {
-    this.invalidate();
     const generation = this.generation;
     await this.validateRunEnvelopes(state);
     const heads = saved && !file ? await Promise.all(saved.heads.map((p) => validatePersona(p))) : [];
@@ -143,13 +150,15 @@ export class Continuity {
     )
       throw new Error('The saved permission to update these histories belongs to another run.');
     if (generation !== this.generation) throw new Error('The run changed while it was loading.');
+    const sources = structuredClone(saved?.sources ?? []);
+    if (!Array.isArray(sources) || (!file && JSON.stringify(sources).length > maxArchive))
+      throw new Error('The saved archive is too large to load.');
+    this.invalidate();
     this.state = state;
     this.heads = heads;
     this.runId = saved?.runId ?? crypto.randomUUID();
     this.fileOrigin = file || saved?.fileOrigin === true;
-    this.sources = saved?.sources ?? [];
-    if (JSON.stringify(this.sources).length > maxArchive)
-      throw new Error('The saved archive is too large to load.');
+    this.sources = sources;
     this.status =
       'The people saved with this run have been restored. Their current browser histories were not loaded. Importing a file gives this run no permission to update those histories.';
   }
@@ -184,13 +193,16 @@ export class Continuity {
   }
 
   async setEnabled(value: boolean) {
+    const shelf = this.requireShelf();
     this.invalidate();
-    await this.shelf.ready;
-    this.shelf.setEnabled(value);
+    await shelf.ready;
+    shelf.setEnabled(value);
     this.status =
       'Your choice about using browser histories has changed. This chapter keeps its current people. Only a new chapter can load browser histories.';
   }
   checkpoint(castId: string, fork = false) {
+    if (this.fileOrigin || !this.shelf) return Promise.reject(new Error('File play cannot publish people.'));
+    const shelf = this.shelf;
     const generation = this.generation,
       state = this.state,
       runId = this.runId;
@@ -206,8 +218,8 @@ export class Continuity {
         throw new Error(
           'Finish this climb before saving a person for another chapter. Their activities, injuries and responsibilities must also allow departure.',
         );
-      await this.shelf.ready;
-      if (!current() || !this.shelf.enabled)
+      await shelf.ready;
+      if (!current() || !shelf.enabled)
         throw new Error('Saving browser histories is off, or the run has changed.');
       const person = state.climb.people.find((p) => castIdOf(p.id) === castId);
       if (!person || !CAST.some((c) => c.castId === castId))
@@ -249,7 +261,7 @@ export class Continuity {
         while (JSON.stringify(this.sources).length > maxArchive) this.sources.shift();
         this.changed();
       }
-      await this.shelf.request({
+      await shelf.request({
         action: 'put',
         envelope,
         fork,
@@ -269,6 +281,7 @@ export class Continuity {
   }
   private closing = new Set<string>();
   closeDeaths() {
+    if (this.fileOrigin || !this.shelf) return;
     for (const head of this.heads) {
       if (
         head.terminal ||
@@ -285,6 +298,7 @@ export class Continuity {
     }
   }
   async checkpointAll() {
+    if (this.fileOrigin || !this.shelf) return;
     for (const c of CAST) {
       try {
         await this.checkpoint(c.castId);
@@ -302,3 +316,9 @@ export type Ownership = {
   fileOrigin: boolean;
   sources: SourceArchive[];
 };
+
+/** Resolve before any owner key or Shelf construction. Supplied ambiguous modes never fall back. */
+export function fileEntry(search: string): 'native' | 'file' | 'invalid' {
+  const values = new URLSearchParams(search).getAll('file');
+  return !values.length ? 'native' : values.length === 1 && values[0] === '1' ? 'file' : 'invalid';
+}

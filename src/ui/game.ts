@@ -5,7 +5,13 @@
  */
 
 import { ENGINE_VERSION, FRAMEWORK_VERSION, voiceOf } from '@adam0white/human-framework';
-import { FEEDBACK_LABELS, personaChannel, watchPersonaCheckpoint } from '@adam0white/lab-client';
+import {
+  canonicalPersona,
+  FEEDBACK_LABELS,
+  personaChannel,
+  validatePersona,
+  watchPersonaCheckpoint,
+} from '@adam0white/lab-client';
 import {
   feedbackPersonaControl,
   feedbackSharePlay,
@@ -39,9 +45,15 @@ import { DISCOVERIES } from '../sim/discoveries.ts';
 import { coldAt, legsUp, routeName, SEASON } from '../sim/mountain.ts';
 import { CAST, FAMILY, MEMBERS, memberOf } from '../sim/party.ts';
 import { checkChapter } from '../sim/passport.ts';
-import { exportClimb, nextClimb, type SeasonState, validateSeasonStart } from '../sim/season.ts';
+import {
+  exportClimb,
+  nextClimb,
+  replayExport,
+  type SeasonState,
+  validateSeasonStart,
+} from '../sim/season.ts';
 import { haltReason, hurtCall, namesOf, promiseDue } from './calls.ts';
-import { Continuity, type Ownership } from './continuity.ts';
+import { Continuity, fileEntry, type Ownership } from './continuity.ts';
 import { type Disclosure, has, markSeen, type Note, newDisclosure, nextNote } from './disclosure.ts';
 import { DisplaySession } from './display.ts';
 import { fieldNotice } from './field.ts';
@@ -102,7 +114,10 @@ export class Game {
   private current(): boolean {
     return !this.disposed && Game.owners.get(this.root) === this;
   }
-  private continuity = new Continuity(lab, personaChannel());
+  private readonly entry = fileEntry(location.search);
+  private continuity = new Continuity(lab, this.entry === 'native' ? personaChannel() : null);
+  private originalFile: { text: string; sha256: string; ownership?: Ownership } | null = null;
+  private fileGeneration = 0;
   private starting = false;
   private root: HTMLElement;
   private readonly labTools = new URLSearchParams(location.search).get('lab') === '1';
@@ -164,6 +179,8 @@ export class Game {
 
   constructor(root: HTMLElement) {
     this.root = root;
+    this.savedText = null;
+    if (this.entry !== 'native') return;
     try {
       this.savedText = localStorage.getItem(SAVE_KEY);
     } catch {
@@ -174,9 +191,11 @@ export class Game {
   async boot(): Promise<void> {
     if (this.booted || this.disposed) return;
     const predecessor = Game.owners.get(this.root);
+    if (predecessor && this.entry !== 'native' && predecessor.entry === 'native')
+      throw new Error('Close the active native game before opening file mode.');
     predecessor?.destroy();
     // Adopt only the predecessor's owned save, including its final progress flush.
-    if (predecessor) this.savedText = predecessor.savedText;
+    if (predecessor && this.entry === 'native') this.savedText = predecessor.savedText;
     Game.owners.set(this.root, this);
     this.booted = true;
     await document.fonts?.ready;
@@ -242,6 +261,23 @@ export class Game {
     );
     window.addEventListener('pagehide', () => this.save(), { signal: this.lifetime.signal });
     this.frameId = requestAnimationFrame(() => this.frame());
+    if (this.entry === 'native') this.trackRun();
+    if (this.entry === 'native')
+      this.unwatch = watchPersonaCheckpoint(() => {
+        if (this.climb?.over) void this.continuity.checkpointAll().then(() => this.save());
+      });
+    window.addEventListener(
+      'storage',
+      (event) => {
+        if (event.key === null) this.continuity.invalidate();
+      },
+      { signal: this.lifetime.signal },
+    );
+    this.titlePage();
+  }
+
+  private trackRun(): void {
+    this.untrack?.();
     this.untrack = lab.trackRun(
       () => {
         if (!this.climb || !this.season) return null;
@@ -261,17 +297,6 @@ export class Game {
             : [],
       },
     );
-    this.unwatch = watchPersonaCheckpoint(() => {
-      if (this.climb?.over) void this.continuity.checkpointAll().then(() => this.save());
-    });
-    window.addEventListener(
-      'storage',
-      (event) => {
-        if (event.key === null) this.continuity.invalidate();
-      },
-      { signal: this.lifetime.signal },
-    );
-    this.titlePage();
   }
 
   private syncStage(): void {
@@ -288,6 +313,7 @@ export class Game {
     if (this.disposed) return;
     this.save();
     this.disposed = true;
+    this.fileGeneration++;
     this.continuity.generation++;
     this.lifetime.abort();
     this.footerObserver?.disconnect();
@@ -321,6 +347,7 @@ export class Game {
   // ------------------------------------------------------------ season and saves
 
   private load(): Save | null {
+    if (this.entry !== 'native') return null;
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       const saved = raw ? (JSON.parse(raw) as Save) : null;
@@ -332,6 +359,10 @@ export class Game {
 
   private save(): void {
     if (!this.current() || !this.climb || !this.season) return;
+    if (this.entry !== 'native') {
+      if (this.originalFile) lab.captureSave(this.fileSession());
+      return;
+    }
     try {
       if (localStorage.getItem(SAVE_KEY) !== this.savedText) return;
     } catch {
@@ -360,7 +391,7 @@ export class Game {
   }
 
   private async newGame(localOnly = false): Promise<void> {
-    if (!this.current() || this.starting) return;
+    if (this.entry !== 'native' || !this.current() || this.starting) return;
     this.starting = true;
     try {
       const seed = (Date.now() % 1_000_000_007) | 0;
@@ -389,6 +420,7 @@ export class Game {
   }
 
   private async resume(sv: Save): Promise<void> {
+    if (this.entry !== 'native') return;
     if (!this.current()) return;
     try {
       if (sv.engine !== ENGINE_VERSION)
@@ -514,7 +546,13 @@ export class Game {
         const wasSkipping = this.skipping;
         const before = wasSkipping ? skipEventStamp(this.climb) : eventStamp(this.climb);
         const readBefore = this.slowUntil;
-        step(this.climb);
+        if (this.entry === 'file') {
+          const next = structuredClone(this.climb);
+          step(next);
+          if (!this.fitsFile(next)) break;
+          this.climb = next;
+          this.continuity.attach({ season: this.season, climb: next });
+        } else step(this.climb);
         this.acc -= 1;
         n++;
         this.afterStep();
@@ -600,7 +638,8 @@ export class Game {
 
   private send(inp: NewInput, also?: NewInput): void {
     if (!this.current()) return;
-    const c = this.climb;
+    const c = this.entry === 'file' ? structuredClone(this.climb) : this.climb;
+    if (!c) return;
     if (performance.now() - this.sentAt < 450) return;
     // Nothing stays focused after a send, so no key press can repeat the order.
     (document.activeElement as HTMLElement | null)?.blur?.();
@@ -614,6 +653,11 @@ export class Game {
     if (also) queueInput(c, also);
     // The word is spoken now: step the minute it applies in, so the answer comes at once.
     step(c);
+    if (this.entry === 'file') {
+      if (!this.fitsFile(c)) return;
+      this.climb = c;
+      this.continuity.attach({ season: this.season, climb: c });
+    }
     this.afterStep();
     this.saySelf(also ?? inp);
     this.skipping = false;
@@ -1887,6 +1931,10 @@ export class Game {
   }
 
   private gameMenu(): void {
+    if (this.entry !== 'native') {
+      this.filePage();
+      return;
+    }
     if (!this.current()) return;
     if (this.menuEl) return;
     this.infoEl?.remove();
@@ -2150,10 +2198,16 @@ export class Game {
     return copy;
   }
   private recordingExport() {
+    if (this.entry === 'file') return this.fileSession();
     return exportClimb(this.start, this.climb, FRAMEWORK_VERSION, this.season.chapter, this.season.past);
   }
 
   private runExport() {
+    if (this.entry === 'file') return this.fileSession();
+    return this.climbExport();
+  }
+
+  private climbExport() {
     return {
       ...exportClimb(this.start, this.climb, FRAMEWORK_VERSION, this.season.chapter, this.season.past),
       castSources: structuredClone(this.continuity.sources),
@@ -2162,9 +2216,13 @@ export class Game {
 
   private continuityPage(): void {
     const back = () => (this.climb ? this.closePage() : this.titlePage());
+    if (this.entry !== 'native') {
+      this.filePage();
+      return;
+    }
     if (!this.labTools) return;
     this.openPage(
-      `<div class="page-body"><h1>The people</h1><p>${esc(this.continuity.status)}</p><p>Continuity stays in this browser. It is separate from lab recording. A loaded season keeps the people it was saved with.</p><label><input type="checkbox" data-continuity ${this.continuity.shelf.enabled ? 'checked' : ''}> Use continuing people in a new season</label><p><a href="https://human.adamwhite.work/lab/people/">Inspect or export browser histories</a></p>${CAST.map((c) => `<p><b>${esc(c.name)}</b> · ${c.age} · ${esc(c.work)} ${esc(FAMILY[c.castId.split('.')[2] ?? ''] ?? '')}</p>`).join('')}${this.climb ? `<h2>Ask in private</h2><p>Only people in earshot can answer. They may keep a subject private.</p>${MEMBERS.map((m) => `<button class="btn" data-life="${m.id}" ${canHear(this.climb, m.id) ? '' : 'disabled'}>${esc(m.name)}: ${esc(DISCOVERIES[m.id]?.displayTopic ?? DISCOVERIES[m.id]?.topic ?? 'talk')}</button>`).join('')}<h2>Leave this chapter</h2><p>Finish this climb before saving a person for another chapter. Injuries, unfinished tasks and responsibilities can still prevent departure. You can instead start a separate history. It does not continue an existing history.</p><select data-person>${CAST.map((c) => `<option value="${c.castId}">${esc(c.name)}</option>`).join('')}</select><button class="btn" data-release>Ask to end this person’s mountain chapter</button><button class="btn" data-checkpoint>Save this person at the finished climb</button><button class="btn" data-fork>Save a separate history</button><button class="btn" data-export>Download this run</button>` : ''}<p><label>Load a current Rope run<input type="file" accept="application/json" data-import></label></p><p data-person-status role="status"></p><p>A run loaded from a file remains a file import after you save and reload it. Importing it does not give this run control over its people’s saved browser histories.</p></div><div class="page-actions"><button class="btn go" data-back>Back</button></div>`,
+      `<div class="page-body"><h1>The people</h1><p>${esc(this.continuity.status)}</p><p>Continuity stays in this browser. It is separate from lab recording. A loaded season keeps the people it was saved with.</p><label><input type="checkbox" data-continuity ${this.continuity.shelf?.enabled ? 'checked' : ''}> Use continuing people in a new season</label><p><a href="https://human.adamwhite.work/lab/people/">Inspect or export browser histories</a></p>${CAST.map((c) => `<p><b>${esc(c.name)}</b> · ${c.age} · ${esc(c.work)} ${esc(FAMILY[c.castId.split('.')[2] ?? ''] ?? '')}</p>`).join('')}${this.climb ? `<h2>Ask in private</h2><p>Only people in earshot can answer. They may keep a subject private.</p>${MEMBERS.map((m) => `<button class="btn" data-life="${m.id}" ${canHear(this.climb, m.id) ? '' : 'disabled'}>${esc(m.name)}: ${esc(DISCOVERIES[m.id]?.displayTopic ?? DISCOVERIES[m.id]?.topic ?? 'talk')}</button>`).join('')}<h2>Leave this chapter</h2><p>Finish this climb before saving a person for another chapter. Injuries, unfinished tasks and responsibilities can still prevent departure. You can instead start a separate history. It does not continue an existing history.</p><select data-person>${CAST.map((c) => `<option value="${c.castId}">${esc(c.name)}</option>`).join('')}</select><button class="btn" data-release>Ask to end this person’s mountain chapter</button><button class="btn" data-checkpoint>Save this person at the finished climb</button><button class="btn" data-fork>Save a separate history</button><button class="btn" data-export>Download this run</button>` : ''}<p><label>Load a current Rope run<input type="file" accept="application/json" data-import></label></p><p data-person-status role="status"></p><p>A run loaded from a file remains a file import after you save and reload it. Importing it does not give this run control over its people’s saved browser histories.</p></div><div class="page-actions"><button class="btn go" data-back>Back</button></div>`,
       (el) => {
         const status = el.querySelector<HTMLElement>('[data-person-status]');
         if (!status) return;
@@ -2235,7 +2293,110 @@ export class Game {
     );
   }
 
+  /** Complete host-native download. SDK queues and an already active SW remain separate gates. */
+  private fileSession(climb = this.climb, season = this.season, start = this.start) {
+    if (!this.originalFile || !climb) throw new Error('Choose a file first.');
+    return {
+      format: 'rope-file-session/1',
+      original: structuredClone(this.originalFile),
+      native: {
+        v: 1,
+        engine: ENGINE_VERSION,
+        ownership: this.continuity.ownership(),
+        season: structuredClone(season),
+        start: start === season.start ? '' : start,
+        inputs: structuredClone(climb.inputs),
+        minute: climb.minute,
+        disclosure: structuredClone(this.disc),
+        over: climb.over,
+      } satisfies Save,
+      current: {
+        ...exportClimb(start, climb, FRAMEWORK_VERSION, season.chapter, season.past),
+        castSources: structuredClone(this.continuity.sources),
+      },
+    };
+  }
+
+  private fitsFile(climb: ClimbState, season = this.season, start = this.start): boolean {
+    if (this.entry !== 'file') return true;
+    try {
+      const initial = finiteJSON(start);
+      if (climb.minute > initial.minute + 10080 || climb.inputs.length > 10000)
+        throw new Error('Replay capacity reached.');
+      finiteJSON(snapshot(climb));
+      finiteJSON(JSON.stringify(this.fileSession(climb, season, start)), SESSION_BYTES);
+      return true;
+    } catch {
+      this.filePage();
+      const status = this.pageEl?.querySelector('[data-file-status]');
+      if (status)
+        status.textContent =
+          'This session cannot grow further within complete export limits. Download it before closing.';
+      return false;
+    }
+  }
+
+  private filePage(): void {
+    if (this.entry === 'invalid') {
+      this.openPage(
+        '<div class="page-body"><h1>File mode could not start</h1><p>Use exactly ?file=1. No season was opened.</p></div>',
+        undefined,
+        'title',
+      );
+      return;
+    }
+    this.openPage(
+      `<div class="page-body"><h1>Choose a Rope file</h1><p>Progress stays in memory. Download before closing or reloading. Reloading opens this chooser.</p><p>This mode keeps the host’s native season separate. Lab recording and an already active service worker have separate preservation limits.</p><label>${this.climb ? 'Choose another file' : 'Choose a file'}<input type="file" accept="application/json" data-file-input></label><p data-file-status role="status"></p></div><div class="page-actions">${this.climb ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-resume>Resume current file</button>' : ''}</div>`,
+      (el) => {
+        el.querySelector('[data-file-resume]')?.addEventListener('click', () => this.closePage());
+        el.querySelector('[data-file-export]')?.addEventListener('click', () => this.exportRun());
+        el.querySelector<HTMLInputElement>('[data-file-input]')?.addEventListener('change', async (event) => {
+          const status = el.querySelector<HTMLElement>('[data-file-status]')!;
+          const generation = ++this.fileGeneration;
+          try {
+            const file = (event.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            if (file.size > SESSION_BYTES) throw new Error('This file is too large to preserve completely.');
+            status.textContent = 'Loading…';
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            if (bytes.byteLength > SESSION_BYTES)
+              throw new Error('This file is too large to preserve completely.');
+            // Bind the selected bytes before decoding. Retain a UTF8 BOM as source text.
+            const selectedDigest = await fileByteDigest(bytes);
+            const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+            const prepared = await decodeFile(text, selectedDigest);
+            if (!this.current() || generation !== this.fileGeneration) return;
+            // Validate everything on detached data before changing the active file or caller arguments.
+            const continuity = new Continuity(lab, null);
+            await continuity.restoreOwnership(
+              { season: prepared.save.season, climb: prepared.climb },
+              prepared.save.ownership,
+              true,
+            );
+            if (!this.current() || generation !== this.fileGeneration) return;
+            this.continuity.generation++;
+            this.continuity = continuity;
+            this.originalFile = prepared.original;
+            this.season = prepared.save.season;
+            this.disc = prepared.save.disclosure;
+            this.begin(prepared.climb, prepared.start, true);
+            this.trackRun();
+            if (this.season.over) this.seasonPage();
+            else if (prepared.climb.over) this.endClimb();
+          } catch (error) {
+            if (this.current() && generation === this.fileGeneration) status.textContent = String(error);
+          }
+        });
+      },
+      'title',
+    );
+  }
+
   private titlePage(): void {
+    if (this.entry !== 'native') {
+      this.filePage();
+      return;
+    }
     lab.screen('title');
     const sv = this.load();
     const cont = sv && !sv.season.over;
@@ -2471,7 +2632,11 @@ export class Game {
   }
 
   private advance(): void {
-    const next = nextClimb(this.season, this.climb, this.branch ?? null);
+    const season = this.entry === 'file' ? structuredClone(this.season) : this.season;
+    const played = this.entry === 'file' ? structuredClone(this.climb) : this.climb;
+    const next = nextClimb(season, played, this.branch ?? null);
+    if (!this.fitsFile(next ?? played, season, next ? (season.start ?? snapshot(next)) : this.start)) return;
+    this.season = season;
     this.branch = undefined;
     this.ending = false;
     if (!next) {
@@ -2504,9 +2669,11 @@ export class Game {
       ${this.peaksSvg(this.season.history.length)}
       ${hist}
       <div data-reckoning-result></div>
-      <div data-season-confirm hidden><p>A new game replaces this season’s saved notebook.</p><button class="btn" data-season-yes>Start new game</button><button class="btn" data-season-no>Keep this game</button></div>
-      </div><div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Feedback</button>${this.labTools ? '<button class="btn" data-a="export">Download this run</button>' : ''}</div><button class="btn go" data-a="new">New game</button></div>`,
+      ${this.entry === 'file' ? '<p>Progress stays in memory. Download before closing.</p>' : '<div data-season-confirm hidden><p>A new game replaces this season’s saved notebook.</p><button class="btn" data-season-yes>Start new game</button><button class="btn" data-season-no>Keep this game</button></div>'}
+      </div><div class="page-actions"><div class="end-secondaries"><button class="btn" data-a="send">Feedback</button>${this.labTools ? '<button class="btn" data-a="export">Download this run</button>' : ''}</div>${this.entry === 'file' ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-choose>Choose another file</button>' : '<button class="btn go" data-a="new">New game</button>'}</div>`,
       (el) => {
+        el.querySelector('[data-file-export]')?.addEventListener('click', () => this.exportRun());
+        el.querySelector('[data-file-choose]')?.addEventListener('click', () => this.filePage());
         el.querySelector<HTMLElement>('[data-a="new"]')?.addEventListener('click', () =>
           el.querySelector<HTMLElement>('[data-season-confirm]')?.removeAttribute('hidden'),
         );
@@ -2529,4 +2696,279 @@ function factsFor(c: ClimbState, id: string) {
   const f = factsOf(c)[id];
   if (!f) throw new Error('no facts');
   return f;
+}
+
+// Refuse oversized or unsafe input before replay or installation. No archive is shortened to fit.
+const FILE_BYTES = 16 * 1024 * 1024;
+const SESSION_BYTES = 64 * 1024 * 1024;
+function finiteJSON(text: string, limit = FILE_BYTES): any {
+  if (new TextEncoder().encode(text).byteLength > limit)
+    throw new Error('This file is too large to preserve completely.');
+  const value = JSON.parse(text);
+  let nodes = 0;
+  const visit = (v: unknown, depth: number): void => {
+    if (++nodes > 2_000_000 || depth > 128) throw new Error('This file exceeds the complete-state limits.');
+    if (typeof v === 'number' && !Number.isFinite(v)) throw new Error('Nonfinite state is unsupported.');
+    if (!v || typeof v !== 'object') return;
+    for (const [key, child] of Object.entries(v)) {
+      if (['__proto__', 'prototype', 'constructor'].includes(key)) throw new Error('Unsafe file property.');
+      visit(child, depth + 1);
+    }
+  };
+  visit(value, 0);
+  return value;
+}
+const sameFileValue = (a: unknown, b: unknown) => canonicalPersona(a) === canonicalPersona(b);
+function exactFileUTF8(text: string): Uint8Array<ArrayBuffer> {
+  const bytes = new TextEncoder().encode(text);
+  if (new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) !== text)
+    throw new Error('The original text cannot round-trip as exact UTF8.');
+  return bytes;
+}
+function fileInterpretation(text: string): string {
+  exactFileUTF8(text);
+  // JSON interpretation alone may omit the BOM; retained text and its digest never do.
+  return text.startsWith('\ufeff') ? text.slice(1) : text;
+}
+async function fileDigest(text: string): Promise<string> {
+  return fileByteDigest(exactFileUTF8(text));
+}
+async function fileByteDigest(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (b) =>
+    b.toString(16).padStart(2, '0'),
+  ).join('');
+}
+async function validateFileSources(save: Save, original?: Ownership): Promise<void> {
+  const ownership = save.ownership;
+  if (
+    !ownership ||
+    typeof ownership.runId !== 'string' ||
+    typeof ownership.fileOrigin !== 'boolean' ||
+    !Array.isArray(ownership.heads) ||
+    !Array.isArray(ownership.sources)
+  )
+    throw new Error('Invalid file provenance.');
+  const records = [
+    ...ownership.heads,
+    ...(original?.heads ?? []),
+    ...(save.season.chapter?.claims ?? []),
+    ...(save.season.chapter?.inputs.map((i) => i.parent) ?? []),
+  ];
+  await Promise.all(records.map((p) => validatePersona(p)));
+  for (const source of ownership.sources) {
+    if (!source || typeof source.revision !== 'string' || !source.source || !source.snapshot)
+      throw new Error('Invalid complete source archive.');
+    const envelope = records.find((p) => p.revision === source.revision);
+    if (!envelope || !sameFileValue(source.source, envelope.source))
+      throw new Error('The source archive has no matching provenance.');
+    const receipt = envelope.transfer.checkpoint as { sha256?: string } | undefined;
+    if (!receipt || (await fileDigest(canonicalPersona(source.snapshot))) !== receipt.sha256)
+      throw new Error('The complete source archive does not match its receipt.');
+  }
+}
+function checkReplayBudget(start: string, inputs: ClimbState['inputs'], minute: number): void {
+  const initial = finiteJSON(start);
+  if (
+    !Number.isSafeInteger(initial.minute) ||
+    !Number.isSafeInteger(minute) ||
+    minute < initial.minute ||
+    minute > initial.minute + 10080 ||
+    !Array.isArray(inputs) ||
+    inputs.length > 10000
+  )
+    throw new Error('Unsupported replay boundary.');
+  let previous = initial.minute;
+  for (const input of inputs) {
+    if (
+      !input ||
+      typeof input.t !== 'string' ||
+      !Number.isSafeInteger(input.at) ||
+      input.at < previous ||
+      input.at > minute + 1
+    )
+      throw new Error('Unsupported input boundary.');
+    previous = input.at;
+  }
+}
+function checkPublicReplay(raw: ReturnType<typeof exportClimb> & { castSources?: unknown }): ClimbState {
+  if (!raw || raw.game !== 'rope' || raw.v !== 1 || raw.engine !== FRAMEWORK_VERSION)
+    throw new Error('Unsupported public Rope export.');
+  const state = finiteJSON(raw.state);
+  checkReplayBudget(raw.start, raw.inputs, state.minute);
+  for (const prior of raw.past ?? [])
+    checkReplayBudget(prior.start, prior.inputs, finiteJSON(prior.state).minute);
+  const climb = replayExport(raw);
+  const { castSources: _sources, ...packet } = raw;
+  if (!sameFileValue(packet, exportClimb(raw.start, climb, FRAMEWORK_VERSION, raw.chapter, raw.past)))
+    throw new Error('The public export metadata does not match its complete replay.');
+  return climb;
+}
+function nativeFileSave(raw: Save): { save: Save; climb: ClimbState; start: string } {
+  if (
+    !raw ||
+    raw.v !== 1 ||
+    raw.engine !== ENGINE_VERSION ||
+    !raw.season ||
+    !Array.isArray(raw.inputs) ||
+    !Number.isSafeInteger(raw.minute) ||
+    typeof raw.over !== 'boolean' ||
+    !raw.disclosure ||
+    typeof raw.disclosure !== 'object'
+  )
+    throw new Error('Unsupported native Rope file.');
+  const save = structuredClone(raw);
+  const start = save.start || save.season.start || '';
+  const initial = finiteJSON(start);
+  checkReplayBudget(start, save.inputs, save.minute);
+  if (
+    save.minute < initial.minute ||
+    save.minute > initial.minute + 10080 ||
+    save.inputs.length > 10000 ||
+    !Array.isArray(save.disclosure.unlocked) ||
+    !Array.isArray(save.disclosure.seen) ||
+    !save.disclosure.unlocked.every((x) =>
+      ['insist', 'tell', 'promise', 'rope', 'fix', 'pack', 'share'].includes(x),
+    ) ||
+    !save.disclosure.seen.every((x) => typeof x === 'string')
+  )
+    throw new Error('Unsupported replay or disclosure boundary.');
+  if (save.season.chapter) checkChapter(save.season.chapter);
+  for (const entry of save.season.past ?? []) {
+    finiteJSON(entry.start);
+    checkReplayBudget(entry.start, entry.inputs, finiteJSON(entry.state).minute);
+  }
+  const past = save.season.past ?? [];
+  const season = validateSeasonStart(
+    save.season.seed,
+    save.season.chapter,
+    save.season.over ? past.slice(0, -1) : past,
+    start,
+  );
+  const climb = replay(start, save.inputs, save.minute);
+  if (climb.minute !== save.minute || climb.over !== save.over || climb.seed !== save.season.seed)
+    throw new Error('Native replay does not match its saved boundary.');
+  if (save.season.over) {
+    const last = past.at(-1);
+    if (
+      !last ||
+      last.start !== start ||
+      last.state !== snapshot(climb) ||
+      !sameFileValue(last.inputs, climb.inputs) ||
+      nextClimb(season, structuredClone(climb), last.branch) !== null
+    )
+      throw new Error('Invalid completed season.');
+  }
+  if (!sameFileValue(season, save.season)) throw new Error('The complete season does not match its replay.');
+  return { save, climb, start };
+}
+async function decodeFile(text: string, selectedDigest?: string) {
+  const interpretation = fileInterpretation(text);
+  if (selectedDigest !== undefined && (await fileDigest(text)) !== selectedDigest)
+    throw new Error('The selected UTF8 bytes do not match the retained source.');
+  const raw = finiteJSON(interpretation, SESSION_BYTES);
+  let prepared: ReturnType<typeof nativeFileSave>;
+  let original: { text: string; sha256: string; ownership?: Ownership };
+  if (raw.format === 'rope-file-session/1') {
+    if (
+      !raw.original ||
+      typeof raw.original.text !== 'string' ||
+      typeof raw.original.sha256 !== 'string' ||
+      finiteJSON(fileInterpretation(raw.original.text)).format
+    )
+      throw new Error('Invalid original file provenance.');
+    const origin = await decodeFile(raw.original.text);
+    if (origin.original.sha256 !== raw.original.sha256 || !sameFileValue(origin.original, raw.original))
+      throw new Error('The original file digest or ownership differs.');
+    prepared = nativeFileSave(raw.native);
+    const current = raw.current;
+    if (!current || current.game !== 'rope' || current.engine !== FRAMEWORK_VERSION)
+      throw new Error('Unsupported public Rope export.');
+    const currentClimb = checkPublicReplay(current);
+    if (
+      snapshot(currentClimb) !== snapshot(prepared.climb) ||
+      !sameFileValue(current, {
+        ...exportClimb(
+          prepared.start,
+          prepared.climb,
+          FRAMEWORK_VERSION,
+          prepared.save.season.chapter,
+          prepared.save.season.past,
+        ),
+        castSources: prepared.save.ownership?.sources ?? [],
+      })
+    )
+      throw new Error('The complete current state does not match its native replay.');
+    const base = origin.save;
+    const played =
+      prepared.climb.climbNo === origin.climb.climbNo
+        ? { start: prepared.start, inputs: prepared.climb.inputs }
+        : prepared.save.season.past?.[origin.climb.climbNo - 1];
+    if (
+      prepared.climb.seed !== origin.climb.seed ||
+      !played ||
+      played.start !== origin.start ||
+      !sameFileValue(played.inputs.slice(0, base.inputs.length), base.inputs) ||
+      !sameFileValue(prepared.save.ownership?.sources, base.ownership?.sources) ||
+      !sameFileValue(prepared.save.season.chapter, base.season.chapter) ||
+      prepared.save.ownership?.heads.length ||
+      prepared.save.ownership?.fileOrigin !== true
+    )
+      throw new Error('This file session does not continue its original provenance.');
+    original = origin.original;
+  } else {
+    finiteJSON(interpretation);
+    if (raw.format) throw new Error('Unsupported Rope file format.');
+    if (raw.game === 'rope') {
+      if (raw.engine !== FRAMEWORK_VERSION) throw new Error('Unsupported public Rope export edition.');
+      const climb = checkPublicReplay(raw);
+      const season = validateSeasonStart(climb.seed, raw.chapter, raw.past ?? [], raw.start);
+      prepared = {
+        climb,
+        start: raw.start,
+        save: {
+          v: 1,
+          engine: ENGINE_VERSION,
+          season,
+          start: raw.start,
+          inputs: structuredClone(climb.inputs),
+          minute: climb.minute,
+          disclosure: newDisclosure(),
+          over: climb.over,
+          ownership: {
+            runId: crypto.randomUUID(),
+            heads: [],
+            fileOrigin: true,
+            sources: structuredClone(raw.castSources ?? []),
+          },
+        },
+      };
+    } else prepared = nativeFileSave(raw);
+    original = {
+      text,
+      sha256: await fileDigest(text),
+      ...(raw.ownership ? { ownership: structuredClone(raw.ownership) } : {}),
+    };
+  }
+  await validateFileSources(prepared.save, original.ownership);
+  prepared.save.ownership = { ...prepared.save.ownership!, heads: [], fileOrigin: true };
+  // Measure the actual complete envelope before play. The original bytes are retained once.
+  const measured = JSON.stringify({
+    format: 'rope-file-session/1',
+    original,
+    native: prepared.save,
+    current: {
+      ...exportClimb(
+        prepared.start,
+        prepared.climb,
+        FRAMEWORK_VERSION,
+        prepared.save.season.chapter,
+        prepared.save.season.past,
+      ),
+      castSources: prepared.save.ownership.sources,
+    },
+  });
+  finiteJSON(measured, SESSION_BYTES);
+  if (!raw.format && new TextEncoder().encode(measured).byteLength > FILE_BYTES)
+    throw new Error('This file leaves insufficient space for a complete session export.');
+  return { ...prepared, original };
 }
