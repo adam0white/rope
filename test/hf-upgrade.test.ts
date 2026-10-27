@@ -60,6 +60,14 @@ it.each([
   for (let i = 0; i < 30; i++) step(climb);
   const exported = exportClimb(season.start ?? '', climb, FRAMEWORK_VERSION, chapter);
   expect(snapshot(replayExport(exported))).toBe(exported.state);
+  const compact = JSON.parse(JSON.stringify(exported));
+  const continued = replayExport(compact);
+  step(continued);
+  step(climb);
+  expect(snapshot(continued)).toBe(snapshot(climb));
+  const { revision: _claimRevision, ...claimBody } = claim;
+  const wrongClaim = await createPersona({ ...claimBody, limitations: ['Replaced source history.'] });
+  expect(() => newSeason(4, { ...chapter, claims: [wrongClaim] })).toThrow(/claim/);
   for (const [key, value] of [
     ['engine', '2.22.0'],
     ['id', 'somebody-else'],

@@ -6,6 +6,7 @@ import { type ClimbState, MOUNTAINS, queueInput, snapshot, step } from '../src/s
 import { exportClimb, newSeason, replayExport, type SeasonState } from '../src/sim/season.ts';
 import type { Continuity } from '../src/ui/continuity.ts';
 import { Game } from '../src/ui/game.ts';
+import { RopeStage } from '../src/ui/stage.ts';
 
 const shelf = vi.hoisted(() => ({
   ready: Promise.resolve(true),
@@ -566,4 +567,24 @@ it('never adopts foreign bytes during predecessor teardown', async () => {
   next.save();
   replacement.destroy();
   expect(localStorage.getItem('rope.save.cast.v1')).toBe('foreign');
+});
+
+it('moves overlay boundary with measured header typography and releases it on teardown', () => {
+  const root = query('#app');
+  root.innerHTML =
+    '<div class="top">A complete header</div><div class="scene"></div><div class="sheet"></div><div class="leader-bar"></div>';
+  const top = root.querySelector<HTMLElement>('.top')!;
+  let height = 80;
+  vi.spyOn(top, 'getBoundingClientRect').mockImplementation(() => ({ height }) as DOMRect);
+  const stage = new RopeStage(root, () => {});
+  stage.show('answers');
+  expect(root.style.getPropertyValue('--rope-top-height')).toBe('80px');
+  height = 140;
+  window.dispatchEvent(new Event('resize'));
+  expect(root.style.getPropertyValue('--rope-top-height')).toBe('140px');
+  stage.destroy();
+  expect(root.style.getPropertyValue('--rope-top-height')).toBe('');
+  height = 180;
+  window.dispatchEvent(new Event('resize'));
+  expect(root.style.getPropertyValue('--rope-top-height')).toBe('');
 });

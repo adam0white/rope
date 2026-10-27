@@ -1647,3 +1647,76 @@ body {
 .privacy-debug summary {
   cursor: pointer;
 }
+
+/* The live stage allocates the complete header and a stable two-line status slot.
+   Font changes may resize these rows; clock/status words must not move the mountain. */
+#app {
+  --rope-top-height: 44px;
+}
+@media (min-height: 501px) {
+  #app[data-sheet-id] {
+    grid-template-rows: max-content max-content minmax(0, 1fr) minmax(216px, 34%) 104px;
+  }
+  #app[data-sheet-id][data-screen="hut"] {
+    grid-template-rows: max-content max-content minmax(0, 1fr) 0 0;
+  }
+  #app[data-sheet-id] .top {
+    min-height: 44px;
+  }
+  #app[data-sheet-id] .where {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    min-block-size: 1lh;
+    font-variant-numeric: tabular-nums;
+    align-content: center;
+  }
+  #app[data-sheet-id] .top > button {
+    height: auto;
+    min-height: 44px;
+    line-height: 1.2;
+    align-self: center;
+    padding-block: 2px;
+  }
+  #app[data-sheet-id] .top .menu-trigger {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 44px;
+    padding-inline: 6px;
+  }
+  #app[data-sheet-id] .day-strip {
+    height: auto;
+    min-height: 36px;
+    align-self: stretch;
+  }
+  #app[data-sheet-id] .clock-rate {
+    display: block;
+    min-block-size: 2lh;
+    align-content: center;
+  }
+}
+#app .menu-backdrop,
+#app .info-backdrop,
+#app .page:not(.page-hut) {
+  top: var(--rope-top-height);
+}
+@media (min-width: 760px) and (min-height: 501px) {
+  #app {
+    --rope-top-height: 56px;
+  }
+  #app[data-sheet-id] {
+    grid-template-rows: max-content max-content minmax(0, 1fr) minmax(100px, auto);
+  }
+  #app[data-sheet-id][data-screen="hut"] {
+    grid-template-rows: max-content max-content minmax(0, 1fr) 0;
+  }
+  #app[data-sheet-id] .top {
+    min-height: 56px;
+  }
+  #app[data-sheet-id] .where {
+    min-block-size: 1lh;
+  }
+  #app[data-sheet-id] .top .menu-trigger {
+    min-width: 76px;
+  }
+}

@@ -5,7 +5,19 @@
 - **Host versus HF.** The host builds honest offers (what a leg costs, how risky it is now, what it advertises) and the world (weather, slips, ropes). HF decides and voices. The game never writes a refusal. Where HF lacks a faculty, the host does not fake it; see `hf-requests.md`.
 - **Leader pace.** Going up, you wait mid-leg when the nearest person behind falls out of earshot. That is the player's own body, kept in the host.
 
+## Current source authority (2026-10-27)
+
+[HANDOFF.md](../HANDOFF.md) records exact delivery through `ba0cbc4`, source/main CI, clean live manifest and qualified receipts. Public controls (`1c2fed8`), complete source archive retention (`78170c1`) and public file-entry/SDK preservation (`ba0cbc4`) are delivered. HF remains3.0.0/engine2.23.0; client0.4.15/kit0.5.17. Historical optional/query-gated wording does not govern ordinary current gameplay. Source delivery and synthetic compatibility do not establish owner-profile safety, publication/admission/claim, receipt/ACK, ingestion or player feel.
+
+## Receiving integrity and enlarged text (2026-10-27)
+
+The ba0cbc4 reproduction admitted a rechecksummed receiving claim with replaced inherited limitations while parent and complete state stayed unchanged. Current source compares the complete SDK15 parent-to-claim transformation, including all inherited fields. Actual public-SDK valid claims and supported historical/current Commonstead sources retain exact replay; false claims refuse. Actual built-App rejection preserves the whole previous run/source packet, valid retry retains the original limitations and bytes, and compact JSON-wrapper reimport remains exact.
+
+The pre-repair actual App let per-element font2x clock/status text cross the fixed header at360×690 and1280×800. Current source gives full wrapped context and stable status space their actual rows, uses stable clock digits, and measures the top boundary for overlays. Actual App normal/font2x controls retain full answer text and its scroll-reachable final line, with stable map/leader rectangles as clock/status words vary. Separate actual file-page root16/root32 checks pass complete retained export and real nonzero-notice/Resume reachability at both sizes. Neither font control is native page zoom or a whole-game/player acceptance result. Exact RED/GREEN and delivery receipts are under `~/code/.lab-scratch/games-deferred/gd-resume-goodhands-rope-closeout-rope-`.
+
 ## Deferred (with targets)
+
+- **Source-owner contract/runtime evidence, review2026-10-30:** SDK15 publishes prepare/put helpers but no exact owned-departure/receiver-ACK binding. Finite native Rope/Commonstead Oskar admission is present; unsupported dialects cannot borrow provenance. Actual owner-profile/active-SW preservation, live ownership/claim, stored ACK/retirement and ingestion remain unproved and distinct. No owner/profile/queue actions are authorized here.
 
 - Adam accepts feel and readiness on 2026-11-03. His exact old screen/page sequence for `r-4sha5x28jz` remains unavailable: the export contains no navigation log. Existing ending and journal-return regressions cover the reproduced trap; they cannot reconstruct unseen navigation. Source: owner report 2026-10-20.
 - Camp conversation through Workers AI waits for actual owner/player judgment that the core is fun (input gate, review 2026-11-03). Inference is off. The labelled deterministic journal fallback runs without a network request. The existing Worker cap, kill switch and $5 total budget remain for any later authorized prototype. This task makes no model calls.
@@ -61,7 +73,7 @@ The UI follows the lab layout grammar: a single top bar, daylight strip, mountai
 
 Send word uses lab-client 0.2.1. It respects an explicit recording opt-out, requires consent for an unlinked run under a browser privacy signal, and remembers an optional submitted name under `hf-lab-feedback-name`. Downloads retain the existing playtest export. The simulation, HF 2.8.0 pin, save shape and replay rules remain unchanged. Adam accepts feel after retesting.
 
-## Public controls and continuity (2026-10-27 candidate)
+## Delivered public controls and continuity (2026-10-27, `1c2fed8`)
 
 Pace controls are public. Run diagnostics start collapsed beside Lab privacy. Cast inspection and experiments link to the central shelf. Fresh seasons enable the released persona channel before preparing the cast transactionally. Claims, parent checks, source admission and cancellation remain in the released contracts. Loaded seasons retain pinned actors. The old cast panel and its alternate import handler are removed; imports use the separate file session.
 
