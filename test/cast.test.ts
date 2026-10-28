@@ -4,7 +4,13 @@ import {
   knockDown,
   snapshot as personSnapshot,
 } from '@adam0white/human-framework';
-import { createPersona, initialPersonaLife, preparePersonaLife } from '@adam0white/lab-client';
+import {
+  claimCastChapterBatch,
+  createPersona,
+  initialPersonaLife,
+  type PersonaRequest,
+  preparePersonaLife,
+} from '@adam0white/lab-client';
 import { expect, it } from 'vitest';
 import { queueInput, snapshot, step } from '../src/sim/climb.ts';
 import { CAST, castIdOf, createParty } from '../src/sim/party.ts';
@@ -131,3 +137,38 @@ function required<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) throw new Error('Missing test control value');
   return value;
 }
+
+// A claim checksum alone must not permit rewriting the pinned source's inherited limitations.
+it('accepts the public SDK claim and rejects rechecksummed replacement source limitations', async () => {
+  const { envelope } = await source('oskar');
+  const original = JSON.stringify(envelope);
+  const input = preparePersonaLife(envelope, 20 * 3600000);
+  const initial = Object.fromEntries(openingParty(8).map((p) => [p.id, p]));
+  initial.oskar = admitClimber(input, required(initial.oskar));
+  const result = await claimCastChapterBatch(
+    {
+      async request<T>(request: PersonaRequest): Promise<T> {
+        if (request.action === 'prepareBatch')
+          return {
+            expectedHeads: { [envelope.castId]: envelope.revision },
+            inputs: [input],
+            blocked: [],
+          } as T;
+        if (request.action === 'putBatch') return {} as T;
+        throw new Error('Unexpected public claim request.');
+      },
+    },
+    [envelope.castId],
+    { game: 'rope', build: 'control', engine: ENGINE_VERSION, rules: RULES },
+    async () => initial,
+  );
+  if (!result) throw new Error('Missing SDK claim.');
+  const chapter = { version: DIALECT as typeof DIALECT, ...result };
+  const valid = newSeason(8, chapter);
+  const exported = exportClimb(required(valid.season.start), valid.climb, ENGINE_VERSION, chapter);
+  expect(snapshot(replayExport(exported))).toBe(exported.state);
+  const { revision: _revision, ...claim } = required(chapter.claims[0]);
+  const changed = await createPersona({ ...claim, limitations: ['A replacement source limitation.'] });
+  expect(() => newSeason(8, { ...chapter, claims: [changed] })).toThrow(/claim/);
+  expect(JSON.stringify(envelope)).toBe(original);
+});

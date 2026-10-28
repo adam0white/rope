@@ -3,6 +3,15 @@ import { type PhoneStage, phoneStage, type SheetHeight } from '@adam0white/lab-k
 /** Shared measurement only. Rope owns layout, navigation, focus and sheet content. */
 export class RopeStage {
   private controller: PhoneStage;
+  private headerObserver: ResizeObserver;
+
+  // Overlay pages share the actual top boundary; typography never gets hidden to fit it.
+  private measureHeader = () => {
+    const top = this.root.querySelector<HTMLElement>('.top');
+    const height = top?.getBoundingClientRect().height ?? 0;
+    if (height > 0) this.root.style.setProperty('--rope-top-height', `${height}px`);
+    this.controller.refresh();
+  };
 
   constructor(root: HTMLElement, resize: (width: number, height: number) => void) {
     this.root = root;
@@ -16,6 +25,10 @@ export class RopeStage {
         if (width > 0 && height > 0) resize(width, height);
       },
     });
+    this.headerObserver = new ResizeObserver(this.measureHeader);
+    const top = root.querySelector('.top');
+    if (top) this.headerObserver.observe(top);
+    window.addEventListener('resize', this.measureHeader);
   }
 
   private root: HTMLElement;
@@ -24,10 +37,13 @@ export class RopeStage {
     this.root.dataset.sheetId = id;
     this.root.dataset.sheet = height;
     this.root.dataset.sheetBack = String(id !== 'main');
-    this.controller.refresh();
+    this.measureHeader();
   }
 
   destroy(): void {
+    this.headerObserver.disconnect();
+    window.removeEventListener('resize', this.measureHeader);
+    this.root.style.removeProperty('--rope-top-height');
     this.controller.destroy();
     delete this.root.dataset.sheetId;
     delete this.root.dataset.sheet;

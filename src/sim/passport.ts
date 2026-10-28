@@ -154,6 +154,20 @@ export function checkChapter(chapter: Chapter) {
       !same(claim.transfer, { ...input.parent.transfer, life: input.life })
     )
       throw new Error('The saved claim to this person’s history does not match its required record.');
+    // SDK15 claimCastChapterBatch inherits the complete pinned parent body. Only the
+    // receiving source, parent revision and prepared life change; checksum validation alone
+    // cannot establish this relationship. Keep unknown supported inherited fields exact too.
+    const { revision: parentRevision, ...parentBody } = input.parent;
+    const { revision: _claimRevision, ...claimBody } = claim;
+    if (
+      !same(claimBody, {
+        ...parentBody,
+        parentRevision,
+        source: claim.source,
+        transfer: { ...parentBody.transfer, life: input.life },
+      })
+    )
+      throw new Error('The saved claim changed its pinned source passport.');
   }
 }
 
