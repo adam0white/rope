@@ -162,7 +162,9 @@ it('offers public pacing and collapsed run diagnostics beside privacy without ca
   const debug = query('[data-debug]') as HTMLDetailsElement;
   expect(debug.open).toBe(false);
   expect(debug.parentElement?.querySelector('a')?.textContent).toBe('Lab privacy');
-  expect(debug.querySelector('[data-debug-export]')).not.toBeNull();
+  expect(debug.querySelector('[data-menu-export]')).toBeNull();
+  expect(query('[data-menu-export]')).not.toBeNull();
+  expect(debug.querySelector('a, button')).toBeNull();
   expect(document.querySelector('[data-menu-people], [data-continuity], [data-fork]')).toBeNull();
   expect(query('[data-cast-shelf]').getAttribute('href')).toBe('https://human.adamwhite.work/lab/people/');
 });
@@ -296,7 +298,12 @@ it('a failed real admission keeps the saved season and ownership, without silent
   );
   expect(localStorage.getItem('rope.save.cast.v1')).toBe(saved);
   expect(game.continuity.ownership()).toEqual(ownership);
-  expect(document.querySelector('.page-title details')?.textContent).toContain('Shelf unavailable');
+  expect(document.querySelector('.page-title details')).toBeNull();
+  tap('.menu-trigger');
+  const debug = query('[data-debug]') as HTMLDetailsElement;
+  expect(debug.open).toBe(false);
+  expect(debug.textContent).toContain('Shelf unavailable');
+  tap('[data-menu-close]');
   expect(document.querySelector('[data-local]')).toBeNull();
   expect(document.querySelector('[data-retry]')).not.toBeNull();
   shelf.enabled = false;

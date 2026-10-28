@@ -16,7 +16,6 @@ import { type NewInput, queueInput, replay, snapshot, step } from '../src/sim/cl
 import { type Branch, debrief } from '../src/sim/debrief.ts';
 import { admitClimber, DIALECT, RULES } from '../src/sim/passport.ts';
 import { exportClimb, newSeason, openingParty } from '../src/sim/season.ts';
-import { fileEntry } from '../src/ui/continuity.ts';
 import { newDisclosure } from '../src/ui/disclosure.ts';
 import { Game } from '../src/ui/game.ts';
 
@@ -656,13 +655,7 @@ function inspect(game: Game) {
   };
 }
 
-it('ambiguous file entry refuses before owned startup and no parameter retains exact owned Resume', async () => {
-  for (const query of ['?file=', '?file=0', '?file=1&file=1', '?file=1&file=2']) {
-    const { root } = await open(query);
-    expect(root.textContent).toContain('File mode could not start');
-    expect(fileEntry(query)).toBe('invalid');
-  }
-  expect(control.channels).toBe(0);
+it('native Resume retains the exact owned season', async () => {
   localStorage.setItem('rope.save.cast.v1', fixture);
   const native = await open('');
   native.root.querySelector<HTMLButtonElement>('[data-a="continue"]')?.click();
@@ -937,7 +930,7 @@ it('file page declares scoped 44px input label and selector-button targets', asy
 });
 
 it('pagehide cancels the selected file before installation without disposing active SDK capture', async () => {
-  const { root, game } = await open('?file=1');
+  const { root, game } = await open('/file/');
   let finish!: (bytes: ArrayBuffer) => void;
   const file = new NodeFile([fixture], 'late.json');
   vi.spyOn(file, 'arrayBuffer').mockImplementation(
