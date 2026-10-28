@@ -343,9 +343,7 @@ export type Ownership = {
   sources: SourceArchive[];
 };
 
-/** Resolve before any owner key or Shelf construction. Supplied ambiguous modes never fall back. */
-export function fileEntry(search: string, pathname = '/'): 'native' | 'file' | 'invalid' {
-  const values = new URLSearchParams(search).getAll('file');
-  if (values.length && (values.length !== 1 || values[0] !== '1')) return 'invalid';
-  return values.length || pathname === '/file/' || pathname === '/file' ? 'file' : 'native';
+/** Only the protected path selects a file session. */
+export function fileEntry(pathname: string): 'native' | 'file' {
+  return pathname === '/file/' || pathname === '/file' ? 'file' : 'native';
 }

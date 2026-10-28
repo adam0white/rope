@@ -31,7 +31,7 @@ The input log records these rules. Existing tapes keep their recorded behavior. 
 
 The game saves automatically in this browser during play and when the page is hidden or left. **Resume** on the title page reconstructs an unfinished saved season. Browser storage must be available; clearing it removes the local save. Saves from an incompatible edition may not load.
 
-**Menu → Playback speed** offers Auto, Slow, Normal and Fast. **Debug**, beside **Lab privacy**, starts collapsed and contains a run download, a link to the separate file-session importer and the title page. File sessions keep progress in memory and require a download before closing. They preserve the native saved season and acquire no browser-history ownership.
+**Menu → Playback speed** offers Auto, Slow, Normal and Fast. The menu offers a run download, the separate file-session importer and the title page. **Debug**, beside **Lab privacy**, starts collapsed and shows diagnostic version information. File sessions keep progress in memory and require a download before closing. They preserve the native saved season and acquire no browser-history ownership.
 
 Fresh seasons automatically prepare shared people through the released browser shelf contract. Failed admission preserves your saved season. **People in this browser** opens the central shelf for cast controls. End screens also link there. Loaded seasons retain pinned actors.
 

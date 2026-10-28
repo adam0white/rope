@@ -114,13 +114,14 @@ export class Game {
   private current(): boolean {
     return !this.disposed && Game.owners.get(this.root) === this;
   }
-  private readonly entry = fileEntry(location.search, location.pathname);
+  private readonly entry = fileEntry(location.pathname);
   private continuity = new Continuity(lab!, this.entry === 'native' ? personaChannel() : null);
   private originalFile: { text: string; sha256: string; ownership?: Ownership } | null = null;
   private fileGeneration = 0;
   private recordingGeneration = 0;
   private recordingBlocked = false;
   private starting = false;
+  private startupError = '';
   private root: HTMLElement;
   private noticeFooter = h('footer', 'recording-footer');
   private scene = new Scene();
@@ -201,10 +202,6 @@ export class Game {
     this.booted = true;
     await document.fonts?.ready;
     if (!this.current()) return;
-    if (this.entry === 'invalid') {
-      this.filePage();
-      return;
-    }
     const info = h('button', 'top-info', 'i');
     info.setAttribute('aria-label', 'About this part of the climb');
     info.onclick = () => this.openInfo();
@@ -424,6 +421,7 @@ export class Game {
       const seed = (Date.now() % 1_000_000_007) | 0;
       const { season, climb } = await this.continuity.fresh(seed);
       if (!this.current()) return;
+      this.startupError = '';
       this.season = season;
       this.disc = newDisclosure();
       this.begin(climb, season.start ?? snapshot(climb));
@@ -431,8 +429,9 @@ export class Game {
     } catch (error) {
       if (!this.current()) return;
       console.error('Season start failed', error);
+      this.startupError = String(error);
       this.openPage(
-        `<div class="page-body"><h1>The season has not begun</h1><p>The game could not start this season. Your saved season has not been replaced.</p><p>Try again, or send Feedback if this keeps happening.</p><details><summary>Debug</summary><pre>${esc(String(error))}</pre></details></div><div class="page-actions"><button class="btn" data-retry>Try again</button><button class="btn" data-back>Back</button><button class="btn" data-word>Feedback</button></div>`,
+        `<div class="page-body"><h1>The season has not begun</h1><p>The game could not start this season. Your saved season has not been replaced.</p><p>Try again, or send Feedback if this keeps happening.</p></div><div class="page-actions"><button class="btn" data-retry>Try again</button><button class="btn" data-back>Back</button><button class="btn" data-word>Feedback</button></div>`,
         (el) => {
           el.querySelector('[data-retry]')?.addEventListener('click', () => void this.newGame());
           el.querySelector('[data-back]')?.addEventListener('click', () => this.titlePage());
@@ -1965,7 +1964,7 @@ export class Game {
     const menu = h(
       'div',
       'menu-backdrop',
-      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div><a class="menu-link" data-cast-shelf href="https://human.adamwhite.work/lab/people/">People in this browser</a><fieldset class="menu-pacing"><legend>Playback speed</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset><div class="privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a><details data-debug><summary>Debug</summary><p>Human Framework ${FRAMEWORK_VERSION}</p><button class="btn" data-debug-export ${this.climb ? '' : 'disabled'}>Download this run</button><a class="menu-link" href="/file/">Open a run file</a><button class="btn" data-menu-title>Title page</button></details></div></div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
+      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div><a class="menu-link" data-cast-shelf href="https://human.adamwhite.work/lab/people/">People in this browser</a><fieldset class="menu-pacing"><legend>Playback speed</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset><button class="btn" data-menu-export ${this.climb ? '' : 'disabled'}>Download this run</button><a class="menu-link" href="/file/">Open a run file</a><button class="btn" data-menu-title>Title page</button><div class="privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a><details data-debug><summary>Debug</summary><p>Human Framework ${FRAMEWORK_VERSION}</p>${this.startupError ? `<pre>${esc(this.startupError)}</pre>` : ''}</details></div></div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
     );
     const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => {
@@ -2000,7 +1999,7 @@ export class Game {
       close();
       this.journalPage();
     });
-    menu.querySelector('[data-debug-export]')?.addEventListener('click', () => this.exportRun());
+    menu.querySelector('[data-menu-export]')?.addEventListener('click', () => this.exportRun());
     menu.querySelector('[data-menu-send]')?.addEventListener('click', () => {
       close();
       this.feedbackPage();
@@ -2276,14 +2275,6 @@ export class Game {
   }
 
   private filePage(): void {
-    if (this.entry === 'invalid') {
-      this.openPage(
-        '<div class="page-body"><h1>File mode could not start</h1><p>The file selector is invalid or repeated. Open /file/ without a file selector. No season was opened.</p></div>',
-        undefined,
-        'title',
-      );
-      return;
-    }
     const recording = this.recordingAllowed();
     this.openPage(
       `<div class="page-body file-controls"><h1>Choose a Rope file</h1><p>Progress stays in memory. Download before closing or reloading. Reloading opens this chooser.</p><p>This mode keeps the host’s native season separate. Lab recording and an already active service worker have separate preservation limits.</p><div data-recording></div><p data-file-recording-status>${recording ? 'Recording follows your current privacy and Recording choices.' : 'Recording is unavailable because the existing local Lab session could not be preserved. You can play in memory.'}</p><label data-file-label>${this.climb ? 'Choose another file' : 'Choose a file'}<input type="file" accept="application/json" data-file-input></label><p data-file-status role="status"></p></div><div class="page-actions">${this.climb ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-resume>Resume current file</button>' : ''}</div>`,

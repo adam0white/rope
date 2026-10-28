@@ -63,15 +63,10 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-it('classifies the public path and refuses ambiguous legacy selectors on every path', () => {
-  expect(fileEntry('', '/file/')).toBe('file');
-  expect(fileEntry('', '/file')).toBe('file');
-  expect(fileEntry('', '/')).toBe('native');
-  expect(fileEntry('?file=1', '/')).toBe('file');
-  for (const path of ['/', '/file/']) {
-    expect(fileEntry('?file=0', path)).toBe('invalid');
-    expect(fileEntry('?file=1&file=1', path)).toBe('invalid');
-  }
+it('selects preservation only from the protected path', () => {
+  expect(fileEntry('/file/')).toBe('file');
+  expect(fileEntry('/file')).toBe('file');
+  expect(fileEntry('/')).toBe('native');
 });
 
 it('starts the real preserving client under OFF without changing existing native data', async () => {
@@ -87,19 +82,30 @@ it('starts the real preserving client under OFF without changing existing native
   expect({ ...localStorage }).toEqual(before);
 });
 
-it('canonicalizes valid legacy entry before the SDK factory and leaves invalid entry inert', async () => {
-  history.replaceState(null, '', '/?file=1&labRunSource=agent#kept');
-  await import('../src/ui/lab.ts');
-  expect(location.pathname).toBe('/file/');
-  expect(location.search).toBe(''); // the public SDK consumes its attribution selector
-  expect(location.hash).toBe('#kept');
-  vi.resetModules();
-  control.options = [];
-  history.replaceState(null, '', '/?file=1&file=1');
-  const invalid = await import('../src/ui/lab.ts');
-  expect(invalid.startupEntry).toBe('invalid');
-  expect(invalid.lab).toBeNull();
+it('redirects old file addresses to the protected path before creating the SDK client', async () => {
+  const { legacyFileDestination, startAtAddress } = await import('../src/ui/file-route.ts');
+  const redirect = vi.fn();
+  const boot = vi.fn();
+  startAtAddress(new URL('/?file=1', location.href).href, redirect, boot);
+  expect(redirect).toHaveBeenCalledOnce();
+  expect(boot).not.toHaveBeenCalled();
+  for (const address of ['/?file=1', '/?file=0', '/?file=1&file=1']) {
+    const destination = legacyFileDestination(new URL(address, location.href).href);
+    if (!destination) throw new Error('Missing redirect');
+    expect(new URL(destination).pathname).toBe('/file/');
+    expect(new URL(destination).searchParams.has('file')).toBe(false);
+  }
   expect(control.options).toEqual([]);
+  expect(legacyFileDestination(new URL('/file/', location.href).href)).toBeNull();
+});
+
+it('redirects the actual entry document without loading the game or SDK', async () => {
+  const replace = vi.fn();
+  vi.stubGlobal('location', { href: 'https://rope.example/?file=1&other=kept#part', replace });
+  await import('../src/main.ts');
+  expect(replace).toHaveBeenCalledWith('https://rope.example/file/?other=kept#part');
+  expect(control.options).toEqual([]);
+  expect(document.querySelector('.menu-trigger')).toBeNull();
 });
 
 it('disposes real blocked clients before host tracking, including unknown future statuses', async () => {
@@ -130,7 +136,7 @@ it('boots the actual public App chooser without native storage or Shelf effects'
   const register = vi.fn();
   const originalSW = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
   Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { register } });
-  await import('../src/main.ts');
+  await import('../src/boot.ts');
   await vi.advanceTimersByTimeAsync(0);
   expect(document.body.textContent).toContain('Choose a Rope file');
   expect(document.querySelector('iframe')).toBeNull();
