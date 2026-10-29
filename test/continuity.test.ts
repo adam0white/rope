@@ -1,3 +1,5 @@
+import { FRAMEWORK_VERSION } from '../src/sim/hf4.ts';
+
 vi.mock('@adam0white/lab-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@adam0white/lab-client')>()),
   portableWriteBlockers: vi.fn(() => []),
@@ -88,7 +90,7 @@ it('title construction performs no claim; Begin preflights all five expected abs
   expect(claims?.expectedHeads).toEqual(
     Object.fromEntries(requests.slice(0, 5).map((r) => [r.castId, null])),
   );
-  expect(claims?.envelopes?.every((p) => p.source.engine === '4.8.1')).toBe(true);
+  expect(claims?.envelopes?.every((p) => p.source.engine === FRAMEWORK_VERSION)).toBe(true);
   expect(state.climb.people).toHaveLength(5);
 });
 it('local reload keeps pinned actors and performs no latest-shelf read; file saves retain nonownership', async () => {

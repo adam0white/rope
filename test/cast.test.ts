@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { archiveOf } from '../src/sim/hf4.ts';
+import { archiveOf, FRAMEWORK_VERSION } from '../src/sim/hf4.ts';
 import { CAST, castIdOf, createParty } from '../src/sim/party.ts';
 import { climberTransfer } from '../src/sim/passport.ts';
 import { newSeason } from '../src/sim/season.ts';
@@ -107,7 +107,7 @@ it('maps an explicitly authored current foreign biography as historical places a
     castRevision: '1',
     branchId: 'authored-foreign-control',
     parentRevision: null,
-    source: { game: 'commonstead', build: 'authored-control', engine: '4.8.1', rules: RULES },
+    source: { game: 'commonstead', build: 'authored-control', engine: FRAMEWORK_VERSION, rules: RULES },
     transfer: { castPassport: 'hf-portable-person/2', portable: part.value },
     limitations: ['This source biography was explicitly authored, not played movement.'],
   });

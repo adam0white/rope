@@ -8,7 +8,7 @@ You lead five Human Framework (HF) people up a mountain and back. Every one of t
 
 ## Rules
 
-- HF comes only from npm: `@adam0white/human-framework@4.8.1`, exact. Never import sibling source. No game logic goes into HF. A generic HF gap goes into [docs/hf-requests.md](docs/hf-requests.md).
+- HF comes only from npm: `@adam0white/human-framework@4.10.0`, exact. Never import sibling source. No game logic goes into HF. A generic HF gap goes into [docs/hf-requests.md](docs/hf-requests.md).
 - Never fake a verdict. Every refusal, deferral or counter-offer comes from an HF resolution (public Run decision events for actual suggestion inputs).
 - Private condition and trust are not observations. Show actual movement, dated injuries and recorded words. Say when current condition is unavailable.
 - All world randomness is keyed by (seed, kind, place, minute) through `hashUnit`, never by draw order. HF owns person randomness and archives it. Seed + input log + start state is the replay, the playtest export and the debrief substrate.

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { snapshot, step } from '../src/sim/climb.ts';
+import { FRAMEWORK_VERSION } from '../src/sim/hf4.ts';
 import { newSeason } from '../src/sim/season.ts';
 import { Game } from '../src/ui/game.ts';
 
@@ -65,7 +66,7 @@ it('pauses native play until the full current archive is durably saved', async (
   await d.flushSave();
   const saved = JSON.parse(localStorage.getItem('rope.save.cast.v1')!);
   expect(saved.v).toBe(2);
-  expect(saved.engine).toBe('4.8.1');
+  expect(saved.engine).toBe(FRAMEWORK_VERSION);
   expect(saved.state).toBe(snapshot(climb));
   expect(d.saving).toBe(false);
   expect(d.sheet.inert).toBe(false);

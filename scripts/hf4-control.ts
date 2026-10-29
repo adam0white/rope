@@ -1,3 +1,4 @@
+import { readRunHistory } from '@adam0white/human-framework';
 /** Technical public-HF control. No browser, model calls or private actor mutation. */
 
 import { performance } from 'node:perf_hooks';
@@ -45,7 +46,7 @@ console.log(
       0.95,
     ),
     framesOver10ms: frames.filter((f) => f.wallMs > 10).length,
-    transactions: initial.history.length,
+    transactions: readRunHistory(initial).length,
     bytes: Buffer.byteLength(snapshot(climb)),
     path: climb.members.find((m) => m.id === 'oskar')!.path,
   }),
@@ -73,7 +74,7 @@ console.log(
     to: target,
     elapsedMs: replayStarted - valleyStarted,
     cpuMs: valleyCpuMs,
-    transactions: full.history.length,
+    transactions: readRunHistory(full).length,
     archiveBytes: Buffer.byteLength(JSON.stringify(full)),
     stateBytes: Buffer.byteLength(serialized),
     fullHash: full.hashes.full,

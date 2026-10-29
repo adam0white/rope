@@ -1,4 +1,4 @@
-import { replay as replayHF } from '@adam0white/human-framework';
+import { readRunHistory, replay as replayHF } from '@adam0white/human-framework';
 import { expect, it } from 'vitest';
 import { advanceFrame, drainAdvance, restore, snapshot } from '../src/sim/climb.ts';
 import { archiveOf, enqueue } from '../src/sim/hf4.ts';
@@ -20,7 +20,7 @@ it('admits a new host observation after a pending resolution and preserves cold 
   expect(snapshot(resumed)).toBe(snapshot(climb));
   const archive = archiveOf(climb);
   expect(
-    archive.history
+    readRunHistory(archive)
       .flatMap((tx) => tx.inputs)
       .some(
         (input) => input.kind === 'context.received' && input.payload.evidenceId === 'boundary-observation',

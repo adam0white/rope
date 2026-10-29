@@ -1,6 +1,6 @@
 /** Current public host intake/voiding control. No browser, model or shelf. */
 import assert from 'node:assert/strict';
-import { replay as replayHF } from '@adam0white/human-framework';
+import { readRunHistory, replay as replayHF } from '@adam0white/human-framework';
 import { queueInput, replay, snapshot, startClimb, step } from '../src/sim/climb.ts';
 import { archiveOf, FRAMEWORK_VERSION, readBladder } from '../src/sim/hf4.ts';
 
@@ -9,7 +9,7 @@ const start = snapshot(climb);
 queueInput(climb, { t: 'say', to: 'oskar', act: 'drink', force: 'ask' });
 for (let i = 0; i < 600 && !climb.over; i++) step(climb);
 const archive = archiveOf(climb);
-const completed = archive.history
+const completed = readRunHistory(archive)
   .flatMap((tx) => tx.inputs)
   .filter(
     (input) =>

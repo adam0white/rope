@@ -37,3 +37,10 @@ The requests above record historical evidence.
 ## HF4 reconciliation (2026-10-28)
 
 The HF3 API descriptions above are historical. Current source uses published HF4.8.1 Run inputs, requests, receipts and full archives. There are no optional physiology faculties, manual trust writes or private body-based presentation. Retained place/voice references admit through honest initial world facts. Current controls establish no G2 or G6 blocker. G4 remains the broader public observation/projection need; this port explicitly says current condition is unavailable rather than exposing privileged truth. No HF edit or new framework gap is claimed.
+
+
+## HF4 phrasebook verdicts and reasons (coordinator 2026-10-29T12:30Z)
+
+Confirmed in published HF4.10.0: `suggestion.resolved` requires `{verdict}` and does not accept authored verdict predicates or reason sentences. Rope cannot submit its six meaning-specific tables directly. The coordinator approved a temporary host adapter using the recorded suggestion event’s wording index; see `docs/design.md`.
+
+Framework item: HF 4.x phrasebooks accept game-authored verdict predicates and reason sentences as an ordinary faculty, following HF4.0 “game requests become ordinary faculties”. Target: next HF minor after 4.11; checkpoint 2026-11-03. Remove Rope’s adapter when it ships. No framework source is changed here.

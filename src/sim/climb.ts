@@ -18,6 +18,7 @@ import {
   createClimbRun,
   enqueue,
   type FollowOn,
+  FRAMEWORK_VERSION,
   MINUTE,
   type Outcome,
   type Percept,
@@ -743,7 +744,17 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
       delete memberState(s, who).gather;
     }
   }
-  const own = voiced(s.seed, who, s.minute, r.verdict, r.says, r.reason, r.chosenAction, r.chosenLabel);
+  const own = voiced(
+    s.seed,
+    who,
+    s.minute,
+    r.verdict,
+    r.says,
+    r.reason,
+    r.chosenAction,
+    r.chosenLabel,
+    r.choiceIndex,
+  );
   const says = withCause(
     s,
     who,
@@ -2504,7 +2515,11 @@ export const snapshot = (s: ClimbState): string =>
   canonicalPersona(JSON.parse(JSON.stringify({ ...s, hf: archiveOf(s) })));
 export const restore = (json: string): ClimbState => {
   const s = JSON.parse(json) as ClimbState;
-  if (!s.hf || s.castEdition !== 'rope-hf4-1')
+  if (
+    !s.hf ||
+    s.castEdition !== 'rope-hf4-1' ||
+    s.hf.engine?.package !== `@adam0white/human-framework@${FRAMEWORK_VERSION}`
+  )
     throw Error('This saved climb uses an older simulation. Keep the file and start a fresh season.');
   syncReadings(s);
   return s;
@@ -2635,6 +2650,7 @@ export function makeWorld(s: ClimbState): World {
           says: '',
           chosenAction: selected?.action,
           chosenLabel: selected?.label,
+          choiceIndex: resolved.choiceIndex,
         };
         line(s, p.id, pending.input, answer);
         const switching =

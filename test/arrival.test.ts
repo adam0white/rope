@@ -1,7 +1,8 @@
+import { readRunHistory } from '@adam0white/human-framework';
 import { createPersona, initialPersonaLife, preparePersonaLife } from '@adam0white/lab-client';
 import { expect, it } from 'vitest';
 import { offersFor, queueInput, snapshot, step } from '../src/sim/climb.ts';
-import { archiveOf } from '../src/sim/hf4.ts';
+import { archiveOf, FRAMEWORK_VERSION } from '../src/sim/hf4.ts';
 import { castIdOf } from '../src/sim/party.ts';
 import { admitClimber, climberTransfer, DIALECT, RULES } from '../src/sim/passport.ts';
 import { exportClimb, newSeason, openingParty, replayExport } from '../src/sim/season.ts';
@@ -19,7 +20,7 @@ it('carries prepared life into a costed hut activity and a replayable journal', 
     castRevision: '1',
     branchId: 'arrival-test',
     parentRevision: null,
-    source: { game: 'rope', build: 'test', engine: '4.8.1', rules: RULES },
+    source: { game: 'rope', build: 'test', engine: FRAMEWORK_VERSION, rules: RULES },
     transfer: captured.transfer,
     limitations: captured.limitations,
   });
@@ -28,7 +29,7 @@ it('carries prepared life into a costed hut activity and a replayable journal', 
   const claim = await createPersona({
     ...body,
     parentRevision: parent.revision,
-    source: { game: 'rope', build: 'test', engine: '4.8.1', rules: RULES },
+    source: { game: 'rope', build: 'test', engine: FRAMEWORK_VERSION, rules: RULES },
     transfer: { ...parent.transfer, life: prepared.life, hostRun: 'test', portableClaim: { game: 'rope' } },
   });
   const initial = Object.fromEntries(
@@ -46,8 +47,8 @@ it('carries prepared life into a costed hut activity and a replayable journal', 
     true,
   );
   for (let i = 0; i < 10; i++) step(climb);
-  const receipts = archiveOf(climb).history.flatMap((t) => t.inputs);
-  const exported = exportClimb(season.start!, climb, '4.8.1', season.chapter);
+  const receipts = readRunHistory(archiveOf(climb)).flatMap((t) => t.inputs);
+  const exported = exportClimb(season.start!, climb, FRAMEWORK_VERSION, season.chapter);
   expect(snapshot(replayExport(exported))).toBe(exported.state);
   for (const [work, place, duration] of [
     ['local-help', 'public-garden', 4],
