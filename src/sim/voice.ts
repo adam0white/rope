@@ -131,6 +131,7 @@ export function voiced(
   _narration: string,
   reason = '',
   chosenAction = '',
+  chosenLabel?: string,
 ): string {
   const k = (n: number) => Math.floor(hashUnit(seed, 9101, minute, who.length, who.charCodeAt(0), 0) * n);
   const table =
@@ -148,7 +149,7 @@ export function voiced(
   const options = table[who];
   const words = options?.[k(options.length)] ?? 'I won’t agree to that.';
   // The chosen act is the alternative HF selected, not the requested act.
-  const act = ACT[chosenAction];
+  const act = ACT[chosenAction] ? chosenLabel || ACT[chosenAction] : undefined;
   const opening =
     table === AFTER || table === INSTEAD
       ? act

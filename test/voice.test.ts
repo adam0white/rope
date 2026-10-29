@@ -26,7 +26,7 @@ it('voices actual HF4 answers from their identities, including the deferred alte
   expect(climb.lines).toHaveLength(5);
   expect(climb.lines.some((l) => l.verdict === 'assented')).toBe(true);
   expect(climb.lines.some((l) => l.verdict === 'deferred')).toBe(true);
-  expect(climb.lines.find((l) => l.who === 'oskar')?.says).toContain('climb first');
+  expect(climb.lines.find((l) => l.who === 'oskar')?.says).toContain('climb the hut path first');
   for (const line of climb.lines) {
     expect(line.says).not.toMatch(/I will climb\.|need:|preference/);
     expect(line.says.length).toBeGreaterThan(5);

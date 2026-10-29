@@ -743,7 +743,7 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
       delete memberState(s, who).gather;
     }
   }
-  const own = voiced(s.seed, who, s.minute, r.verdict, r.says, r.reason, r.chosenAction);
+  const own = voiced(s.seed, who, s.minute, r.verdict, r.says, r.reason, r.chosenAction, r.chosenLabel);
   const says = withCause(
     s,
     who,
@@ -2623,15 +2623,18 @@ export function makeWorld(s: ClimbState): World {
           (e) => e.data.kind === 'decision' && e.data.decision.id === decisionId,
         );
         const result = resolved.data.resolution;
+        // Labels come from Rope's own offers, not the HF counter-offer narration.
+        const selected = s.hfOffers[p.id]?.offers.find(
+          (o) =>
+            o.id ===
+            (result.insteadAffordanceId ??
+              (event?.data.kind === 'decision' ? event.data.decision.chosenAffordanceId : undefined)),
+        );
         const answer = {
           ...result,
           says: '',
-          chosenAction: s.hfOffers[p.id]?.offers.find(
-            (o) =>
-              o.id ===
-              (result.insteadAffordanceId ??
-                (event?.data.kind === 'decision' ? event.data.decision.chosenAffordanceId : undefined)),
-          )?.action,
+          chosenAction: selected?.action,
+          chosenLabel: selected?.label,
         };
         line(s, p.id, pending.input, answer);
         const switching =

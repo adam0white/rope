@@ -143,6 +143,7 @@ export interface SuggestionResolution {
   verdict: 'assented' | 'complied' | 'deferred' | 'modified' | 'refused' | 'commanded';
   says: string;
   chosenAction?: string;
+  chosenLabel?: string;
   reason: string;
   kind?: string;
   counterOffer?: { affordanceId?: string; label: string };
