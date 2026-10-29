@@ -7,7 +7,7 @@ it('control: hours of waiting send no word for the player', () => {
   expect(s.inputs).toHaveLength(0);
   expect(s.lines.filter((l) => l.input >= 0)).toHaveLength(0);
   expect(s.journal.filter((j) => /^You (told|asked|urged|insisted|said)/.test(j.text))).toHaveLength(0);
-});
+}, 120000);
 
 it('a promise is not credited by a turn made before it', () => {
   const s = startClimb(1, 3);

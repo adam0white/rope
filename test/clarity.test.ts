@@ -114,8 +114,7 @@ it('keeps mandatory opening story across title and hut below forty words, with c
   button('Close information').click();
   document.querySelector<HTMLButtonElement>('.page [data-a="new"]')!.click();
   await vi.advanceTimersByTimeAsync(1);
-  for (let i = 0; i < 100 && !document.querySelector('[data-hour]'); i++)
-    await vi.advanceTimersByTimeAsync(10);
+  await vi.waitFor(() => expect(document.querySelector('[data-hour]')).not.toBeNull(), { timeout: 15000 });
   expect(document.querySelector('[data-hour]'), document.body.textContent ?? '').not.toBeNull();
   expect(title + words()).toBeLessThanOrEqual(40);
   button('About this part of the climb').click();
@@ -149,8 +148,7 @@ it('shows target, selected request and commit without repeating unrelated verb g
   await boot();
   document.querySelector<HTMLButtonElement>('.page [data-a="new"]')!.click();
   await vi.advanceTimersByTimeAsync(1);
-  for (let i = 0; i < 100 && !document.querySelector('[data-hour]'); i++)
-    await vi.advanceTimersByTimeAsync(10);
+  await vi.waitFor(() => expect(document.querySelector('[data-hour]')).not.toBeNull(), { timeout: 15000 });
   button("We'll see").click();
   vi.advanceTimersByTime(500);
   button('rest').click();

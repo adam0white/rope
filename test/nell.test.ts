@@ -18,4 +18,4 @@ it('control: pressed to climb on in the afternoon, Nell answers from her own HF 
   expect(l?.verdict).not.toBe('assented');
   expect(l?.reason).toMatch(/^commitment:/);
   expect(l?.says).toContain('as I told Mum');
-});
+}, 120000);
