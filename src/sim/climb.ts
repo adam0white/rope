@@ -612,6 +612,13 @@ export function offersFor(s: ClimbState, id: string, asking?: string): Affordanc
   const mem = memberState(s, id);
   const out: Affordance[] = [];
   const pos = mem.pos;
+  // A carried routine is a real, costed HF opportunity at the hut.
+  if (s.minute < mem.idleUntil && pos.place === m.hut)
+    return [
+      small('arrival-preparation', 'wait', 'prepare at the hut', mem.idleUntil - s.minute, {
+        belonging: 0.06,
+      }),
+    ];
   const home = pos.place === m.hut && mem.path.length === 0 && mem.high !== m.hut;
   if (pos.leg) {
     const lg = legOf(m, pos.leg);
@@ -736,15 +743,7 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
       delete memberState(s, who).gather;
     }
   }
-  const own = voiced(
-    s.seed,
-    who,
-    s.minute,
-    r.verdict,
-    r.says,
-    r.reason,
-    personOf(s, who).lexicon?.plainEnglish === true,
-  );
+  const own = voiced(s.seed, who, s.minute, r.verdict, r.says, r.reason, r.chosenAction);
   const says = withCause(
     s,
     who,
@@ -2626,7 +2625,13 @@ export function makeWorld(s: ClimbState): World {
         const result = resolved.data.resolution;
         const answer = {
           ...result,
-          says: (event?.narration ?? resolved.narration).map((l) => l.text).join(' ') || result.reason,
+          says: '',
+          chosenAction: s.hfOffers[p.id]?.offers.find(
+            (o) =>
+              o.id ===
+              (result.insteadAffordanceId ??
+                (event?.data.kind === 'decision' ? event.data.decision.chosenAffordanceId : undefined)),
+          )?.action,
         };
         line(s, p.id, pending.input, answer);
         const switching =
