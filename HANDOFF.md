@@ -1,3 +1,15 @@
+# HF4 port — 2026-10-28, candidate
+
+Remaining: finish current-pin checks, the one hosted Codex review, signed merge, exact merged CI, deployment and live release verification. Adam retains gameplay feel acceptance. This candidate is not the deployed game.
+
+Current source uses published HF4.8.1, immutable Lab client0.5.7/kit0.5.24 and current HF portable-person v2. Old saves and exports are refused with a start-fresh message; historical fixtures are retained unchanged under docs/history. The full current HF Run archive, public input log and exact in-progress host phase are saved and exported. Native storage uses IndexedDB because a complete saved season plus full HF/source archives exceeds the localStorage budget (current four-day host checkpoint4.54MB before its season wrapper). File play stays in memory and never opens native storage or publishes people.
+
+A completed native climb attempts eligible checkpoints before navigation. Departure is a real five-minute request that can be refused or remain unfinished. The valley transition stages a detached season and yields between public HF calls before installing it. Complete source archives are deduplicated by SHA256 and retained with every source envelope, including failed publication attempts. Capacity refusal preserves existing state; it never shortens an archive.
+
+Private condition and trust do not become player observations. The drawing uses actual position and activity; dated injuries and recorded words remain visible. Current private condition is explicitly unavailable. This is an ordinary port design decision, not owner feel acceptance.
+
+No framework source was changed. Public world facts register real places/groups for retained references. The earlier Warren G2 blocker conclusion was withdrawn; no such blocker is asserted here. Generic projection limits remain a broader G4 need, not a port blocker. Camp inference remains disabled, $0.
+
 # Public gameplay audit (2026-10-27)
 
 Remaining: independent review, signed merge, exact green CI, deploy and live release verification; Adam accepts feel on 2026-11-03. The menu exposes run export, file entry and title alongside public pacing. Debug contains version diagnostics and starts collapsed beside Lab privacy. Existing automatic shelf preparation remains in place. The development-only window reference is diagnostic; CAMP_AI controls optional narration, not gameplay.
@@ -324,3 +336,7 @@ The exact B native hut fixture is retained inside the authorized test file:25866
 Capture uses real public Lab trackRun/captureSave with complete file-session data and normal privacy choices; run registration waits for accepted input. Calling capture does not prove queue delivery or ingestion. SDK11 has no supported occupied-profile preservation capability. Its identity/session/preferences/journal/queue behavior remains an explicit runtime gate with the sole SDK publisher. Skipping NEW SW registration in file mode does not control an already active SW/cache. Marker14/publication/adoption and actual existing-profile admission remain separate and unissued. This feature guarantees only the host-native boundary; it does not promise whole-profile preservation.
 
 Independent review found a second Debug disclosure on the season-start error page. Its diagnostic now appears only in the collapsed menu Debug beside Lab privacy; ordinary retry, Back and Feedback remain on the error page.
+
+## HF4 delivery correction, 2026-10-28
+
+A sub-minute world-required boundary exposed a closed-time error when ordinary observations were queued at the boundary timestamp. The adapter now queues ordinary inputs after the current HF cursor; `test/hf4-observation-boundary.test.ts` reproduced the failure before the fix and passes afterward. `scripts/hf4-full-climb-control.ts` retains the real complete-climb, export and replay proof independently of the small telemetry-name test. Shared-person compatibility is gated per person before admission, projection and terminal closure; local climbs remain available while peers have not certified their readers. Adam's feel acceptance remains outstanding.

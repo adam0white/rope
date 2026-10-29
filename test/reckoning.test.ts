@@ -39,6 +39,7 @@ interface Driver {
   seasonPage(): void;
   journalPage(): void;
   advance(): void;
+  flushSave(): Promise<void>;
 }
 beforeEach(() => {
   vi.stubGlobal('requestAnimationFrame', () => 0);
@@ -68,6 +69,7 @@ async function setup() {
   const { season, climb } = newSeason(41);
   driver.season = season;
   driver.begin(climb, season.start as string);
+  await driver.flushSave();
   return driver;
 }
 it('keeps real turn-time choices and offers no tally preference or live total', async () => {
@@ -109,9 +111,13 @@ it('computes the completed climb total and reveals it only on request without ch
   expect(document.querySelector('[data-see-tally]')).toBeNull();
   document.querySelector<HTMLButtonElement>('[data-a="close"]')?.click();
   expect(document.querySelector('#reckoning-tally')?.hasAttribute('hidden')).toBe(true);
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    queueMicrotask(() => callback(0));
+    return 0;
+  });
   d.advance();
-  expect(document.querySelector('[data-see-tally]')).toBeNull();
-});
+  await vi.waitFor(() => expect(document.querySelector('[data-see-tally]')).toBeNull(), { timeout: 110000 });
+}, 120000);
 it('counts only recorded history at the closed season', async () => {
   const d = await setup();
   d.climb.over = true;

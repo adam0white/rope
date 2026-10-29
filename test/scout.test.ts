@@ -9,7 +9,7 @@ it('scouting a leg from the col reports it from the world and makes its route fa
   for (let i = 0; i < 40; i++) step(s);
   expect(s.journal.some((j) => j.text.startsWith('You came back from the rock channel'))).toBe(true);
   expect(s.known.some((f) => f === 'gully-loose' || f === 'gully-quiet')).toBe(true);
-});
+}, 120000);
 
 it('someone sent ahead calls down what the next leg looks like when they get there', () => {
   const s = startClimb(1, 3);

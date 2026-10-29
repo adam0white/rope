@@ -23,6 +23,16 @@ The pre-repair actual App let per-element font2x clock/status text cross the fix
 - Camp conversation through Workers AI waits for actual owner/player judgment that the core is fun (input gate, review 2026-11-03). Inference is off. The labelled deterministic journal fallback runs without a network request. The existing Worker cap, kill switch and $5 total budget remain for any later authorized prototype. This task makes no model calls.
 - Named owner acceptance journeys (opening answers, approaches, pair meetings, phone reading, pacing and carried Commonstead Oskar) remain acceptance work on 2026-11-03. Existing implementations and engineering controls do not establish Adam's judgment. No new player round is part of this task.
 
+- Repeat broad HF4 multi-seed climb, rope, account and position sampling by 2026-11-03. The preserved HF3 calibration is not evidence for HF4; current tests use bounded controls and one exact full-climb proof.
+
+## Automatic completed-climb histories (2026-10-28)
+
+Design decision: a completed native climb automatically attempts to save eligible browser histories. It uses the existing checkpoint validation, source retention and compare-and-set publication path. This removes reliance on hiding or closing the page. It does not end anyone’s goals or invent a departure verdict.
+
+The next-climb action waits for the outstanding attempt before changing the climb. End-of-climb, hidden-page and next-climb triggers share one attempt for an unchanged completed state. A real request to end a person’s trip changes that state and permits a new attempt. Waiting copy describes the attempt, not successful publication. Refusals remain in continuity status. Disabled browser histories skip the attempt; an already outstanding attempt still settles before navigation. File play cannot publish. A stale result cannot advance a replacement climb.
+
+Public pacing, export and file entry remain in the ordinary menu. Cast controls stay on the central shelf. Debug starts collapsed beside Lab privacy. Native legacy admission remains limited to supported Rope and Commonstead Oskar histories; it is not a claim that every shared history can enter.
+
 ## Public mountain plans (2026-10-27)
 
 The ordinary hut start records `field-rules` with HF bodily needs enabled. There is no feature choice. Old inputs and starts keep their recorded behavior; upgrades do not rewrite admitted Person snapshots. Logged rules persist into later climbs. Complete current exports replay exactly.
@@ -78,3 +88,23 @@ Send word uses lab-client 0.2.1. It respects an explicit recording opt-out, requ
 Pace controls are public. Run diagnostics start collapsed beside Lab privacy. Cast inspection and experiments link to the central shelf. Fresh seasons enable the released persona channel before preparing the cast transactionally. Claims, parent checks, source admission and cancellation remain in the released contracts. Loaded seasons retain pinned actors. The old cast panel and its alternate import handler are removed; imports use the separate file session.
 
 HF stays at 3.0.0. Camp inference remains input-gated. There is no model call in this batch. Owner acceptance remains separate from engineering checks.
+
+
+## HF4 port decisions (2026-10-28, candidate)
+
+HF4.8.1 replaces HF3 with the public Run protocol. The canonical cast, mountain geometry, deterministic keyed world randomness and real physical outcomes remain the host's responsibility. HF chooses people’s responses and owns physiology, social learning, memory, active work, agenda and lifecycle. There are no faculty enable flags, alternate person updates or game-local replacements for HF decisions.
+
+Current saves and public playtest exports contain the complete HF Run plus the start, inputs, phase and complete host state. Replay must reproduce the exact saved state on the installed pin. HF3 saves/exports and profile-only portable v1 are deliberately refused. Historical tests and fixtures remain verbatim in docs/history, not re-stamped as current evidence. The fresh season reads public shelf heads automatically, admits supported v2 histories before a single batch claim, and leaves old/occupied/terminal histories unchanged; those roles begin an explicitly new local story and cannot overwrite the skipped histories.
+
+Player-visible condition is an evidence boundary. HF's privileged body and trust truth cannot drive a tired face, a gaze, a fatigue adjective or a private need summary. Show actual movement, received words and dated injuries; state that current condition/trust are unavailable. No substitute physiology was invented. This deliberately changes the drawing and remains subject to Adam's feel acceptance. It relates to broader HF needs G4 but does not block the port.
+
+Complete Run archives are much larger than old person snapshots: the 4.8.1 four-day valley control retains3.78MB HF/4.54MB host state, before the complete season/source envelope. The earlier4.5.3 control retained16.70MB HF/17.46MB host. Native saves therefore use IndexedDB, exact compare-and-swap ownership and a visible paused save. Valley days advance on detached state, one public call per animation frame, with a paused progress message; the old one-minute horizon becomes30minutes only in the valley, preserving all intermediate world requests and actual activity durations. Mountain frames still advance one public call at a time. No fixed phone/worst-case frame-time guarantee is claimed.
+
+Each completed native climb attempts eligible history publication before next-climb navigation. A refused checkpoint is not publication. Asking someone to end a trip performs real costed work and may be refused or unfinished. Complete source envelopes and deduplicated raw full archives survive failed CAS. Native source capacity is128Mi UTF16 units; original file bytes are limited to128MiB, a complete file session to512MiB, JSON depth128/nodes8million, with existing replay/input bounds. Oversize state is refused before file installation/publication; nothing is trimmed. File progress never opens native storage or publishes people.
+
+No real framework blocker is currently established. Supported initial world facts register honest place/group identities for retained history. No HF source was edited. Controls are synthetic technical evidence, not a new player round or Adam's acceptance. Camp remains off with no model spend.
+
+
+### Shared-person compatibility, 2026-10-28
+
+The current SDK reports that peer games have not certified portable reading for the five Rope people. Rope skips each blocked incoming history and refuses its source projection or terminal write; local climbs remain available. The SDK controls when each peer becomes eligible. This is the existing G2 portable-admission dependency in `docs/hf-requests.md`, not a new framework gap. Recheck peer certification by 2026-11-03.

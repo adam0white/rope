@@ -2,8 +2,9 @@
  * The five people. Each is an HF person with traits, values, a summit goal and a voice relation to the leader (the
  * player, voice id `leader`). The game never decides for them: it only offers what the mountain affords.
  */
-import { createPerson, type Person, type PersonSpec } from '@adam0white/human-framework';
+import { DEFAULT_NORMS, type PersonAuthoring } from '@adam0white/human-framework';
 import { castForGame } from '@adam0white/lab-client';
+import { authoredPerson, MINUTE } from './hf4.ts';
 import { hashUnit } from './rng.ts';
 
 export const LEADER = 'leader';
@@ -92,15 +93,13 @@ const summitGoal = (importance: number) => ({
   temporal: { halfLifeMinutes: 240 },
 });
 
-function spec(seed: number, now: number, id: string): PersonSpec {
+function spec(seed: number, now: number, id: string) {
   const base = {
     id,
     name: memberOf(id).name,
     seed,
     now,
     lexicon: { names: NAMES, plainEnglish: true },
-    // HF 2.6.0: exertion accumulates over the day, so a long climb leaves a person spent for the descent.
-    enable: { fatigueStore: true },
   };
   const rel = (
     otherId: string,
@@ -200,16 +199,45 @@ function spec(seed: number, now: number, id: string): PersonSpec {
 
 export const CAST = castForGame('rope');
 export const castIdOf = (id: string): string => `hf.cast.${id}.rope`;
-export function createParty(seed: number, now: number): Person[] {
-  return MEMBERS.map((m, i) => {
-    const canonical = CAST.find((c) => c.castId === castIdOf(m.id));
-    if (!canonical) throw new Error('Missing canonical Rope person');
-    return createPerson({
-      ...spec(seed * 31 + i, now, m.id),
-      name: canonical.name,
-      bornAt: now - canonical.age * YEAR,
-      traits: structuredClone(canonical.traits),
-      values: structuredClone(canonical.values),
-    });
+export function createParty(seed: number, now: number): PersonAuthoring[] {
+  return MEMBERS.map((member, i) => {
+    const canonical = CAST.find((c) => c.castId === castIdOf(member.id));
+    if (!canonical) throw Error('Missing canonical Rope person');
+    const opening = spec(seed * 31 + i, now, member.id);
+    const p = authoredPerson(member.id, canonical.name, opening.sex as 'female' | 'male', now * MINUTE);
+    p.identity.castId = canonical.castId;
+    p.identity.birthAt = (now - canonical.age * YEAR) * MINUTE;
+    p.state.traits = structuredClone(canonical.traits);
+    p.state.values = structuredClone(canonical.values);
+    p.state.body = { ...p.state.body, ...opening.body };
+    p.state.skills = Object.entries(opening.skills).map(([id, level]) => ({
+      id,
+      level,
+      practicedMs: 0,
+      lastPracticed: now * MINUTE,
+    }));
+    p.state.voices = opening.voices;
+    p.state.relationships = opening.relationships.map((r) => ({
+      ...r,
+      ledger: 0,
+      lastInteraction: now * MINUTE,
+    }));
+    p.state.heldNorms = DEFAULT_NORMS.map((norm) => ({
+      normId: norm.id,
+      standing: norm.standing,
+      conviction: 0.5,
+      provenance: norm.provenance,
+    }));
+    p.state.agenda.goals = opening.goals.map((goal) => ({
+      id: goal.id,
+      label: goal.label,
+      serves: goal.serves,
+      advancedBy: goal.advancedBy,
+      importance: goal.importance,
+      baseImportance: goal.importance,
+      progress: 0,
+      completionHalfLifeMs: goal.temporal.halfLifeMinutes * MINUTE,
+    }));
+    return p;
   });
 }

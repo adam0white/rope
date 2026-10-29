@@ -4,12 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { queueInput, snapshot, startClimb, step } from '../src/sim/climb.ts';
+import { FRAMEWORK_VERSION } from '../src/sim/hf4.ts';
 import { exportClimb } from '../src/sim/season.ts';
 import { climbMilestones, climbScreen } from '../src/ui/labnames.ts';
-import { playScripted } from './script.ts';
 
 it('lab names are short, stable and carry no player text', () => {
-  const done = playScripted(startClimb(3, 3), { turnAt: 12 * 60 });
+  // Authored host facts test telemetry labels; the full actual climb has its own headless control.
+  const done = startClimb(3, 3);
+  done.over = true;
+  for (const member of done.members) member.homeAt = done.minute;
+  done.members[0]!.summitAt = done.minute - 60;
   const names = [
     ...climbMilestones(done),
     climbScreen(done, 'hut'),
@@ -18,8 +22,8 @@ it('lab names are short, stable and carry no player text', () => {
   ];
   expect(climbMilestones(done)[0]).toBe(`climb ${done.climbNo} done`);
   for (const n of names) expect(n).toMatch(/^[a-z0-9: ]{1,40}$/);
-  // Same climb, same names.
-  expect(climbMilestones(playScripted(startClimb(3, 3), { turnAt: 12 * 60 }))).toEqual(climbMilestones(done));
+  // The same JSON host facts retain their labels after transport.
+  expect(climbMilestones(JSON.parse(JSON.stringify(done)))).toEqual(climbMilestones(done));
 });
 
 it('the released lab-kit stamp writes public/release.json with the build', () => {
@@ -48,7 +52,7 @@ it('the replay CLI reconstructs a downloaded in-progress run at its saved minute
   const dir = mkdtempSync(join(tmpdir(), 'rope-export-'));
   try {
     const path = join(dir, 'partial.json');
-    writeFileSync(path, JSON.stringify(exportClimb(start, climb, '2.8.0')));
+    writeFileSync(path, JSON.stringify(exportClimb(start, climb, FRAMEWORK_VERSION)));
     const output = execFileSync('node', ['scripts/replay-export.ts', path], { encoding: 'utf8' });
     expect(output).toContain(
       'replay matches saved answers: true; journal text identical: true; over=false; minute 05:01',

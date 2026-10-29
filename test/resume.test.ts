@@ -1,20 +1,18 @@
 import { expect, it } from 'vitest';
-import { replay, snapshot, startClimb } from '../src/sim/climb.ts';
-import { factsOf } from '../src/sim/debrief.ts';
-import { playScripted } from './script.ts';
+import { queueInput, restore, snapshot, startClimb, step } from '../src/sim/climb.ts';
 
-// Regression (Fable, 2026-10-18): a save taken during the end of the day, with the stamp still showing,
-// must replay to the same finished climb so resume opens the read-back, not a dead map.
-it('a save taken mid-ending replays to the finished climb and its read-back', () => {
-  for (const seed of [1, 3, 7]) {
-    const s0 = startClimb(seed, 3);
-    const start = snapshot(s0);
-    const done = playScripted(s0, { turnAt: 12 * 60 });
-    expect(done.over).toBe(true);
-    // The save during the stamp: the same inputs and minute as the finished climb.
-    const r = replay(start, done.inputs, done.minute);
-    expect(r.over).toBe(true);
-    expect(r.journal).toEqual(done.journal);
-    expect(factsOf(r)).toEqual(factsOf(done));
+// The actual finished-climb/read-back replay is retained in hf4-full-climb-control.ts.
+// This bounded current-pin control checks active cold continuation for three seeds.
+it.each([1, 3, 7])('cold-continuing an active climb is exact for seed %s', (seed) => {
+  const live = startClimb(seed, 3);
+  queueInput(live, { t: 'say', to: 'all', act: 'climb', force: 'ask' });
+  queueInput(live, { t: 'lead', dir: 'up' });
+  for (let i = 0; i < 10; i++) step(live);
+  expect(live.people.some((p) => p.activity !== null)).toBe(true);
+  const resumed = restore(snapshot(live));
+  for (let i = 0; i < 10; i++) {
+    step(live);
+    step(resumed);
   }
+  expect(snapshot(resumed)).toBe(snapshot(live));
 });

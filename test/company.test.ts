@@ -1,87 +1,89 @@
+import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { canHear, queueInput, startClimb, step } from '../src/sim/climb.ts';
-import { playScripted } from './script.ts';
+import { canHear, memberState, queueInput, replay, startClimb, step } from '../src/sim/climb.ts';
+import { archiveOf } from '../src/sim/hf4.ts';
 
-it('nobody goes down alone unasked: a lone turn becomes a request the player answers', () => {
-  let asked = 0;
-  let alone = 0;
-  for (let seed = 1; seed <= 12; seed++) {
-    const s = playScripted(startClimb(seed, 3), { turnAt: 15 * 60 });
-    asked += s.lines.filter((l) => l.reason === 'asks:company').length;
-    alone += s.journal.filter((j) => j.text.includes('went down alone')).length;
-    // No lone descent ever starts without the ask before it.
-    for (const j of s.journal.filter((x) => x.text.includes('went down alone')))
-      expect(s.lines.some((l) => l.who === j.who && l.reason === 'asks:company' && l.at <= j.at - 45)).toBe(
-        true,
-      );
+/** Authored host positions and paths, not a claim that anyone climbed to the col. */
+function atCol() {
+  const s = startClimb(2, 3);
+  for (const x of [...s.members, s.leader]) {
+    x.pos = { place: 'col', leg: null, t: 0 };
+    x.path = ['meadow', 'moraine', 'snow'];
   }
-  console.log({ asked, alone });
-  expect(asked).toBeGreaterThan(0);
+  for (const x of s.members) x.high = 'col';
+  return s;
+}
+
+it('a lone descent requests company and waits 45 minutes before going alone', () => {
+  const s = atCol();
+  for (const x of s.members.filter((m) => m.id !== 'wren')) x.pos = { place: 'hut', leg: null, t: 0 };
+  const input = queueInput(s, {
+    t: 'say',
+    to: 'wren',
+    act: 'descend',
+    force: 'insist',
+  });
+  for (let i = 0; i < 150; i++) step(s);
+  expect(s.lines.some((l) => l.input === input && l.who === 'wren' && l.verdict === 'assented')).toBe(true);
+  const ask = s.lines.find((l) => l.who === 'wren' && l.reason === 'asks:company');
+  const alone = s.journal.find((j) => j.who === 'wren' && j.text.includes('went down alone'));
+  expect(ask).toBeDefined();
+  expect(alone).toBeDefined();
+  expect(alone!.at - ask!.at).toBeGreaterThanOrEqual(45);
 });
 
-it('sending someone with the asker pairs them on the rope going down', () => {
-  for (let seed = 1; seed <= 12; seed++) {
-    const s = startClimb(seed, 3);
-    queueInput(s, { t: 'lead', dir: 'up' });
-    let asker: string | undefined;
-    for (let i = 0; i < 700 && !s.over && !asker; i++) {
-      step(s);
-      asker = s.members.find((x) => x.asks)?.id;
-      if (s.leader.move === null && !asker) queueInput(s, { t: 'lead', dir: 'up' });
-    }
-    if (!asker) continue;
-    const mate = s.members.find((x) => x.id !== asker && x.homeAt === null && canHear(s, x.id));
-    if (!mate) continue;
-    queueInput(s, { t: 'say', to: mate.id, act: 'escort', force: 'insist', with: asker });
-    for (let i = 0; i < 30; i++) step(s);
-    const went = s.journal.some(
-      (j) => j.text.includes('roped together') || j.text.includes(`went down with`),
+it('an escort request produces a real HF answer and honest physical effects', () => {
+  const s = atCol();
+  // Authored pending host request, used to exercise the response without inventing an HF decision.
+  memberState(s, 'nell').asks = { at: s.minute };
+  const input = queueInput(s, {
+    t: 'say',
+    to: 'tamar',
+    act: 'escort',
+    force: 'insist',
+    with: 'nell',
+  });
+  step(s);
+  expect(s.lines.find((l) => l.input === input && l.who === 'tamar')?.verdict).toBe('assented');
+  expect(memberState(s, 'tamar').ropedTo).toBe('nell');
+  expect(memberState(s, 'nell').ropedTo).toBe('tamar');
+  expect(memberState(s, 'nell').asks).toBeNull();
+  expect(
+    s.journal.some((j) => j.who === 'tamar' && j.text.includes('went down with Nell, roped together')),
+  ).toBe(true);
+  for (let i = 0; i < 90; i++) step(s);
+  const receipt = archiveOf(s)
+    .history.flatMap((t) => t.inputs)
+    .find(
+      (i) =>
+        i.kind === 'action.resolved' &&
+        i.payload.person === 'tamar' &&
+        i.payload.outcome?.actionId === 'descend' &&
+        i.payload.outcome.status === 'completed',
     );
-    if (went) {
-      expect(s.journal.some((j) => j.text.includes('went down alone') && j.who === asker)).toBe(false);
-      return;
-    }
-  }
-  throw new Error('no seed paired an escort');
+  expect(receipt).toBeDefined();
+  if (receipt?.kind === 'action.resolved')
+    expect(receipt.payload.outcome!.end - receipt.payload.outcome!.start).toBeGreaterThan(0);
 });
 
-it('turning for home answers a request for company within earshot', () => {
-  let checked = 0;
-  for (let seed = 1; seed <= 12 && checked < 2; seed++) {
-    const s = startClimb(seed, 3);
-    queueInput(s, { t: 'lead', dir: 'up' });
-    queueInput(s, { t: 'say', to: 'all', act: 'climb', force: 'ask' });
-    for (let k = 0; k < 900 && !s.over; k++) {
-      step(s);
-      const asker = s.members.find((x) => x.asks && canHear(s, x.id));
-      if (asker) {
-        queueInput(s, { t: 'lead', dir: 'down' });
-        step(s);
-        if (canHear(s, asker.id)) {
-          expect(asker.asks ?? null).toBeNull();
-          checked++;
-        }
-        break;
-      }
-    }
-  }
-  expect(checked).toBeGreaterThan(0);
-});
-
-it('current narration of an escort sent to someone far off does not claim a rope', async () => {
-  const { readFileSync } = await import('node:fs');
-  const { replay } = await import('../src/sim/climb.ts');
-  const e = JSON.parse(
-    readFileSync(
-      new URL('../docs/playtests/owner-2026-10-19-kestrel-334144833.json', import.meta.url),
-      'utf8',
-    ),
+it('turning home answers a request within earshot', () => {
+  const s = atCol();
+  // Authored host request and location; no HF decision is simulated.
+  const asker = memberState(s, 'wren');
+  asker.asks = { at: s.minute };
+  expect(canHear(s, asker.id)).toBe(true);
+  queueInput(s, { t: 'lead', dir: 'down' });
+  step(s);
+  expect(asker.asks).toBeNull();
+  expect(s.journal.some((j) => j.who === asker.id && j.text.includes('had someone to walk down with'))).toBe(
+    true,
   );
-  // Exercise today's narrator against the original host-rules-1 decision sequence.
-  const s = replay(e.start, e.inputs, undefined, 3);
-  // Three people were sent to Oskar from the ice wall, hours from the lake where he sat.
-  const far = s.journal.filter((j) => j.text.includes('who is far off'));
-  expect(far.length).toBe(3);
-  expect(s.journal.some((j) => j.text.includes('roped together'))).toBe(false);
-  for (const m of s.members) expect(m.ropedTo).toBeNull();
+});
+
+it('refuses the legacy owner replay without changing its source file', () => {
+  const url = new URL('../docs/playtests/owner-2026-10-19-kestrel-334144833.json', import.meta.url);
+  const original = readFileSync(url, 'utf8');
+  const e = JSON.parse(original);
+  expect(() => replay(e.start, e.inputs, undefined, 3)).toThrow(/fresh|unsupported|older/i);
+  expect(readFileSync(url, 'utf8')).toBe(original);
 });

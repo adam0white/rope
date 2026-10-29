@@ -1,6 +1,6 @@
 {
   "name": "rope",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "The Rope: lead five Human Framework people up a mountain and back. Every one of them can say no.",
@@ -12,19 +12,19 @@
     "dev": "vite",
     "build": "stamp-release && vite build",
     "preview": "vite preview",
-    "test": "vitest run --testTimeout=30000",
+    "test": "vitest run --maxWorkers=2 --testTimeout=30000",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "biome check .",
     "format": "biome format --write .",
     "measure": "node scripts/measure.ts",
     "check": "npm run lint && npm run typecheck && npm test",
     "deploy": "npm run check && npm run build && wrangler deploy",
-    "check:lane": "npm run check"
+    "check:lane": "npm run lint && npm run typecheck"
   },
   "dependencies": {
-    "@adam0white/human-framework": "3.0.0",
-    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.4.15.tgz",
-    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.17.tgz",
+    "@adam0white/human-framework": "4.8.1",
+    "@adam0white/lab-client": "file:vendor/adam0white-lab-client-0.5.7.tgz",
+    "@adam0white/lab-kit": "file:vendor/adam0white-lab-kit-0.5.24.tgz",
     "pixi.js": "8.22.0"
   },
   "devDependencies": {

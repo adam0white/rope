@@ -8,10 +8,10 @@ You lead five Human Framework (HF) people up a mountain and back. Every one of t
 
 ## Rules
 
-- HF comes only from npm: `@adam0white/human-framework@3.0.0`, exact. Never import sibling source. No game logic goes into HF. A generic HF gap goes into [docs/hf-requests.md](docs/hf-requests.md).
-- Never fake a verdict. Every refusal, deferral or counter-offer comes from an HF resolution (`answerNow`, `decide` with a suggestion, `predict`).
-- Inner state is never a number on screen. Show it as drawing: stride, lag, lean, gaze, hatching.
-- All world randomness is keyed by (seed, kind, place, minute) through `hashUnit`, never by draw order. Person RNG stays unused (`will.temperature` 0). Seed + input log + start state is the replay, the playtest export and the debrief substrate.
+- HF comes only from npm: `@adam0white/human-framework@4.8.1`, exact. Never import sibling source. No game logic goes into HF. A generic HF gap goes into [docs/hf-requests.md](docs/hf-requests.md).
+- Never fake a verdict. Every refusal, deferral or counter-offer comes from an HF resolution (public Run decision events for actual suggestion inputs).
+- Private condition and trust are not observations. Show actual movement, dated injuries and recorded words. Say when current condition is unavailable.
+- All world randomness is keyed by (seed, kind, place, minute) through `hashUnit`, never by draw order. HF owns person randomness and archives it. Seed + input log + start state is the replay, the playtest export and the debrief substrate.
 - The sim core (`src/sim`) is headless, deterministic and free of DOM, renderer and LLM code. State is plain JSON.
 - Visual language: Field Notebook (`human-framework/docs/design-language.md`). Only `--rope` is loud.
 - Faith stays quiet: a prayer at dusk is a journal line, never a mechanic.
@@ -27,4 +27,8 @@ You lead five Human Framework (HF) people up a mountain and back. Every one of t
 
 - Player-facing copy follows [Plain English](docs/lab/plain-english.md).
 
-Use the exact pnpm 12.14.0 package-manager pin. Install with `pnpm install --frozen-lockfile`; keep `pnpm-lock.yaml`. Keep npm overrides and native build permissions in `pnpm-workspace.yaml`, not package metadata. `npm run` remains valid for scripts. Wrap the full lane once with HF `scripts/suite-lock.ts`; Rope scripts do not acquire it. The installer conversion requires reviewed source, full lane, byte-identical raw build outputs, signed commit and exact green CI; it does not deploy the app or establish game readiness.
+Use the exact pnpm 12.14.0 package-manager pin. Install with `pnpm install --frozen-lockfile`; keep `pnpm-lock.yaml`. Keep npm overrides and native build permissions in `pnpm-workspace.yaml`, not package metadata. `npm run` remains valid for scripts. Run `npm run check:lane` directly; do not acquire the suite lock. The installer conversion requires reviewed source, full lane, byte-identical raw build outputs, signed commit and exact green CI; it does not deploy the app or establish game readiness.
+
+## Public gameplay
+
+Every gameplay feature is public. Shared people should carry over automatically through supported admission. Native completed climbs attempt to save eligible histories before next-climb navigation. A refusal is not a publication. File play cannot publish. Cast controls live on the central shelf. Diagnostics sit in one collapsed Debug item beside Lab privacy.

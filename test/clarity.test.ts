@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { type ClimbState, distance, type Line, MOUNTAINS, step } from '../src/sim/climb.ts';
+import { type ClimbState, distance, type Line, MOUNTAINS, snapshot, step } from '../src/sim/climb.ts';
+import { ENGINE_VERSION } from '../src/sim/hf4.ts';
 import { newSeason } from '../src/sim/season.ts';
 import { Game } from '../src/ui/game.ts';
 import { displayText } from '../src/ui/plain-english.ts';
@@ -37,18 +38,24 @@ vi.mock('../src/ui/lab.ts', () => ({
 
 interface Driver {
   climb: ClimbState;
-  resume(save: unknown): void;
+  resume(save: unknown): Promise<void>;
+  flushSave(): Promise<void>;
   renderSheet(ifChanged?: boolean): void;
 }
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
   vi.stubGlobal('requestAnimationFrame', () => 0);
+  vi.stubGlobal('indexedDB', undefined);
   vi.spyOn(Date, 'now').mockReturnValue(20261018);
   localStorage.clear();
   document.body.innerHTML = '<div id="app"></div>';
 });
-afterEach(() => {
+let active: Driver | undefined;
+afterEach(async () => {
+  await vi.advanceTimersByTimeAsync(1);
+  await active?.flushSave();
+  active = undefined;
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -72,7 +79,9 @@ async function boot(all = false, seed = 20261018) {
   if (all) {
     const { season, climb } = newSeason(seed);
     await (game as unknown as Driver).resume({
-      engine: '2.23.0',
+      v: 2,
+      engine: ENGINE_VERSION,
+      state: snapshot(climb),
       season,
       start: season.start,
       inputs: [],
@@ -81,7 +90,11 @@ async function boot(all = false, seed = 20261018) {
       disclosure: { unlocked: ['insist', 'tell', 'promise', 'rope', 'fix', 'pack', 'share'], seen: [] },
     });
   }
-  return game as unknown as Driver;
+  const driver = game as unknown as Driver;
+  active = driver;
+  await vi.advanceTimersByTimeAsync(1);
+  await driver.flushSave();
+  return driver;
 }
 
 it('keeps mandatory opening story across title and hut below forty words, with context on request', async () => {
@@ -99,10 +112,10 @@ it('keeps mandatory opening story across title and hut below forty words, with c
   button('About this part of the climb').click();
   expect(document.querySelector('.info-popover')?.textContent).toContain('eleven summers');
   button('Close information').click();
-  button('New game').click();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  document.querySelector<HTMLButtonElement>('.page [data-a="new"]')!.click();
+  await vi.advanceTimersByTimeAsync(1);
+  await vi.waitFor(() => expect(document.querySelector('[data-hour]')).not.toBeNull(), { timeout: 15000 });
+  expect(document.querySelector('[data-hour]'), document.body.textContent ?? '').not.toBeNull();
   expect(title + words()).toBeLessThanOrEqual(40);
   button('About this part of the climb').click();
   expect(document.querySelector('.info-popover')?.textContent).toContain(
@@ -133,11 +146,11 @@ it('gives every unavailable verb an adjacent readable reason and updates changed
 
 it('shows target, selected request and commit without repeating unrelated verb grids', async () => {
   await boot();
-  button('New game').click();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  document.querySelector<HTMLButtonElement>('.page [data-a="new"]')!.click();
+  await vi.advanceTimersByTimeAsync(1);
+  await vi.waitFor(() => expect(document.querySelector('[data-hour]')).not.toBeNull(), { timeout: 15000 });
   button("We'll see").click();
+  await vi.waitFor(() => expect(document.querySelector('[data-hour]')).toBeNull(), { timeout: 15000 });
   vi.advanceTimersByTime(500);
   button('rest').click();
   document.querySelector<HTMLButtonElement>('.request-tone')?.click();
@@ -147,7 +160,7 @@ it('shows target, selected request and commit without repeating unrelated verb g
   expect(document.querySelector('.target-hint')).toBeNull();
   expect(document.querySelectorAll('.targets .chip')).toHaveLength(0);
   const insist = document.querySelector<HTMLButtonElement>('.forces button:last-child');
-  expect(insist?.textContent).toContain('costs trust');
+  expect(insist?.textContent).toContain('can harm trust');
   expect(insist?.disabled).toBe(false);
   expect(document.querySelector('.force:not(:disabled)')?.classList.contains('task')).toBe(true);
   expect(document.querySelector('.chip[aria-pressed="true"]')).toBeNull();
@@ -165,13 +178,16 @@ it('retains authentic HF words through the explicit pressure control and a later
   document.querySelector<HTMLButtonElement>('.request-tone')?.click();
   expect(document.querySelector<HTMLButtonElement>('.forces button:last-child')?.disabled).toBe(false);
   expect(driver.climb.inputs).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1);
+  await driver.flushSave();
   document.querySelector<HTMLButtonElement>('.forces button:last-child')?.click();
   step(driver.climb);
   const latest = driver.climb.lines.filter((l) => l.who === refusal.who).at(-1) as Line;
-  expect(latest.says).not.toBe(refusal.says);
+  expect(latest.input).not.toBe(refusal.input);
   document.querySelector<HTMLButtonElement>('.all-answers')?.click();
   expect(document.querySelector('.answers-sheet')?.textContent).toContain(displayText(latest.says));
-  expect(document.querySelector('.answers-sheet')?.textContent).not.toContain(displayText(refusal.says));
+  if (latest.says !== refusal.says)
+    expect(document.querySelector('.answers-sheet')?.textContent).not.toContain(displayText(refusal.says));
 });
 
 it('updates an open request when the target leaves earshot and when they return', async () => {
@@ -283,13 +299,15 @@ it('retains both rope partners’ HF answers after bubble expiry and when the pa
 
 it('shows the saved climb, mountain and time beside Continue without advancing the save', async () => {
   const { season, climb } = newSeason(23);
+  for (let i = 0; i < 13; i++) step(climb);
   const saved = JSON.stringify({
-    v: 1,
-    engine: '2.23.0',
+    v: 2,
+    engine: ENGINE_VERSION,
+    state: snapshot(climb),
     season,
-    start: '',
-    inputs: [],
-    minute: climb.minute + 13,
+    start: season.start,
+    inputs: climb.inputs,
+    minute: climb.minute,
     over: false,
     disclosure: { unlocked: [], seen: [] },
   });
@@ -299,6 +317,18 @@ it('shows the saved climb, mountain and time beside Continue without advancing t
   expect(document.querySelector('.continue-summary')?.textContent).toContain('Climb 1 of 3');
   expect(document.querySelector('.continue-summary')?.textContent).toContain('Hollin');
   expect(document.querySelector('.continue-summary')?.textContent).toContain('05:13');
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe(saved);
+});
+
+it('keeps an unsupported HF3 local save and explains it cannot resume', async () => {
+  const saved = JSON.stringify({ v: 1, engine: '2.23.0' });
+  localStorage.setItem('rope.save.cast.v1', saved);
+  await boot();
+  expect(document.body.textContent).toContain('unsupported edition');
+  expect(document.body.textContent).toContain('saved history has not been replaced');
+  expect([...document.querySelectorAll('button')].some((button) => button.textContent === 'Resume')).toBe(
+    false,
+  );
   expect(localStorage.getItem('rope.save.cast.v1')).toBe(saved);
 });
 

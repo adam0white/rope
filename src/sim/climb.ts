@@ -6,40 +6,32 @@
  * suggestion. World draws are keyed by (seed, kind, leg, minute, member), never by draw order. Not modelled: a
  * negotiated route plans, carrying an injured person, ropes longer than one partner, navigation.
  */
+import type { Input as HFInput, RunArchive, StepResult } from '@adam0white/human-framework';
+import { canonicalPersona } from '@adam0white/lab-client';
+import { type GatherPlan, type Segment, segmentMove, trailRoute } from './approach.ts';
+import { commit, endGoal, forecast, interruptActivity, receive, setGoal } from './commands.ts';
+import { DISCOVERIES } from './discoveries.ts';
 import {
+  type Activity,
   type Affordance,
-  abandonGoal,
-  adoptGoal,
-  adoptVoiceTrust,
-  answerNow,
-  begin,
-  bodyForecast,
-  type DecisionRecord,
-  decide,
-  enableBladder,
-  enableFullness,
+  archiveOf,
+  createClimbRun,
+  enqueue,
   type FollowOn,
-  finish,
-  interrupt,
-  knockDown,
-  noteVoicePromise,
+  MINUTE,
   type Outcome,
   type Percept,
   type Person,
-  perceive,
-  predict,
-  promise as promiseCommitment,
   type ReceivedConsequence,
   readBladder,
   readPerson,
-  reviewed,
+  type SimEvent,
   type Suggestion,
   type SuggestionResolution,
-  tick,
-  voiceOf,
-} from '@adam0white/human-framework';
-import { type GatherPlan, type Segment, segmentMove, trailRoute } from './approach.ts';
-import { DISCOVERIES } from './discoveries.ts';
+  stepPeople,
+  syncReadings,
+  type World,
+} from './hf4.ts';
 import {
   type Beat,
   coldAt,
@@ -212,12 +204,30 @@ export interface JournalEntry {
 export type NarrationVersion = 1 | 2 | 3;
 
 export interface ClimbState {
+  hf: RunArchive;
+  hfQueue: HFInput[];
+  hfOffers: Record<string, { revision: number; offers: Affordance[] }>;
+  hfActive: Record<string, Activity>;
+  hfEventCursor?: string;
+  hfPhase?: {
+    from: number;
+    to: number;
+    target: number;
+    steps: number;
+    lastNote?: JournalEntry;
+    events?: SimEvent[];
+    result?: StepResult;
+  };
+  hfLastDecision: Record<string, string>;
+  hfRequests: Record<string, { kind: 'release' | 'life'; input: number; offer: Affordance }>;
+  hfMode?: 'valley';
+  hfReleased: Record<string, true>;
   /** Explicit input opt-in; absent in every legacy tape. HF owns bodily dynamics. */
   fieldRules?: {
     bladder: boolean;
     observations?: Partial<Record<FactId, { at: number; source: 'direct' | 'scout' }>>;
   };
-  castEdition?: 'rope-cast-1';
+  castEdition?: 'rope-hf4-1';
   v: 1;
   /** Host rules version. Absent (1): climbs saved before HF 2.8.0. 2: fullness on, alongside, reconsider. */
   rules?: 2;
@@ -277,30 +287,42 @@ const at = (placeId: string): Pos => ({ place: placeId, leg: null, t: 0 });
 export function startClimb(
   seed: number,
   day: number,
-  people?: Person[],
+  people?: import('@adam0white/human-framework').PersonAuthoring[],
   mountainId = 'hollin',
   climbNo = 1,
+  continuing?: RunArchive,
+  active: Record<string, Activity> = {},
 ): ClimbState {
   const m = MOUNTAINS[mountainId];
   if (!m) throw new Error(`no mountain ${mountainId}`);
   const start = day * 1440 + m.startMinuteOfDay;
-  const party = people ?? createParty(seed, start - 30);
-  // HF 2.8.0 fullness: a person at comfort stops finding a drink worth walking to (the Kestrel drink loop).
-  for (const p of party) {
-    enableFullness(p);
-    tick(p, start);
-  }
+  const party = people ?? createParty(seed, start);
   const s: ClimbState = {
     v: 1,
-    castEdition: 'rope-cast-1',
+    castEdition: 'rope-hf4-1',
+    hf: continuing as RunArchive,
+    hfQueue: [],
+    hfOffers: continuing
+      ? Object.fromEntries(
+          Object.entries(continuing.current.offers).map(([id, offer]) => [
+            id,
+            { revision: offer.revision, offers: [] },
+          ]),
+        )
+      : {},
+    hfActive: structuredClone(active),
+    hfLastDecision: {},
+    hfRequests: {},
+    hfReleased: {},
     rules: 2,
+    fieldRules: { bladder: true, observations: {} },
     seed,
     day,
     mountain: mountainId,
     minute: start,
     startMinute: start,
     weather: weatherFor(seed, day),
-    people: party,
+    people: [],
     members: MEMBERS.map((x) => ({
       id: x.id,
       pos: at(m.hut),
@@ -342,6 +364,8 @@ export function startClimb(
     climbNo,
     beatsDone: [],
   };
+  if (continuing) syncReadings(s);
+  else createClimbRun(s, party);
   // Climb 1 meets the party a person at a time: two at the hut door, the rest along the first leg (quietLines).
   if (climbNo === 1)
     for (const x of MEMBERS.slice(0, 2)) s.journal.push({ at: start, text: x.first, who: x.id });
@@ -352,6 +376,15 @@ export function startClimb(
       who: 'wren',
       text: 'Wren had left without breakfast; she said she wasn’t hungry.',
     });
+  if (continuing)
+    for (const authored of party) {
+      const p = personOf(s, authored.id);
+      for (const goal of authored.state.agenda.goals)
+        enqueue(s, 'agenda.requested', {
+          person: p.id,
+          request: { type: 'goal', goal: { ...goal, id: `${goal.id}:climb:${climbNo}` } },
+        });
+    }
   aims(s, m);
   beat(s, 'start');
   return s;
@@ -683,6 +716,7 @@ export function offersFor(s: ClimbState, id: string, asking?: string): Affordanc
 
 /** Record an input for the next minute and return its index. The UI and replays both go through this. */
 export function queueInput(s: ClimbState, input: NewInput): number {
+  drainAdvance(s);
   const full = { ...input, at: input.at ?? s.minute + 1 } as Input;
   s.inputs.push(full);
   return s.inputs.length - 1;
@@ -718,6 +752,14 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
     r,
     withForecast(s, who, input, r, withPromise(s, who, { ...r, says: own })),
   );
+  // Reconsidering the same standing request across an interruption is one
+  // outward answer unless HF changes its verdict or reason.
+  if (
+    s.lines.some(
+      (l) => l.who === who && l.input === input && l.verdict === r.verdict && l.reason === r.reason,
+    )
+  )
+    return;
   s.lines.push({
     at: s.minute,
     who,
@@ -758,7 +800,7 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
             [previous.who, who, says],
           ])
             if (listener && speaker && words)
-              perceive(personOf(s, listener), [
+              receive(s, personOf(s, listener), [
                 {
                   at: s.minute,
                   channel: 'social',
@@ -795,7 +837,7 @@ function withForecast(
   const lg = nextLegUp(s, mem, inp.via ?? s.leader.route);
   if (!lg) return says;
   const p = personOf(s, who);
-  const fc = bodyForecast(p, upOffer(s, p, mem, lg, mem.pos.leg ? mem.pos.t : 0));
+  const fc = forecast(s, p, upOffer(s, p, mem, lg, mem.pos.leg ? mem.pos.t : 0));
   if (!fc.line) return says;
   // A yes with a hard descent ahead says so now, while turning is still cheap: the warning comes early.
   if (yes) return /\b(but|though|won't|can't)\b/.test(fc.line) ? `${says} ${fc.line}` : says;
@@ -857,20 +899,15 @@ function journalFor(s: ClimbState, who: string, r: SuggestionResolution): string
   }
 }
 
-/**
- * A person's answer to news (a told fact, a promise, a gift): how they now stand toward the act it bears on, read
- * from HF with `predict` (no state change, no randomness), in their own words. The reaction is not a suggestion
- * and books nothing.
- */
+/** News prompts a genuine public HF suggestion. Its later resolution supplies the answer. */
 function reaction(
   s: ClimbState,
   id: string,
   input: number,
   act: 'climb' | 'descend' | 'eat',
-  reason: string,
+  _reason: string,
 ): void {
   const mem = memberState(s, id);
-  const p = personOf(s, id);
   const sug: Suggestion =
     act === 'climb'
       ? (() => {
@@ -880,16 +917,7 @@ function reaction(
             : { voiceId: LEADER, action: 'climb', strength: 0.35 };
         })()
       : { voiceId: LEADER, action: act, strength: 0.35 };
-  const r = predict(p, offersFor(s, id), sug);
-  s.lines.push({
-    at: s.minute,
-    who: id,
-    input,
-    verdict: 'heard',
-    ...(r.kind ? { kind: r.kind } : {}),
-    reason: `${reason}:${r.verdict}`,
-    says: r.says,
-  });
+  mem.pending = { s: { ...sug, since: s.minute }, input };
 }
 
 function suggestionFor(s: ClimbState, mem: MemberState, inp: Extract<Input, { t: 'say' }>): Suggestion {
@@ -943,7 +971,7 @@ function applyInput(s: ClimbState, idx: number): void {
       // An explicit logged choice, never inferred from a package upgrade or loaded actor.
       if (s.fieldRules || s.minute > s.startMinute + 1) return;
       s.fieldRules = { bladder: inp.bladder };
-      if (inp.bladder) for (const p of s.people) enableBladder(p);
+      // Every HF4 bodily faculty is on from authoring; this records only the host rules input.
       return;
     }
     case 'say': {
@@ -1006,132 +1034,52 @@ function applyInput(s: ClimbState, idx: number): void {
         heard += 1;
         if (inp.act === 'ahead') mem.ahead = true;
         if (inp.act === 'escort') mem.escortFor = inp.with ?? null;
-        const p = personOf(s, id);
         const sug = suggestionFor(
           s,
           mem,
           (inp.act === 'rope' || inp.act === 'gather') && id === inp.with ? { ...inp, with: inp.to } : inp,
         );
-        const offers = offersFor(s, id, sug.affordanceId);
-        const { resolution, booked } = answerNow(p, offers, sug);
-        if (booked) {
-          line(s, id, idx, resolution);
-          continue;
-        }
         mem.pending = { s: sug, input: idx };
         mem.deferred = null;
-        if (p.activity) interrupt(p, s.minute, 'voice:leader');
       }
       if (heard === 0) s.unheard.push(idx);
       return;
     }
-    case 'release-person': {
+    case 'release-person':
+    case 'ask-life': {
       const p = personOf(s, inp.to),
         mem = memberState(s, inp.to);
-      if (
-        !s.over ||
-        mem.pos.place !== m.hut ||
-        p.projects?.currentGoalId ||
-        s.members.some((member) => member.pos.place !== m.hut) ||
-        (p.activity &&
-          (!['rest', 'eat', 'drink', 'relieve', 'wait'].includes(p.activity.action) ||
-            p.activity.endsAt > s.minute + 120))
-      ) {
+      if (!p.body.alive || (inp.t === 'release-person' && (!s.over || mem.pos.place !== m.hut))) {
         s.journal.push({
           at: s.minute,
           who: inp.to,
-          text: `${p.name} cannot leave this mountain chapter yet. Return to the hut and finish active work first.`,
+          text: `${p.name} cannot end this chapter away from the hut or during the climb.`,
         });
         return;
       }
-      if (p.activity) {
-        const until = p.activity.endsAt;
-        s.journal.push({
-          at: s.minute,
-          who: inp.to,
-          text: `You waited at the hut for ${p.name} to finish ${p.activity.action} before asking about departure.`,
-        });
-        while (s.minute < until) {
-          s.minute++;
-          for (const actor of s.people) tick(actor, s.minute);
-          for (const member of s.members) {
-            const actor = personOf(s, member.id);
-            if (actor.activity && actor.activity.endsAt <= s.minute)
-              complete(s, m, member, actor, 'completed');
-          }
-        }
-      }
-      const offer: Affordance = {
-        id: 'end-chapter',
-        action: 'rest',
-        label: 'end this mountain chapter at the hut',
-        duration: 5,
-        effort: 0,
-        advertises: { rest: 0.6, safety: 0.5, leisure: 0.3 },
-      };
-      const r = predict(p, [offer], { voiceId: LEADER, affordanceId: offer.id, strength: 0.35 });
-      s.lines.push({
-        at: s.minute,
-        who: inp.to,
-        input: idx,
-        verdict: r.verdict,
-        reason: 'chapter-release',
-        says: r.says,
-      });
-      if (r.verdict === 'assented' || r.verdict === 'complied') {
-        for (const goal of p.agenda.goals.filter(
-          (g) =>
-            g.status === 'active' &&
-            (g.id === 'summit' || g.label === 'get down safely' || g.label === 'leave the tin on the top'),
-        ))
-          abandonGoal(p, goal.id);
-        s.journal.push({
-          at: s.minute,
-          who: inp.to,
-          text: `${p.name} agreed to end this mountain chapter. Mountain goals are set aside. Promises, debts and health remain.`,
-        });
-      }
-      return;
-    }
-    case 'ask-life': {
-      const clue = DISCOVERIES[inp.to];
-      if (!clue || !canHear(s, inp.to)) {
+      const release = inp.t === 'release-person',
+        clue = DISCOVERIES[inp.to];
+      if (!release && (!clue || !canHear(s, inp.to))) {
         s.unheard.push(idx);
         return;
       }
-      const p = personOf(s, inp.to);
       const offer: Affordance = {
-        id: 'private-talk',
-        action: 'talk',
-        label: `talk about ${clue.topic}`,
+        id: release ? 'end-chapter' : 'private-talk',
+        action: release ? 'rest' : 'talk',
+        label: release ? 'end this mountain chapter at the hut' : `talk about ${clue!.topic}`,
         duration: 5,
         effort: 0.02,
-        advertises: { belonging: 0.6, leisure: 0.4, meaning: 0.2 },
-        tags: ['social'],
-        with: [LEADER],
+        placeId: mem.pos.place ?? mem.pos.leg ?? m.hut,
+        advertises: release
+          ? { rest: 0.6, safety: 0.5, leisure: 0.3 }
+          : { belonging: 0.6, leisure: 0.4, meaning: 0.2 },
+        tags: release ? ['rest'] : ['social'],
       };
-      const r = predict(p, [...offersFor(s, inp.to), offer], {
-        voiceId: LEADER,
-        affordanceId: offer.id,
-        strength: 0.35,
-      });
-      const yes = r.verdict === 'assented' || r.verdict === 'complied';
-      s.lines.push({
-        at: s.minute,
-        who: inp.to,
+      s.hfRequests[inp.to] = { kind: release ? 'release' : 'life', input: idx, offer };
+      mem.pending = {
+        s: { voiceId: LEADER, affordanceId: offer.id, strength: 0.35, since: s.minute },
         input: idx,
-        verdict: r.verdict,
-        reason: 'private-conversation',
-        says: yes ? `${r.says} ${clue.clue}` : r.says,
-      });
-      s.journal.push({
-        at: s.minute,
-        who: inp.to,
-        text: `You asked ${p.name} about ${clue.displayTopic ?? clue.topic}. ${yes ? clue.outcome : `${memberIn(s, inp.to).they === 'she' ? 'She' : 'He'} did not discuss it this time.`}`,
-        story: true,
-      });
-      if (yes)
-        s.journal.push({ at: s.minute, who: inp.to, text: `${p.name} said, “${clue.clue}”`, story: true });
+      };
       return;
     }
     case 'promise': {
@@ -1144,7 +1092,7 @@ function applyInput(s: ClimbState, idx: number): void {
       const label = `turning back at ${clock(from)}`;
       for (const id of hearers) {
         const p = personOf(s, id);
-        perceive(p, [
+        receive(s, p, [
           {
             at: s.minute,
             channel: 'told',
@@ -1156,7 +1104,7 @@ function applyInput(s: ClimbState, idx: number): void {
             summary: `the leader said we turn back at ${clock(from)}`,
           },
         ]);
-        promiseCommitment(p, {
+        commit(s, p, {
           kind: 'promise',
           toId: LEADER,
           actions: ['descend'],
@@ -1185,7 +1133,7 @@ function applyInput(s: ClimbState, idx: number): void {
         return;
       }
       for (const id of hearers) {
-        perceive(personOf(s, id), [factPercept(s, inp.fact, id)]);
+        receive(s, personOf(s, id), [factPercept(s, inp.fact, id)]);
         reaction(s, id, idx, FACTS[inp.fact].bears, `told:${inp.fact}`);
       }
       s.told[inp.fact] = [...(s.told[inp.fact] ?? []), ...hearers];
@@ -1268,7 +1216,7 @@ function applyInput(s: ClimbState, idx: number): void {
       }
       s.leader.rations -= 1;
       mem.rations += 1;
-      perceive(personOf(s, inp.to), [
+      receive(s, personOf(s, inp.to), [
         {
           at: s.minute,
           channel: 'social',
@@ -1465,31 +1413,79 @@ function learnLeg(s: ClimbState, lg: Leg): void {
 
 export function clock(minute: number): string {
   const mod = ((minute % 1440) + 1440) % 1440;
-  return `${String(Math.floor(mod / 60)).padStart(2, '0')}:${String(mod % 60).padStart(2, '0')}`;
+  return `${String(Math.floor(mod / 60)).padStart(2, '0')}:${String(Math.floor(mod % 60)).padStart(2, '0')}`;
 }
 
-/** Advance one minute. Deterministic in the state and the input log. */
+/** The frame path yields after each admitted public HF call. The synchronous
+ * path drains the same generator, so save/replay preserve identical chunking. */
+const pendingSteps = new WeakMap<ClimbState, Generator<void, void, void>>();
+export function advanceFrame(s: ClimbState): boolean {
+  let pending = pendingSteps.get(s);
+  if (!pending) {
+    pending = stepping(s);
+    pendingSteps.set(s, pending);
+  }
+  const result = pending.next();
+  if (result.done) {
+    pendingSteps.delete(s);
+    return true;
+  }
+  return false;
+}
+export function drainAdvance(s: ClimbState): void {
+  let pending = pendingSteps.get(s);
+  if (!pending && s.hfPhase) pending = stepping(s);
+  if (!pending) return;
+  let result = pending.next();
+  while (!result.done) result = pending.next();
+  pendingSteps.delete(s);
+}
 export function step(s: ClimbState): void {
-  if (s.over) {
-    const releases = s.inputs
-      .map((input, index) => ({ input, index }))
-      .filter(({ input }) => input.t === 'release-person' && input.at === s.minute + 1);
-    if (releases.length) {
-      s.minute++;
-      for (const { index } of releases) applyInput(s, index);
-    }
+  if (pendingSteps.has(s) || s.hfPhase) {
+    drainAdvance(s);
     return;
   }
-  const m = mountainOf(s);
-  s.minute += 1;
-  for (const p of s.people) tick(p, s.minute);
-  stepLeader(s, m);
-  learn(s);
-  for (let i = 0; i < s.inputs.length; i++) if (s.inputs[i]?.at === s.minute) applyInput(s, i);
-  slips(s, m);
-  if ((s.minute - s.startMinute) % 15 === 0) sky(s, m);
-  checkPromise(s);
-  for (const mem of s.members) stepMember(s, m, mem);
+  const generator = stepping(s);
+  let result = generator.next();
+  while (!result.done) result = generator.next();
+}
+function* stepping(s: ClimbState): Generator<void, void, void> {
+  const m = mountainOf(s),
+    resuming = !!s.hfPhase;
+  if (
+    s.over &&
+    !resuming &&
+    !Object.keys(s.hfRequests).length &&
+    !s.hfQueue.length &&
+    !s.inputs.some((i) => i.t === 'release-person' && i.at === s.minute + 1)
+  )
+    return;
+  const target = s.hfPhase?.to ?? s.minute + 1;
+  if (!resuming) {
+    s.minute = target;
+    if (!s.over) {
+      stepLeader(s, m);
+      learn(s);
+    }
+    for (let i = 0; i < s.inputs.length; i++) if (s.inputs[i]?.at === s.minute) applyInput(s, i);
+    if (!s.over) {
+      slips(s, m);
+      if ((s.minute - s.startMinute) % 15 === 0) sky(s, m);
+      checkPromise(s);
+      for (const member of s.members) stepMember(s, m, member);
+    }
+    s.minute = target - 1;
+  }
+  const suggestions = Object.fromEntries(
+    s.members.flatMap((mem) => {
+      const pending = mem.pending ?? mem.deferred;
+      return pending ? [[mem.id, pending.s]] : [];
+    }),
+  );
+  yield* stepPeople(s, makeWorld, target, suggestions);
+  s.minute = target;
+  delete s.hfPhase;
+  if (s.over) return;
   ropeCheck(s);
   quietLines(s, m);
   const allHome = s.members.every((x) => x.homeAt !== null) && s.leader.pos.place === m.hut;
@@ -1893,72 +1889,6 @@ function stepMember(s: ClimbState, m: Mountain, mem: MemberState): void {
   }
   if (mem.gather && p.activity?.affordanceId === `gather:${mem.gather.with}`) gatherStep(s, m, mem);
   if (mem.move) mem.pos = movePos(mem.move, s.minute);
-  let a = p.activity;
-  if (a && s.minute >= a.endsAt) {
-    complete(s, m, mem, p, 'completed');
-    a = null;
-  }
-  const due = mem.pending !== null || (a ? s.minute >= a.reviewAt : s.minute >= mem.idleUntil);
-  if (!due) return;
-  const offers = alongsidePartner(
-    s,
-    mem,
-    offersFor(s, mem.id).filter((o) => !a || o.id !== a.affordanceId),
-  );
-  const fresh = !a;
-  const voice =
-    mem.pending ?? (fresh && mem.deferred && s.minute <= mem.deferred.until ? mem.deferred : null);
-  // A roped person whose partner is moving decides on the merits, not defending what they are already doing.
-  const tugged = rules2(s) && mem.ropedTo !== null && memberState(s, mem.ropedTo).move !== null;
-  const rec: DecisionRecord = decide(p, offers, {
-    ...(voice ? { suggestion: voice.s } : {}),
-    ...(tugged ? { reconsider: true } : {}),
-  });
-  if (voice) {
-    const r = rec.suggestion;
-    const wasDeferred = voice === mem.deferred;
-    mem.pending = null;
-    mem.deferred = null;
-    if (r) {
-      if (!wasDeferred || r.verdict !== 'deferred') line(s, mem.id, voice.input, r);
-      if (r.verdict === 'deferred' && !wasDeferred)
-        mem.deferred = { s: voice.s, input: voice.input, until: s.minute + 90 };
-    }
-  }
-  if (a && rec.chosenAffordanceId === a.affordanceId) {
-    reviewed(p);
-    return;
-  }
-  const aff = offers.find((o) => o.id === rec.chosenAffordanceId);
-  if (!aff) {
-    if (!a) mem.idleUntil = s.minute + 5;
-    else reviewed(p);
-    return;
-  }
-  if (aff.id.startsWith('down:') && mem.escortMeeting) {
-    const target = memberState(s, mem.escortMeeting.with);
-    if (
-      voice?.input === mem.escortMeeting.input &&
-      rec.suggestion &&
-      ['assented', 'complied'].includes(rec.suggestion.verdict) &&
-      s.minute <= mem.escortMeeting.until &&
-      distance(s, mem.pos, target.pos) < 40
-    )
-      mem.companyFor = target.id;
-    delete mem.escortMeeting;
-  }
-  if (aff.id.startsWith('down:') && needsCompany(s, mem)) {
-    // HF chose to go down; on a mountain nobody leaves the party alone without the leader's answer.
-    askCompany(s, mem);
-    if (!mem.alone) {
-      if (!a) mem.idleUntil = s.minute + 5;
-      else reviewed(p);
-      return;
-    }
-  }
-  if (a) complete(s, m, mem, p, 'interrupted');
-  if (!begin(p, aff, rec)) return;
-  startMove(s, m, mem, aff);
 }
 
 /** Going down from above the hut, first turn, with the leader still going up and nobody turned close by. */
@@ -2090,7 +2020,7 @@ function startMove(s: ClimbState, m: Mountain, mem: MemberState, aff: Affordance
       const o = memberState(s, mem.ropedTo);
       const op = personOf(s, o.id);
       if (o.move === null) {
-        if (op.activity) interrupt(op, s.minute, 'rope:tug');
+        if (op.activity) interruptActivity(s, op, 'rope:tug');
         o.idleUntil = s.minute;
       }
     }
@@ -2111,19 +2041,15 @@ function promisedDown(p: Person, now: number): boolean {
 
 function wantHome(s: ClimbState, p: Person, legsLeft: number): void {
   if (p.agenda.goals.some((g) => g.label === 'get down safely' && g.status === 'active')) return;
-  adoptGoal(
-    p,
-    {
-      label: 'get down safely',
-      serves: ['safety', 'security'],
-      advancedBy: [{ action: 'descend', amount: 1 / Math.max(1, legsLeft) }],
-      // Someone already bound by a promise to be down goes down for that promise; the goal only backs it up.
-      importance: promisedDown(p, s.minute) ? 0.3 : 0.7,
-      temporal: { halfLifeMinutes: 180 },
-      deadline: s.day * 1440 + mountainOf(s).duskMinuteOfDay,
-    },
-    s.minute,
-  );
+  setGoal(s, p, {
+    label: 'get down safely',
+    serves: ['safety', 'security'],
+    advancedBy: [{ action: 'descend', amount: 1 / Math.max(1, legsLeft) }],
+    // Someone already bound by a promise to be down goes down for that promise; the goal only backs it up.
+    importance: promisedDown(p, s.minute) ? 0.3 : 0.7,
+    temporal: { halfLifeMinutes: 180 },
+    deadline: s.day * 1440 + mountainOf(s).duskMinuteOfDay,
+  });
 }
 
 /**
@@ -2134,7 +2060,7 @@ function wantHome(s: ClimbState, p: Person, legsLeft: number): void {
 function aims(s: ClimbState, m: Mountain): void {
   const dusk = s.day * 1440 + m.duskMinuteOfDay;
   const nell = personOf(s, 'nell');
-  promiseCommitment(nell, {
+  commit(s, nell, {
     kind: 'promise',
     toId: 'nell-mother',
     actions: ['descend'],
@@ -2150,17 +2076,13 @@ function aims(s: ClimbState, m: Mountain): void {
   });
   const bilal = personOf(s, 'bilal');
   if (!bilal.agenda.goals.some((g) => g.label === 'leave the tin on the top' && g.status === 'active'))
-    adoptGoal(
-      bilal,
-      {
-        label: 'leave the tin on the top',
-        serves: ['tradition', 'benevolence'],
-        advancedBy: [{ action: 'summit', amount: 1 }],
-        importance: 0.85,
-        temporal: { halfLifeMinutes: 600 },
-      },
-      s.minute,
-    );
+    setGoal(s, bilal, {
+      label: 'leave the tin on the top',
+      serves: ['tradition', 'benevolence'],
+      advancedBy: [{ action: 'summit', amount: 1 }],
+      importance: 0.85,
+      temporal: { halfLifeMinutes: 600 },
+    });
 }
 
 /** Say a story beat once. */
@@ -2180,16 +2102,16 @@ function here(m: Mountain, mem: MemberState): string {
 }
 
 /** End the running activity with an HF outcome built from what the world did. */
-function complete(
+function resolvePhysical(
   s: ClimbState,
   m: Mountain,
   mem: MemberState,
   p: Person,
   status: Outcome['status'],
   extra: Partial<Outcome> = {},
-): void {
+): Outcome {
   const a = p.activity;
-  if (!a) return;
+  if (!a) throw Error('Missing accepted physical activity');
   const out: Outcome = {
     affordanceId: a.affordanceId,
     action: a.action,
@@ -2328,7 +2250,7 @@ function complete(
       } else mem.ropeReady = { with: other.id, at: s.minute };
     }
   }
-  finish(p, out);
+  return out;
 }
 
 function ropeOffText(s: ClimbState, a: MemberState, b: MemberState): string {
@@ -2387,7 +2309,7 @@ function slips(s: ClimbState, m: Mountain): void {
         who: mem.id,
         text: `${name} slipped on ${routeName(lg)}; ${memberIn(s, partner.id).name} held the rope.`,
       });
-      perceive(p, [
+      receive(s, p, [
         {
           at: s.minute,
           channel: 'social',
@@ -2427,7 +2349,12 @@ function slips(s: ClimbState, m: Mountain): void {
           },
         ],
       });
-      if (sev > 0.45) knockDown(p, { reason: 'fall', until: s.minute + 40 });
+      if (sev > 0.45)
+        enqueue(s, 'body.received', {
+          person: p.id,
+          evidenceId: `fall:${p.id}:${s.minute}`,
+          receipt: { type: 'fallen', cause: 'fall', observedUntil: Math.round((s.minute + 40) * MINUTE) },
+        });
     }
     witness(s, mem.id, 'fall', `${name} fell on ${lg.name}`, sev, lg.id);
   });
@@ -2447,7 +2374,7 @@ function witness(
     if (other.id === who || other.homeAt !== null) continue;
     if (distance(s, mem.pos, other.pos) > 300) continue;
     const p = personOf(s, other.id);
-    perceive(p, [
+    receive(s, p, [
       {
         at: s.minute,
         channel: 'saw',
@@ -2460,7 +2387,7 @@ function witness(
         ...(kind === 'fall' && source ? { threat: { severity, chance: 0.4, sourceId: source } } : {}),
       },
     ]);
-    if (kind === 'fall' && p.activity) interrupt(p, s.minute, 'percept:fall');
+    if (kind === 'fall' && p.activity) interruptActivity(s, p, 'percept:fall');
   }
 }
 
@@ -2493,7 +2420,7 @@ function sky(s: ClimbState, m: Mountain): void {
         summary: 'I was cold',
       });
     }
-    if (percepts.length) perceive(personOf(s, mem.id), percepts);
+    if (percepts.length) receive(s, personOf(s, mem.id), percepts);
   }
 }
 
@@ -2510,11 +2437,14 @@ function checkPromise(s: ClimbState): void {
   pr.status = kept ? 'kept' : 'broken';
   for (const id of pr.hearers) {
     const p = personOf(s, id);
-    const trust = voiceOf(p, LEADER)?.trust ?? 0.5;
-    // Host step (docs/hf-requests.md 2): HF has no rule for a voice keeping its own promise.
-    if (s.fieldRules) noteVoicePromise(p, LEADER, { kept, at: s.minute, action: 'turn back' });
-    else adoptVoiceTrust(p, LEADER, Math.max(0, Math.min(1, trust + (kept ? 0.05 : -0.15))), 1);
-    perceive(p, [
+    // HF learns from the actual kept/broken promise through its public evidence input.
+    enqueue(s, 'voice.promise-received', {
+      person: p.id,
+      evidenceId: `promise:${p.id}:${s.minute}`,
+      voiceId: LEADER,
+      promise: { kept, action: 'descend' },
+    });
+    receive(s, p, [
       {
         at: s.minute,
         channel: 'social',
@@ -2571,8 +2501,15 @@ function quietLines(s: ClimbState, m: Mountain): void {
 
 // ---------------------------------------------------------------- run and replay
 
-export const snapshot = (s: ClimbState): string => JSON.stringify(s);
-export const restore = (json: string): ClimbState => JSON.parse(json) as ClimbState;
+export const snapshot = (s: ClimbState): string =>
+  canonicalPersona(JSON.parse(JSON.stringify({ ...s, hf: archiveOf(s) })));
+export const restore = (json: string): ClimbState => {
+  const s = JSON.parse(json) as ClimbState;
+  if (!s.hf || s.castEdition !== 'rope-hf4-1')
+    throw Error('This saved climb uses an older simulation. Keep the file and start a fresh season.');
+  syncReadings(s);
+  return s;
+};
 
 /** Replay a start state with a list of inputs to the end of the climb. */
 export function replay(
@@ -2580,18 +2517,175 @@ export function replay(
   inputs: readonly Input[],
   until?: number,
   narration?: NarrationVersion,
+  phase?: Pick<NonNullable<ClimbState['hfPhase']>, 'from' | 'to' | 'steps'>,
 ): ClimbState {
   const s = restore(startJson);
   const savedNarration = s.narration;
   if (narration !== undefined) s.narration = narration;
   s.inputs = inputs.map((x) => ({ ...x }));
   while (
-    (!s.over || s.inputs.some((i) => i.t === 'release-person' && i.at === s.minute + 1)) &&
-    (until === undefined || s.minute < until)
+    (!s.over ||
+      Object.keys(s.hfRequests).length > 0 ||
+      s.hfQueue.length > 0 ||
+      s.inputs.some((i) => i.t === 'release-person' && i.at === s.minute + 1)) &&
+    ((phase?.from ?? until) === undefined || s.minute < (phase?.from ?? until)!)
   )
     step(s);
+  if (phase) {
+    if (
+      s.minute !== phase.from ||
+      phase.to !== phase.from + 1 ||
+      !Number.isSafeInteger(phase.steps) ||
+      phase.steps < 1
+    )
+      throw Error('Unsupported partial simulation phase');
+    const generator = stepping(s);
+    for (let n = 0; n < phase.steps; n++)
+      if (generator.next().done) throw Error('Partial phase exceeds its admitted steps');
+    pendingSteps.set(s, generator);
+  }
   // The compatibility override does not rewrite the original saved state's metadata.
   if (savedNarration === undefined) delete s.narration;
   else s.narration = savedNarration;
   return s;
+}
+
+/** Host evidence requests an HF interruption; it cannot finish an actor itself. */
+function complete(
+  s: ClimbState,
+  _m: Mountain,
+  _mem: MemberState,
+  p: Person,
+  status: Outcome['status'],
+  extra: Partial<Outcome> = {},
+) {
+  if (extra.injury)
+    enqueue(s, 'body.received', {
+      person: p.id,
+      evidenceId: `injury:${p.id}:${s.minute}`,
+      receipt: { type: 'injured', injury: extra.injury as never },
+    });
+  if (extra.percepts?.length) receive(s, p, extra.percepts);
+  interruptActivity(s, p, `world:${status}`);
+}
+
+export function makeWorld(s: ClimbState): World {
+  const m = mountainOf(s);
+  return {
+    now: () => s.minute,
+    converse: (a, b) =>
+      !a.body.asleep &&
+      !b.body.asleep &&
+      distance(s, memberState(s, a.id).pos, memberState(s, b.id).pos) < earshot(s)
+        ? { placeId: `place:${s.mountain}:${memberState(s, a.id).pos.place ?? memberState(s, a.id).pos.leg}` }
+        : false,
+    affordancesFor: (p) => {
+      const mem = memberState(s, p.id);
+      if (mem.homeAt !== null && !s.over) return [];
+      if (s.hfReleased[p.id]) return [];
+      const request = s.hfRequests[p.id];
+      const boundary = s.hfPhase?.result?.boundary;
+      const starting =
+        boundary?.type === 'world-required'
+          ? boundary.requests.find((r) => r.kind === 'action' && r.person === p.id && r.stage === 'start')
+          : undefined;
+      // A genuine HF start request retains its offer authorization after its
+      // answer is shown. Revalidate physical availability with that same request.
+      const offers = alongsidePartner(
+        s,
+        mem,
+        offersFor(s, p.id, starting?.kind === 'action' ? starting.offerId : undefined),
+      ).filter(
+        (o) => !s.over || ['eat', 'drink', 'relieve', 'rest', 'wait', 'sleep', 'talk'].includes(o.action),
+      );
+      return request ? [...offers, request.offer] : offers;
+    },
+    perceptsFor: () => [],
+    scarcityFor: () => 0,
+    observed: () => {
+      for (const p of s.people) {
+        const mem = memberState(s, p.id),
+          pending = mem.pending ?? mem.deferred;
+        if (!pending) continue;
+        const resolved = p.events.findLast(
+          (e) =>
+            e.data.kind === 'suggestion-resolved' &&
+            e.data.adviceId === `${pending.s.voiceId}:${pending.s.since}`,
+        );
+        if (
+          !resolved ||
+          resolved.data.kind !== 'suggestion-resolved' ||
+          s.hfLastDecision[p.id] === resolved.id
+        )
+          continue;
+        s.hfLastDecision[p.id] = resolved.id;
+        const decisionId = resolved.data.decisionId;
+        const event = p.events.findLast(
+          (e) => e.data.kind === 'decision' && e.data.decision.id === decisionId,
+        );
+        const result = resolved.data.resolution;
+        const answer = {
+          ...result,
+          says: (event?.narration ?? resolved.narration).map((l) => l.text).join(' ') || result.reason,
+        };
+        line(s, p.id, pending.input, answer);
+        const switching =
+          p.activity &&
+          event?.data.kind === 'decision' &&
+          event.data.decision.chosenAffordanceId &&
+          event.data.decision.chosenAffordanceId !== p.activity.affordanceId &&
+          ['assented', 'complied', 'commanded'].includes(result.verdict);
+        mem.pending = switching ? pending : null;
+        mem.deferred =
+          result.verdict === 'deferred' ? { s: pending.s, input: pending.input, until: s.minute + 90 } : null;
+      }
+    },
+    beginOptions: (p, offer) => {
+      const mem = memberState(s, p.id);
+      if (offer.id.startsWith('down:') && needsCompany(s, mem)) {
+        askCompany(s, mem);
+        if (!mem.alone) return false;
+      }
+      p.activity = s.hfActive[p.id] ?? null;
+      startMove(s, m, mem, offer);
+      return true;
+    },
+    resolve: (p, activity, reason) => {
+      p.activity = activity;
+      const result = resolvePhysical(
+        s,
+        m,
+        memberState(s, p.id),
+        p,
+        reason === 'ended' ? 'completed' : 'interrupted',
+      );
+      const request = s.hfRequests[p.id];
+      if (request && request.offer.id === activity.affordanceId && reason === 'ended') {
+        if (request.kind === 'release') {
+          s.hfReleased[p.id] = true;
+          for (const goal of p.agenda.goals.filter(
+            (g) =>
+              g.status === 'active' &&
+              ['summit', 'get down safely', 'leave the tin on the top'].some(
+                (label) => g.id === label || g.label === label,
+              ),
+          ))
+            endGoal(s, p, goal.id);
+          s.journal.push({
+            at: s.minute,
+            who: p.id,
+            text: `${p.name} ended this mountain chapter at the hut. Promises, debts and health remain.`,
+          });
+          s.hfOffers[p.id] = { revision: (s.hfOffers[p.id]?.revision ?? 0) + 1, offers: [] };
+          enqueue(s, 'offers.received', { person: p.id, revision: s.hfOffers[p.id]!.revision, offers: [] });
+        } else if (canHear(s, p.id)) {
+          const clue = DISCOVERIES[p.id];
+          if (clue)
+            s.journal.push({ at: s.minute, who: p.id, text: `${p.name} said, “${clue.clue}”`, story: true });
+        }
+        delete s.hfRequests[p.id];
+      }
+      return result;
+    },
+  };
 }

@@ -145,20 +145,15 @@ it('keeps turn-place identities exact when journal prose uses reader-facing rout
 });
 
 it.each(['tamar', 'oskar', 'nell', 'bilal', 'wren'])(
-  'names %s alone in private-conversation refusals',
+  'records the named person’s actual private-conversation answer for %s',
   async (id) => {
-    const { queueInput, startClimb, step, personOf } = await import('../src/sim/climb.ts');
+    const { queueInput, startClimb, step } = await import('../src/sim/climb.ts');
     const s = startClimb(13, 3);
-    personOf(s, id).body.downed = { since: s.minute, reason: 'fall', until: s.minute + 60 };
-    queueInput(s, { t: 'ask-life', to: id });
-    step(s);
-    const line = s.journal.find((j) => j.text.startsWith('You asked '));
-    expect(line?.text).toContain(
-      ['tamar', 'nell', 'wren'].includes(id)
-        ? 'She did not discuss it this time.'
-        : 'He did not discuss it this time.',
-    );
-    expect(line?.text).not.toContain('They');
+    const input = queueInput(s, { t: 'ask-life', to: id });
+    for (let i = 0; i < 10; i++) step(s);
+    const answer = s.lines.find((line) => line.input === input && line.who === id);
+    expect(answer?.says).toBeTruthy();
+    expect(['assented', 'deferred', 'refused']).toContain(answer?.verdict);
   },
 );
 

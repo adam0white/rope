@@ -4,29 +4,23 @@
  * stepped through the same HF decide/begin/finish loop. SCOPE: the valley is offers only, no places or events; a
  * season ends after the last mountain or when the party can no longer climb. Not modelled: jobs, families, travel.
  */
-import {
-  type Affordance,
-  begin,
-  decide,
-  finish,
-  type Person,
-  readPerson,
-  tick,
-  voiceOf,
-} from '@adam0white/human-framework';
-import { canonicalPersona, lifeAdmission } from '@adam0white/lab-client';
+import type { PersonAuthoring } from '@adam0white/human-framework';
+import { canonicalPersona } from '@adam0white/lab-client';
 import {
   type ClimbState,
   hurtLevel,
+  makeWorld,
   type NarrationVersion,
   replay,
   restore,
   snapshot,
   startClimb,
 } from './climb.ts';
+import { interruptActivity } from './commands.ts';
 import { type Branch, type Facts, factsOf } from './debrief.ts';
+import { type Affordance, archiveOf, type Person, stepPeople } from './hf4.ts';
 import { SEASON } from './mountain.ts';
-import { createParty, LEADER, MEMBERS } from './party.ts';
+import { createParty, MEMBERS } from './party.ts';
 import { admitClimber, type Chapter, checkChapter } from './passport.ts';
 
 export interface ClimbSummary {
@@ -64,8 +58,8 @@ export const DAYS_BETWEEN = 4;
 
 export const dayOfClimb = (climbNo: number): number => FIRST_DAY + DAYS_BETWEEN * (climbNo - 1);
 
-export function openingParty(seed: number): Person[] {
-  return createParty(seed, dayOfClimb(1) * 1440 + (SEASON[0]?.startMinuteOfDay ?? 300) - 30);
+export function openingParty(seed: number): PersonAuthoring[] {
+  return createParty(seed, dayOfClimb(1) * 1440 + (SEASON[0]?.startMinuteOfDay ?? 300));
 }
 export function newSeason(seed: number, chapter?: Chapter): { season: SeasonState; climb: ClimbState } {
   const day = dayOfClimb(1);
@@ -73,7 +67,7 @@ export function newSeason(seed: number, chapter?: Chapter): { season: SeasonStat
     checkChapter(chapter);
     const expected = Object.fromEntries(openingParty(seed).map((p) => [p.id, p]));
     for (const input of chapter.inputs) {
-      const id = input.parent.castId.split('.')[2] ?? '';
+      const id = input.castId.split('.')[2] ?? '';
       const opening = expected[id];
       if (!opening) throw new Error('This person does not belong in the starting party.');
       expected[id] = admitClimber(input, opening);
@@ -89,25 +83,6 @@ export function newSeason(seed: number, chapter?: Chapter): { season: SeasonStat
       })
     : openingParty(seed);
   const climb = startClimb(seed, day, people, SEASON[0]?.id ?? 'hollin', 1);
-  if (chapter)
-    for (const input of chapter.inputs) {
-      const life = lifeAdmission(input, 'rope');
-      const id = input.parent.castId.split('.')[2];
-      const member = climb.members.find((m) => m.id === id);
-      // A carried routine consumes preparation time at the hut; it grants no skill or work completion.
-      if (member && !life.availableForExtraWork)
-        member.idleUntil = climb.minute + (life.startsAtHome ? 8 : 4);
-      climb.journal.push({
-        at: climb.minute,
-        who: id,
-        text:
-          life.line +
-          (!life.availableForExtraWork
-            ? ` ${MEMBERS.find((m) => m.id === id)?.they === 'she' ? 'She checks her' : 'He checks his'} gear at the hut for a few minutes.`
-            : ` ${MEMBERS.find((m) => m.id === id)?.they === 'she' ? 'She has' : 'He has'} time to help with preparations.`),
-        story: true,
-      });
-    }
   const season: SeasonState = {
     v: 1,
     seed,
@@ -123,6 +98,17 @@ export function newSeason(seed: number, chapter?: Chapter): { season: SeasonStat
 
 /** Close a played climb into the season, then live the valley days and start the next climb (or end). */
 export function nextClimb(season: SeasonState, played: ClimbState, branch: Branch | null): ClimbState | null {
+  const frames = nextClimbFrames(season, played, branch);
+  let result = frames.next();
+  while (!result.done) result = frames.next();
+  return result.value;
+}
+/** Explicit paused transition; callers may yield rendering between each public HF call. */
+export function* nextClimbFrames(
+  season: SeasonState,
+  played: ClimbState,
+  branch: Branch | null,
+): Generator<void, ClimbState | null, void> {
   season.past ??= [];
   season.past.push({
     start: season.start ?? '',
@@ -145,10 +131,10 @@ export function nextClimb(season: SeasonState, played: ClimbState, branch: Branc
     return null;
   }
   const day = dayOfClimb(played.climbNo + 1);
-  const people = played.people;
-  valley(people, played.minute, day * 1440 + next.startMinuteOfDay);
+  yield* valleyFrames(played, day * 1440 + next.startMinuteOfDay);
+  const continued = archiveOf(played);
   season.climbNo = played.climbNo + 1;
-  const climb = startClimb(season.seed, day, people, next.id, season.climbNo);
+  const climb = startClimb(season.seed, day, undefined, next.id, season.climbNo, continued, played.hfActive);
   if (played.fieldRules) climb.fieldRules = { ...played.fieldRules };
   aftermath(climb, season.history.at(-1)?.facts ?? {});
   season.start = snapshot(climb);
@@ -156,10 +142,7 @@ export function nextClimb(season: SeasonState, played: ClimbState, branch: Branc
   return climb;
 }
 
-/**
- * The next climb opens on what the last one left: who spent the night out and was brought down, who is still hurt
- * (read from the HF body), and who has stopped trusting you (read from HF voice trust). Words, never numbers.
- */
+/** The next climb recalls recorded physical events. Current condition is unavailable. */
 function aftermath(climb: ClimbState, facts: Facts): void {
   const at = climb.minute;
   const add = (text: string, who?: string) =>
@@ -180,18 +163,12 @@ function aftermath(climb: ClimbState, facts: Facts): void {
   for (const p of climb.people) {
     const m = MEMBERS.find((x) => x.id === p.id);
     if (!m) continue;
-    const cap = readPerson(p).body.capacity;
     const f = facts[m.id];
     if (f && (hurtLevel(f.hurt) === 'hurt' || hurtLevel(f.hurt) === 'badly'))
       lines.push([
-        cap < 0.7
-          ? `${m.name} was still hurt from ${f.hurtWhere ?? 'the last climb'}, and came anyway.`
-          : `${m.name}'s minor injury from ${f.hurtWhere ?? 'the last climb'} had mostly healed.`,
+        `${m.name} was injured at ${f.hurtWhere ?? 'the last climb'}. Current condition is unavailable.`,
         m.id,
       ]);
-    const trust = voiceOf(p, LEADER)?.trust ?? 0.5;
-    if (trust < 0.35) lines.push([`${m.name} hardly looked at you over breakfast.`, m.id]);
-    else if (trust > 0.75) lines.push([`${m.name} saved you the good mug.`, m.id]);
   }
   for (const [t, w] of lines.reverse()) add(t, w);
 }
@@ -241,77 +218,52 @@ const VALLEY: Affordance[] = [
 ];
 
 /** Live the days between climbs: each person decides among the valley's offers until `to`. */
-export function valley(people: Person[], from: number, to: number): void {
-  for (const p of people) {
-    let now = Math.max(from, p.now);
-    if (p.activity) {
-      tick(p, now);
-      finish(p, {
-        affordanceId: p.activity.affordanceId,
-        action: p.activity.action,
-        status: 'interrupted',
-        at: now,
-      });
-    }
-    const offers: Affordance[] = [
-      ...VALLEY.map((o) =>
-        p.body.bladder && o.id === 'relieve'
-          ? { ...o, label: 'use the toilet', advertises: {}, voidsBladder: true }
-          : o,
-      ),
-      ...MEMBERS.filter((m) => m.id !== p.id).map(
-        (m): Affordance => ({
-          id: `talk:${m.id}`,
-          action: 'talk',
-          label: `talk with ${m.name}`,
-          targetId: m.id,
-          with: [m.id],
-          duration: 60,
-          effort: 0.05,
-          advertises: { belonging: 0.4, leisure: 0.15 },
-          tags: ['social'],
-        }),
-      ),
-    ];
-    while (now < to) {
-      tick(p, now);
-      const rec = decide(p, offers);
-      const aff = offers.find((o) => o.id === rec.chosenAffordanceId);
-      if (!aff) {
-        now += 30;
-        continue;
-      }
-      begin(p, aff, rec);
-      const end = Math.min(to, p.activity?.endsAt ?? now + aff.duration);
-      tick(p, end);
-      finish(p, {
-        affordanceId: aff.id,
-        action: aff.action,
-        status: end < (p.activity?.endsAt ?? end) ? 'interrupted' : 'completed',
-        at: end,
-        ...(aff.voidsBladder ? { voidedBladder: true } : {}),
-        ...(aff.action === 'eat' ? { needs: { food: 0.8, water: 0.4 } } : {}),
-        ...(aff.action === 'talk' && aff.targetId
-          ? {
-              percepts: [
-                {
-                  at: end,
-                  channel: 'social' as const,
-                  kind: 'chat',
-                  actorId: aff.targetId,
-                  targetId: p.id,
-                  salience: 0.4,
-                  valence: 0.2,
-                  summary: `I talked with ${aff.label.replace('talk with ', '')}`,
-                },
-              ],
-            }
-          : {}),
-      });
-      now = Math.max(end, now + 1);
-    }
-    tick(p, to);
-  }
+export function valley(state: ClimbState, to: number): void {
+  const frames = valleyFrames(state, to);
+  let result = frames.next();
+  while (!result.done) result = frames.next();
+}
+export function* valleyFrames(state: ClimbState, to: number): Generator<void, void, void> {
+  state.hfMode = 'valley';
+  for (const p of state.people) interruptActivity(state, p, 'the climb ended; return to the valley');
+  const world = (s: ClimbState) => ({
+    ...makeWorld(s),
+    affordancesFor: (p: Person): Affordance[] => [
+      ...VALLEY,
+      ...MEMBERS.filter((m) => m.id !== p.id).map((m) => ({
+        id: `talk:${m.id}`,
+        action: 'talk',
+        label: `talk with ${m.name}`,
+        targetId: m.id,
+        with: [m.id],
+        placeId: 'valley',
+        duration: 60,
+        effort: 0.05,
+        advertises: { belonging: 0.4, leisure: 0.15 },
+        tags: ['social'],
+      })),
+    ],
+    beginOptions: () => true,
+    resolve: (
+      _p: Person,
+      a: import('./hf4.ts').Activity,
+      reason: 'ended' | 'interrupted',
+    ): import('./hf4.ts').Outcome => ({
+      affordanceId: a.affordanceId,
+      action: a.action,
+      targetId: a.targetId,
+      status: reason === 'ended' ? 'completed' : 'interrupted',
+      at: s.minute,
+      ...(reason === 'ended' && a.action === 'eat' ? { needs: { food: 0.8, water: 0.4 } } : {}),
+      ...(reason === 'ended' && a.action === 'relieve' ? { voidedBladder: true } : {}),
+    }),
+    converse: () => ({ placeId: 'valley' }),
+  });
+  // The public Run advances every bodily/agenda owner across the actual valley interval.
+  yield* stepPeople(state, world, to, {}, undefined, 30);
+  state.minute = to;
+  delete state.hfPhase;
+  delete state.hfMode;
 }
 
 /** Reconstruct every prior played climb and valley interval before trusting a later initial state. */
@@ -343,7 +295,7 @@ export function validateSeasonStart(
 /** Playtest export (AGENTS.md): seed, start state, input log and final state replay the player's climb. */
 export interface PlaytestExport {
   game: 'rope';
-  v: 1;
+  v: 2;
   engine: string;
   seed: number;
   climbNo: number;
@@ -366,7 +318,7 @@ export function exportClimb(
 ): PlaytestExport {
   return {
     game: 'rope',
-    v: 1,
+    v: 2,
     engine,
     seed: s.seed,
     climbNo: s.climbNo,
@@ -380,27 +332,12 @@ export function exportClimb(
   };
 }
 
-/**
- * Reconstruct an export snapshot at its saved minute. Unversioned releases used several narration revisions.
- * Their saved words identify the narrator revision only; the simulation regenerates every line and journal entry.
- * A start state and input log alone cannot distinguish those releases. Rules 2 identifies the current narrator.
- * This reconstructs a snapshot only: the temporary legacy override is removed to preserve the saved JSON shape.
- * Continuing an unversioned result with step() requires an explicit narration version.
- */
+/** Reconstruct the exact current Run, host phase and input tape. Older save formats refuse. */
 export function replayExport(e: PlaytestExport): ClimbState {
-  const start = restore(e.start);
+  restore(e.start);
   const saved = restore(e.state);
-  let narration: NarrationVersion | undefined;
-  if (start.rules === undefined && start.narration === undefined) {
-    const causes = saved.lines.some((l) =>
-      / (?:My food's gone|One of us is tied in already|.+?'s too far off to tie to)\.$/.test(l.says),
-    );
-    const truthfulEscort = saved.journal.some((j) =>
-      / (?:turned to go down toward .+, who is far off|went down with [^,.]+)\.$/.test(j.text),
-    );
-    narration = truthfulEscort ? 3 : causes ? 2 : 1;
-  }
-  const reconstructed = replay(e.start, e.inputs, saved.minute, narration);
+  const narration: NarrationVersion | undefined = undefined;
+  const reconstructed = replay(e.start, e.inputs, saved.minute, narration, saved.hfPhase);
   if (snapshot(reconstructed) !== e.state)
     throw new Error(
       'This saved climb uses different narration or rules. Keep its export and start a fresh climb.',

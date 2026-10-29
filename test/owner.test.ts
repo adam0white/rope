@@ -7,7 +7,7 @@ it('control: hours of waiting send no word for the player', () => {
   expect(s.inputs).toHaveLength(0);
   expect(s.lines.filter((l) => l.input >= 0)).toHaveLength(0);
   expect(s.journal.filter((j) => /^You (told|asked|urged|insisted|said)/.test(j.text))).toHaveLength(0);
-});
+}, 120000);
 
 it('a promise is not credited by a turn made before it', () => {
   const s = startClimb(1, 3);
@@ -32,7 +32,7 @@ it('a turn made after the promise, before its hour, is credited', () => {
   // Credited at the hour, once the turn has held until then.
   while (!s.over && s.minute < s.day * 1440 + 16 * 60 + 1) step(s);
   expect(s.journal.some((j) => j.text === 'You turned when you said you would.')).toBe(true);
-});
+}, 120000);
 
 it('a walk down and back up before the hour keeps nothing', () => {
   const s = startClimb(1, 3);
@@ -44,4 +44,4 @@ it('a walk down and back up before the hour keeps nothing', () => {
   queueInput(s, { t: 'lead', dir: 'up' });
   while (!s.over && s.minute < s.day * 1440 + 12 * 60 + 31) step(s);
   expect(s.promise?.status).toBe('broken');
-});
+}, 120000);

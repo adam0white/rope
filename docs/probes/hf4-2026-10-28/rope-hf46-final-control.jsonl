@@ -1,0 +1,2 @@
+{"stage":"climb","minutes":110,"elapsedMs":2386.459708,"frameSamplesAfter10minWarmup":207,"frameWallP95Ms":26.22887499999979,"frameWallMaxMs":275.6964579999999,"frameCpuP95Ms":25.877,"framesOver10ms":63,"transactions":116,"bytes":2556266,"path":["meadow"]}
+{"stage":"valley-and-next-opening","from":4730,"to":10350,"elapsedMs":54726.931333,"cpuMs":56845.638,"transactions":729,"archiveBytes":3782639,"stateBytes":4542509,"fullHash":"5b6bbaf783ac3cd50e075367c69669e391349e8f8b18880f38bec2de334863a1","replayMs":12959.030332999995,"replayExact":true}

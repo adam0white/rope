@@ -1,8 +1,7 @@
 import { expect, it } from 'vitest';
 import { campFacts, campFallback } from '../src/sim/camp.ts';
-import { startClimb } from '../src/sim/climb.ts';
+import { queueInput, startClimb, step } from '../src/sim/climb.ts';
 import worker from '../worker/index.ts';
-import { playScripted } from './script.ts';
 
 const post = (body: unknown, ip = '1.2.3.4') =>
   new Request('https://x/api/camp', {
@@ -21,11 +20,16 @@ const env = (
   CAMP_AI: on,
 });
 
-it('camp facts come from HF records and the journal; the fallback is deterministic', () => {
-  const s = playScripted(startClimb(1, 3), { turnAt: 11 * 60 });
+it('camp facts preserve an actual HF deferral and journal; the fallback is deterministic', () => {
+  const s = startClimb(1, 3);
+  // Authored host locations exercise the actual HF response; this is not a completed climb.
+  for (const member of [...s.members, s.leader]) member.pos = { place: null, leg: 'meadow', t: 0.5 };
+  s.members.find((m) => m.id === 'oskar')!.pos.t = 0.6;
+  queueInput(s, { t: 'say', to: 'tamar', act: 'gather', with: 'oskar', force: 'ask' });
+  step(s);
   const f = campFacts(s, 'Hollin');
   expect(f.people).toHaveLength(5);
-  expect(f.answers.length).toBeGreaterThan(0);
+  expect(f.answers.some((answer) => answer.includes('Oskar') && answer.includes('deferred'))).toBe(true);
   expect(campFallback(f)).toEqual(campFallback(campFacts(s, 'Hollin')));
 });
 

@@ -1,174 +1,133 @@
-import {
-  abandonGoal,
-  ENGINE_VERSION,
-  knockDown,
-  snapshot as personSnapshot,
-} from '@adam0white/human-framework';
-import {
-  claimCastChapterBatch,
-  createPersona,
-  initialPersonaLife,
-  type PersonaRequest,
-  preparePersonaLife,
-} from '@adam0white/lab-client';
 import { expect, it } from 'vitest';
-import { queueInput, snapshot, step } from '../src/sim/climb.ts';
+import { archiveOf } from '../src/sim/hf4.ts';
 import { CAST, castIdOf, createParty } from '../src/sim/party.ts';
-import { admitClimber, climberTransfer, DIALECT, RULES } from '../src/sim/passport.ts';
-import {
-  exportClimb,
-  newSeason,
-  nextClimb,
-  openingParty,
-  replayExport,
-  validateSeasonStart,
-} from '../src/sim/season.ts';
+import { climberTransfer } from '../src/sim/passport.ts';
+import { newSeason } from '../src/sim/season.ts';
 
-async function source(id: string) {
-  const person = createParty(42, 4620).find((p) => p.id === id);
-  if (!person) throw new Error('person');
-  person.body.fitness = 0.63;
-  for (const g of person.agenda.goals) abandonGoal(person, g.id); // isolated eligible-boundary control
-  const captured = await climberTransfer(person);
-  const branchId = 'cast-control';
-  const envelope = await createPersona({
-    format: 'hf-persona/1',
-    castId: castIdOf(id),
-    castRevision: '1',
-    branchId,
-    parentRevision: null,
-    source: { game: 'rope', build: 'control', engine: ENGINE_VERSION, rules: RULES },
-    transfer: { ...captured.transfer, life: initialPersonaLife(castIdOf(id), branchId, 0) },
-    limitations: captured.limitations,
-  });
-  return { person, captured, envelope };
-}
-it('uses every canonical profile without extra RNG draws', () => {
+it('authors every actual canonical profile and identity without editing live HF actors', () => {
   const people = createParty(42, 4620);
   expect(people).toHaveLength(5);
   for (const p of people) {
-    const c = CAST.find((c) => c.castId === castIdOf(p.id));
-    expect(p.traits).toEqual(c?.traits);
-    expect(p.values).toEqual(c?.values);
-    expect(p.name).toBe(c?.name);
-    expect(p.will.temperature).toBe(0);
+    const cast = CAST.find((c) => c.castId === castIdOf(p.id))!;
+    expect(p.identity.castId).toBe(cast.castId);
+    expect(p.state.traits).toEqual(cast.traits);
+    expect(p.state.values).toEqual(cast.values);
+    expect(p.identity.name).toBe(cast.name);
+    expect(p.state.agenda.goals.length).toBeGreaterThan(0);
   }
 });
-it('native actual projection retains temperament, changed fitness and RNG; injuries refuse', async () => {
-  const { person, captured, envelope } = await source('oskar');
-  const input = preparePersonaLife(envelope, 20 * 3600000);
-  const opening = createParty(15, 4620).find((p) => p.id === 'oskar');
-  if (!opening) throw new Error('opening');
-  const admitted = admitClimber(input, opening);
-  expect(admitted.rng).toEqual(person.rng);
-  expect(admitted.body.fitness).toBe(0.63);
-  expect(admitted.traits).toEqual(person.traits);
-  expect(captured.transfer.checkpoint.sha256).toMatch(/^[a-f0-9]{64}$/);
-  knockDown(person, { reason: 'test actual downing' });
-  await expect(climberTransfer(person)).rejects.toThrow();
+it('refuses active optional agendas without stripping goals or mutating the source run', async () => {
+  const { climb } = newSeason(42);
+  const before = archiveOf(climb);
+  await expect(climberTransfer(climb, 'oskar')).rejects.toThrow();
+  expect(archiveOf(climb)).toEqual(before);
 });
-it('pins a complete admitted cast and changed life preparation in deterministic replay', async () => {
-  const { envelope } = await source('oskar');
-  const input = preparePersonaLife(envelope, 20 * 3600000);
-  const initial = Object.fromEntries(openingParty(8).map((p) => [p.id, p]));
-  initial.oskar = admitClimber(input, required(initial.oskar));
-  const { revision, ...body } = envelope;
-  const claim = await createPersona({
-    ...body,
-    parentRevision: revision,
-    source: { game: 'rope', build: 'control', engine: ENGINE_VERSION, rules: RULES },
-    transfer: { ...body.transfer, life: input.life },
-  });
-  const chapter = { version: DIALECT as typeof DIALECT, inputs: [input], claims: [claim], initial };
-  const { season, climb } = newSeason(8, chapter);
-  const start = required(season.start);
-  expect(climb.journal.some((j) => j.text.includes('last local stop'))).toBe(true);
-  queueInput(climb, { t: 'ask-life', to: 'nell' });
-  for (let i = 0; i < 30; i++) step(climb);
-  const exported = exportClimb(start, climb, '2.21.0', chapter);
-  expect(snapshot(replayExport(exported))).toBe(exported.state);
-  expect(personSnapshot(JSON.parse(start).people.find((p: { id: string }) => p.id === 'oskar')).rng).toEqual(
-    initial.oskar.rng,
-  );
-  const bad = structuredClone(input);
-  bad.parent.source.game = 'watch';
-  expect(() => admitClimber(bad, required(initial.oskar))).toThrow();
-});
-it('private clues require a chosen receptive encounter and replay exactly', () => {
-  const { season, climb } = newSeason(13);
-  expect(climb.journal.some((j) => j.text.includes('Sunny Chair'))).toBe(false);
-  queueInput(climb, { t: 'ask-life', to: 'nell' });
-  step(climb);
-  expect(climb.lines.some((l) => l.reason === 'private-conversation')).toBe(true);
-  const exported = exportClimb(required(season.start), climb, '2.21.0');
-  expect(snapshot(replayExport(exported))).toBe(exported.state);
-});
-
-it('a played finished hut chapter waits for actual rest, releases mountain aims, and remains replayable', async () => {
-  const { season, climb } = newSeason(13);
-  queueInput(climb, { t: 'lead', dir: 'up' });
-  while (!climb.over) step(climb);
-  queueInput(climb, { t: 'release-person', to: 'oskar' });
-  step(climb);
-  const person = climb.people.find((p) => p.id === 'oskar');
-  if (!person) throw new Error('missing person');
-  expect(person.activity).toBeNull();
-  expect(climb.journal.some((j) => j.text.includes('You waited at the hut'))).toBe(true);
-  await expect(climberTransfer(person)).resolves.toHaveProperty('transfer.castPassport', DIALECT);
-  const exported = exportClimb(season.start ?? '', climb, '2.21.0');
-  expect(snapshot(replayExport(exported))).toBe(exported.state);
-});
-
-it('binds later starts to the actual played prefix', () => {
-  const { season, climb } = newSeason(13);
-  queueInput(climb, { t: 'lead', dir: 'up' });
-  while (!climb.over) step(climb);
-  const next = nextClimb(season, climb, null);
-  if (!next || !season.start) throw new Error('next');
-  expect(validateSeasonStart(13, undefined, season.past ?? [], season.start).climbNo).toBe(2);
-  const changed = JSON.parse(season.start);
-  changed.people[0].traits.honesty = 0.01;
-  expect(() => validateSeasonStart(13, undefined, season.past ?? [], JSON.stringify(changed))).toThrow(
-    'starting state does not match',
-  );
-});
-
-function required<T>(value: T | null | undefined): T {
-  if (value === null || value === undefined) throw new Error('Missing test control value');
-  return value;
-}
-
-// A claim checksum alone must not permit rewriting the pinned source's inherited limitations.
-it('accepts the public SDK claim and rejects rechecksummed replacement source limitations', async () => {
-  const { envelope } = await source('oskar');
-  const original = JSON.stringify(envelope);
-  const input = preparePersonaLife(envelope, 20 * 3600000);
-  const initial = Object.fromEntries(openingParty(8).map((p) => [p.id, p]));
-  initial.oskar = admitClimber(input, required(initial.oskar));
-  const result = await claimCastChapterBatch(
+it('maps an explicitly authored current foreign biography as historical places and voices', async () => {
+  const {
+    createRun,
+    createPerson,
+    step: stepHF,
+    inspect,
+    replay: replayHF,
+    exportRun,
+  } = await import('@adam0white/human-framework');
+  const { createPersona } = await import('@adam0white/lab-client');
+  const { admitClimber, RULES } = await import('../src/sim/passport.ts');
+  const { openingParty } = await import('../src/sim/season.ts');
+  const { startClimb } = await import('../src/sim/climb.ts');
+  const { need } = await import('../src/sim/hf4.ts');
+  const original = archiveOf(newSeason(7).climb).initial.spec;
+  const spec = structuredClone(original);
+  spec.host.id = 'commonstead';
+  spec.definitions.sources = [
+    ...spec.definitions.sources.filter((s) => s.type !== 'host'),
+    { type: 'host', id: 'commonstead' },
+    { type: 'voice', id: 'orchard-neighbour' },
+  ];
+  spec.world.facts = [
+    ...spec.world.facts.map((f) => ({ ...f, provenance: { ...f.provenance, source: 'commonstead' } })),
     {
-      async request<T>(request: PersonaRequest): Promise<T> {
-        if (request.action === 'prepareBatch')
-          return {
-            expectedHeads: { [envelope.castId]: envelope.revision },
-            inputs: [input],
-            blocked: [],
-          } as T;
-        if (request.action === 'putBatch') return {} as T;
-        throw new Error('Unexpected public claim request.');
-      },
+      id: 'orchard-map',
+      subject: 'old-orchard',
+      predicate: 'kind',
+      value: 'place',
+      at: spec.start,
+      provenance: { source: 'commonstead', evidenceId: 'authored-orchard-map' },
     },
-    [envelope.castId],
-    { game: 'rope', build: 'control', engine: ENGINE_VERSION, rules: RULES },
-    async () => initial,
+  ];
+  const source = need(createRun(spec));
+  const authored = openingParty(7);
+  const oskar = authored.find((p) => p.id === 'oskar')!;
+  oskar.biography = [
+    {
+      id: 'e0',
+      at: spec.start - 60000,
+      kind: 'work',
+      action: 'walk',
+      actorId: 'oskar',
+      targetId: 'old-orchard',
+      placeId: 'old-orchard',
+      voiceId: 'orchard-neighbour',
+      valence: 0.2,
+      salience: 0.7,
+      summary: 'Authored background: walked through the old orchard with a neighbour.',
+      tags: ['authored-background'],
+      basis: { kind: 'authored', author: 'commonstead' },
+      provenance: ['authored-orchard-map'],
+    },
+  ];
+  for (const person of authored) need(createPerson(source, person));
+  need(
+    stepHF(source, {
+      until: spec.start,
+      inputs: oskar.state.agenda.goals.map((g, i) => ({
+        id: `release:${i}`,
+        at: spec.start,
+        source: { type: 'host', id: 'commonstead' },
+        kind: 'agenda.requested' as const,
+        payload: { person: 'oskar', request: { type: 'abandon-goal' as const, goalId: g.id } },
+      })),
+    }),
   );
-  if (!result) throw new Error('Missing SDK claim.');
-  const chapter = { version: DIALECT as typeof DIALECT, ...result };
-  const valid = newSeason(8, chapter);
-  const exported = exportClimb(required(valid.season.start), valid.climb, ENGINE_VERSION, chapter);
-  expect(snapshot(replayExport(exported))).toBe(exported.state);
-  const { revision: _revision, ...claim } = required(chapter.claims[0]);
-  const changed = await createPersona({ ...claim, limitations: ['A replacement source limitation.'] });
-  expect(() => newSeason(8, { ...chapter, claims: [changed] })).toThrow(/claim/);
-  expect(JSON.stringify(envelope)).toBe(original);
+  const before = exportRun(source);
+  const view = need(
+    inspect(source, {
+      perspective: { kind: 'host' },
+      people: ['oskar'],
+      select: ['persona'],
+      portable: { person: 'oskar', castId: castIdOf('oskar'), castRevision: '1' },
+    }),
+  ).people[0];
+  if (view?.kind !== 'host') throw Error('Missing host projection');
+  const part = view.parts.find((p) => p.select === 'persona');
+  if (part?.select !== 'persona') throw Error('Missing history');
+  const envelope = await createPersona({
+    format: 'hf-persona/1',
+    castId: castIdOf('oskar'),
+    castRevision: '1',
+    branchId: 'authored-foreign-control',
+    parentRevision: null,
+    source: { game: 'commonstead', build: 'authored-control', engine: '4.8.1', rules: RULES },
+    transfer: { castPassport: 'hf-portable-person/2', portable: part.value },
+    limitations: ['This source biography was explicitly authored, not played movement.'],
+  });
+  const target = startClimb(
+    8,
+    3,
+    openingParty(8).map((p) => (p.id === 'oskar' ? admitClimber(envelope, p) : p)),
+  );
+  expect(replayHF(archiveOf(target)).ok).toBe(true);
+  expect(exportRun(source)).toEqual(before);
+  expect(replayHF(before).ok).toBe(true);
+  const mapped = archiveOf(target).initial.people.find((p) => p.id === 'oskar')!.portable!.mapping.references;
+  expect(mapped).toContainEqual({
+    kind: 'entity',
+    source: 'old-orchard',
+    target: 'history:commonstead:old-orchard',
+  });
+  expect(mapped).toContainEqual({
+    kind: 'source',
+    source: 'orchard-neighbour',
+    target: 'history:commonstead:orchard-neighbour',
+  });
 });

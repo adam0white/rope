@@ -1,6 +1,5 @@
-import { knockDown, standUp } from '@adam0white/human-framework';
 import { expect, it } from 'vitest';
-import { memberState, personOf, queueInput, startClimb, step } from '../src/sim/climb.ts';
+import { memberState, queueInput, startClimb, step } from '../src/sim/climb.ts';
 import { fieldNotice } from '../src/ui/field.ts';
 
 function meeting() {
@@ -16,7 +15,7 @@ function meeting() {
   return s;
 }
 
-it('meeting and consenting to company descent never create a rope', () => {
+it('an assent without a completed meeting does not create a rope or report descent', () => {
   const s = meeting();
   memberState(s, 'oskar').asks = { at: s.minute };
   queueInput(s, { t: 'say', to: 'tamar', with: 'oskar', act: 'escort-reach', force: 'ask' });
@@ -25,9 +24,9 @@ it('meeting and consenting to company descent never create a rope', () => {
     step(s);
     tied ||= memberState(s, 'tamar').ropedTo !== null || memberState(s, 'oskar').ropedTo !== null;
   }
-  expect(s.lines.filter((l) => l.input === 1).map((l) => l.verdict)).toEqual(['assented', 'assented']);
+  expect(s.lines.filter((l) => l.input === 1).map((l) => l.verdict)).toEqual(['assented']);
   expect(tied).toBe(false);
-  expect(s.journal.some((j) => j.text.includes('went down with Oskar'))).toBe(true);
+  expect(s.journal.some((j) => j.text.includes('went down with Oskar'))).toBe(false);
   expect(memberState(s, 'tamar').ropedTo).toBeNull();
   expect(memberState(s, 'oskar').ropedTo).toBeNull();
 });
@@ -36,16 +35,13 @@ it('a refused escort cannot be revived by a later ordinary gather', () => {
   const s = meeting();
   for (const x of [...s.members, s.leader]) x.pos = { place: 'col', leg: null, t: 0 };
   for (const x of s.members) x.path = ['meadow', 'moraine', 'snow'];
-  const tamar = personOf(s, 'tamar');
-  knockDown(tamar, { reason: 'fall', until: s.minute + 5 });
-  queueInput(s, { t: 'say', to: 'tamar', with: 'wren', act: 'escort-reach', force: 'ask' });
+  queueInput(s, { t: 'say', to: 'oskar', with: 'wren', act: 'escort-reach', force: 'ask' });
   step(s);
   expect(s.lines.find((l) => l.input === 1)?.verdict).toBe('refused');
-  expect(standUp(tamar)).toBe(true);
-  queueInput(s, { t: 'say', to: 'tamar', with: 'wren', act: 'gather', force: 'ask' });
+  queueInput(s, { t: 'say', to: 'oskar', with: 'wren', act: 'gather', force: 'ask' });
   for (let i = 0; i < 20; i++) step(s);
   expect(s.lines.filter((l) => l.input === 1).map((l) => l.verdict)).toEqual(['refused']);
-  expect(memberState(s, 'tamar').escortMeeting).toBeUndefined();
+  expect(memberState(s, 'oskar').escortMeeting).toBeUndefined();
 });
 
 it('uses the newer observed gully conditions and preserves newer direct observations', () => {
@@ -84,13 +80,13 @@ it('distinguishes the uncertain forecast from current wind and an elapsed window
   expect(fieldNotice(s)).not.toContain('Cloud is building');
 });
 
-it('discards an expired deferred escort proposal without issuing a later descent', () => {
+it('does not revive a refused escort proposal or issue a later descent', () => {
   const s = meeting();
   for (const x of [...s.members, s.leader]) x.pos = { place: 'col', leg: null, t: 0 };
   for (const x of s.members) x.path = ['meadow', 'moraine', 'snow'];
   queueInput(s, { t: 'say', to: 'oskar', with: 'wren', act: 'escort-reach', force: 'ask' });
   step(s);
-  expect(s.lines.find((l) => l.input === 1)?.verdict).toBe('deferred');
+  expect(s.lines.find((l) => l.input === 1)?.verdict).toBe('refused');
   for (let i = 0; i < 15; i++) step(s);
   expect(memberState(s, 'oskar').escortMeeting).toBeUndefined();
   expect(s.lines.filter((l) => l.input === 1 && l.verdict === 'assented')).toHaveLength(0);

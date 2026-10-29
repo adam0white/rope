@@ -1,0 +1,1 @@
+{"stage":"climb","minutes":110,"elapsedMs":1310.772709,"frameSamplesAfter10minWarmup":207,"frameWallP95Ms":8.841959000000088,"frameWallMaxMs":129.6287080000002,"frameCpuP95Ms":20.749,"framesOver10ms":6,"transactions":116,"bytes":3731728,"path":["meadow"]}
