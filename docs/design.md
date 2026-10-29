@@ -23,7 +23,7 @@ The pre-repair actual App let per-element font2x clock/status text cross the fix
 - Camp conversation through Workers AI waits for actual owner/player judgment that the core is fun (input gate, review 2026-11-03). Inference is off. The labelled deterministic journal fallback runs without a network request. The existing Worker cap, kill switch and $5 total budget remain for any later authorized prototype. This task makes no model calls.
 - Named owner acceptance journeys (opening answers, approaches, pair meetings, phone reading, pacing and carried Commonstead Oskar) remain acceptance work on 2026-11-03. Existing implementations and engineering controls do not establish Adam's judgment. No new player round is part of this task.
 
-- Repeat broad HF4 multi-seed climb, rope, account and position sampling by 2026-11-03. The preserved HF3 calibration is not evidence for HF4; current tests use bounded controls and one exact full-climb proof.
+- HF4 sampling on 2026-10-29 includes the unchanged 36-climb script and one complete game/public HF replay on `3aded8c` (HF 4.12.0). The focused position and roped-company controls were run earlier on `9f17680` (HF 4.8.1). [Results and limits](hf4-sampling-2026-10-29.md). This engineering sample is not Adam’s acceptance or a difficulty guarantee. Repeat after a relevant engine or mechanics change; HF3 calibration remains historical.
 
 ## Automatic completed-climb histories (2026-10-28)
 
