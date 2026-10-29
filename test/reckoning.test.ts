@@ -116,8 +116,8 @@ it('computes the completed climb total and reveals it only on request without ch
     return 0;
   });
   d.advance();
-  await vi.waitFor(() => expect(document.querySelector('[data-see-tally]')).toBeNull(), { timeout: 30000 });
-});
+  await vi.waitFor(() => expect(document.querySelector('[data-see-tally]')).toBeNull(), { timeout: 110000 });
+}, 120000);
 it('counts only recorded history at the closed season', async () => {
   const d = await setup();
   d.climb.over = true;

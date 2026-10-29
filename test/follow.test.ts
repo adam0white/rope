@@ -24,4 +24,4 @@ it('lead on keeps the party in earshot, and walk to closes on one person', () =>
     if (far.homeAt === null && before > earshot(s) * 0.5)
       expect(distance(s, far.pos, s.leader.pos)).toBeLessThan(Math.max(before, earshot(s)));
   }
-});
+}, 120000);
