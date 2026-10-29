@@ -23,6 +23,8 @@ The pre-repair actual App let per-element font2x clock/status text cross the fix
 - Camp conversation through Workers AI waits for actual owner/player judgment that the core is fun (input gate, review 2026-11-03). Inference is off. The labelled deterministic journal fallback runs without a network request. The existing Worker cap, kill switch and $5 total budget remain for any later authorized prototype. This task makes no model calls.
 - Named owner acceptance journeys (opening answers, approaches, pair meetings, phone reading, pacing and carried Commonstead Oskar) remain acceptance work on 2026-11-03. Existing implementations and engineering controls do not establish Adam's judgment. No new player round is part of this task.
 
+- Repeat broad HF4 multi-seed climb, rope, account and position sampling by 2026-11-03. The preserved HF3 calibration is not evidence for HF4; current tests use bounded controls and one exact full-climb proof.
+
 ## Automatic completed-climb histories (2026-10-28)
 
 Design decision: a completed native climb automatically attempts to save eligible browser histories. It uses the existing checkpoint validation, source retention and compare-and-set publication path. This removes reliance on hiding or closing the page. It does not end anyone’s goals or invent a departure verdict.
