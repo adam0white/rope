@@ -171,8 +171,8 @@ importers:
   .:
     dependencies:
       '@adam0white/human-framework':
-        specifier: 4.12.0
-        version: 4.12.0
+        specifier: 4.13.0
+        version: 4.13.0
       '@adam0white/lab-client':
         specifier: file:vendor/adam0white-lab-client-0.5.12.tgz
         version: file:vendor/adam0white-lab-client-0.5.12.tgz
@@ -213,6 +213,10 @@ packages:
 
   '@adam0white/human-framework@4.12.0':
     resolution: {integrity: sha512-IQrb9+ETKnPH4h5wL7ZdBLY5BCimmzjvu4SJJfuBa3Y7D3YOi0wggSH6SFxPgoSesD/lqlK3XtI8RZ60pyrWsQ==}
+    engines: {node: '>=24'}
+
+  '@adam0white/human-framework@4.13.0':
+    resolution: {integrity: sha512-OzTdhfUW5aERdvoT2Ay6x3alWZyzEdregamuVip8dLkK9hXlyC7mQ/JoWlX8VN9BRDyr2C52IFeei1+cstpbPw==}
     engines: {node: '>=24'}
 
   '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.12.tgz':
@@ -1353,6 +1357,8 @@ snapshots:
   '@adam0white/human-framework@3.0.0': {}
 
   '@adam0white/human-framework@4.12.0': {}
+
+  '@adam0white/human-framework@4.13.0': {}
 
   '@adam0white/lab-client@file:vendor/adam0white-lab-client-0.5.12.tgz':
     dependencies:
