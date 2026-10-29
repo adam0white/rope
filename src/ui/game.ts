@@ -2511,7 +2511,9 @@ export class Game {
             ? { t: 'field-rules', bladder: true }
             : undefined;
         };
-        el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', () => {
+        el.querySelector<HTMLElement>('[data-a="go"]')?.addEventListener('click', async () => {
+          await this.flushSave();
+          if (!this.current() || this.climb !== c) return;
           this.display.start();
           const plan = plans();
           if (plan) this.send(plan);

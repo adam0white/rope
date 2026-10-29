@@ -150,6 +150,7 @@ it('shows target, selected request and commit without repeating unrelated verb g
   await vi.advanceTimersByTimeAsync(1);
   await vi.waitFor(() => expect(document.querySelector('[data-hour]')).not.toBeNull(), { timeout: 15000 });
   button("We'll see").click();
+  await vi.waitFor(() => expect(document.querySelector('[data-hour]')).toBeNull(), { timeout: 15000 });
   vi.advanceTimersByTime(500);
   button('rest').click();
   document.querySelector<HTMLButtonElement>('.request-tone')?.click();
