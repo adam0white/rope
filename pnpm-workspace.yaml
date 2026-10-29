@@ -17,5 +17,3 @@ allowBuilds:
 overrides:
   sharp: 0.35.5
   miniflare>undici: 7.30.1
-  # Keep this exact version aligned with the direct dependency.
-  "@adam0white/human-framework": 3.0.0

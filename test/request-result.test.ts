@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { type ClimbState, MOUNTAINS, type NewInput, queueInput } from '../src/sim/climb.ts';
+import { type ClimbState, MOUNTAINS, type NewInput, queueInput, snapshot } from '../src/sim/climb.ts';
+import { ENGINE_VERSION } from '../src/sim/hf4.ts';
 import { newSeason } from '../src/sim/season.ts';
 import { Game } from '../src/ui/game.ts';
 import { displayText } from '../src/ui/plain-english.ts';
@@ -37,7 +38,8 @@ vi.mock('../src/ui/lab.ts', () => ({
 
 interface Driver {
   climb: ClimbState;
-  resume(save: unknown): void;
+  resume(save: unknown): Promise<void>;
+  flushSave(): Promise<void>;
   renderSheet(ifChanged?: boolean): void;
   send(input: NewInput, also?: NewInput): void;
 }
@@ -45,6 +47,7 @@ interface Driver {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
   vi.stubGlobal('requestAnimationFrame', () => 0);
+  vi.stubGlobal('indexedDB', undefined);
   vi.spyOn(Date, 'now').mockReturnValue(20261018);
   localStorage.clear();
   document.body.innerHTML = '<div id="app"></div>';
@@ -61,7 +64,9 @@ async function boot() {
   const driver = game as unknown as Driver;
   const { season, climb } = newSeason(20261018);
   await driver.resume({
-    engine: '2.23.0',
+    v: 2,
+    engine: ENGINE_VERSION,
+    state: snapshot(climb),
     season,
     start: season.start,
     inputs: [],
@@ -69,7 +74,8 @@ async function boot() {
     over: false,
     disclosure: { unlocked: ['insist', 'tell', 'promise', 'rope', 'fix', 'pack', 'share'], seen: [] },
   });
-  vi.advanceTimersByTime(500);
+  await vi.advanceTimersByTimeAsync(500);
+  await driver.flushSave();
   return driver;
 }
 
@@ -109,7 +115,8 @@ it('explains we all turn as your descent plus a new urge with renewed HF objecti
   expect(c.members.some((member) => member.asks)).toBe(true);
   expect(document.querySelector('.company-banner')?.textContent).toContain('wants to go down');
   expect(document.querySelector('.ask-bar')).toBeNull();
-  vi.advanceTimersByTime(500);
+  await vi.advanceTimersByTimeAsync(500);
+  await driver.flushSave();
   document.querySelector<HTMLButtonElement>('.company-banner')?.click();
   const turn = [...document.querySelectorAll<HTMLButtonElement>('.ask-bar button')].find(
     (button) => button.textContent === 'we all turn',
@@ -163,7 +170,8 @@ it('keeps every opening promise answer readable after speech expires', async () 
   for (const line of answers)
     expect(document.querySelector('.answers-sheet')?.textContent).toContain(displayText(line.says));
   backToRequests();
-  vi.advanceTimersByTime(500);
+  await vi.advanceTimersByTimeAsync(500);
+  await driver.flushSave();
   driver.send({ t: 'say', to: 'tamar', act: 'rest', force: 'ask' });
   expect(result()?.textContent).not.toContain('You promised to turn back at 12:00.');
 });
@@ -219,7 +227,8 @@ it('offers a real pair gathering request after distance blocks roping', async ()
   driver.send({ t: 'say', to: 'tamar', act: 'rope', with: 'oskar', force: 'ask' });
   expect(result()?.textContent).toContain('too far');
   expect(document.querySelector('.gather-pair')?.textContent).toBe('Close up: Tamar Vale + Oskar');
-  vi.advanceTimersByTime(500);
+  await vi.advanceTimersByTimeAsync(500);
+  await driver.flushSave();
   tap('Close up: Tamar Vale + Oskar');
   expect(c.inputs.at(-1)).toMatchObject({
     t: 'say',
@@ -260,7 +269,7 @@ it('removes a distance gathering response as soon as the pair reaches one anothe
   c.leader.pos = { place: null, leg: 'meadow', t: 0.55 };
   driver.send({ t: 'say', to: 'tamar', act: 'rope', with: 'nell', force: 'ask' });
   expect(document.querySelector('.gather-pair')).not.toBeNull();
-  nell.pos.t = 0.51;
+  driver.climb.members.find((m) => m.id === 'nell')!.pos.t = 0.51;
   driver.renderSheet(true);
   expect(document.querySelector('.gather-pair')).toBeNull();
 });
@@ -269,7 +278,8 @@ it('uses a singular answer caption for one person and plural for the party', asy
   const driver = await boot();
   driver.send({ t: 'say', to: 'tamar', act: 'rest', force: 'ask' });
   expect(result()?.querySelector('.all-answers')?.textContent).toBe('1 answer ▸');
-  vi.advanceTimersByTime(500);
+  await vi.advanceTimersByTimeAsync(500);
+  await driver.flushSave();
   driver.send({ t: 'say', to: 'all', act: 'rest', force: 'ask' });
   expect(result()?.querySelector('.all-answers')?.textContent).toBe('All 5 answers ▸');
 });

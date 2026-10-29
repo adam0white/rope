@@ -1,0 +1,2 @@
+{"stage":"climb","minutes":110,"elapsedMs":4542.117792,"transactions":116,"bytes":3731728,"path":["meadow"]}
+{"stage":"valley-and-next-opening","from":4730,"to":10350,"elapsedMs":26830.4565,"cpuMs":28654.913,"transactions":729,"archiveBytes":16701602,"stateBytes":17461984,"fullHash":"9333d0cb7b5f56ae80b9167e278a5cf2314c7da3f71ddff900f645be53233488","replayMs":17539.438166,"replayExact":true}

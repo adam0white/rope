@@ -33,7 +33,7 @@ The game saves automatically in this browser during play and when the page is hi
 
 **Menu → Playback speed** offers Auto, Slow, Normal and Fast. The menu offers a run download, the separate file-session importer and the title page. **Debug**, beside **Lab privacy**, starts collapsed and shows diagnostic version information. File sessions keep progress in memory and require a download before closing. They preserve the native saved season and acquire no browser-history ownership.
 
-Fresh seasons automatically prepare shared people through the released browser shelf contract. Failed admission preserves your saved season. **People in this browser** opens the central shelf for cast controls. End screens also link there. Loaded seasons retain pinned actors.
+Fresh seasons automatically prepare shared people through the released browser shelf contract. Failed admission preserves your saved season. **People in this browser** opens the central shelf for cast controls. End screens also link there. Loaded seasons retain pinned actors. Completed native climbs automatically attempt to save eligible histories. Continuing to the next climb waits for that attempt. People can refuse departure, and an attempted save may fail; neither means a history was published. File sessions cannot publish people.
 
 To print an exported run's timeline locally:
 

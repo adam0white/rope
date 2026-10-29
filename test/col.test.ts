@@ -1,18 +1,15 @@
-import { voiceOf } from '@adam0white/human-framework';
 import { expect, it } from 'vitest';
 import { type ClimbState, type Force, memberState, queueInput, startClimb, step } from '../src/sim/climb.ts';
+import { voiceOf } from '../src/sim/hf4.ts';
 
-const below = new Set(['meadow', 'moraine', 'snow']);
-
-/** Walk the party to the col (Hollin's fork) with one ask, and stop when everyone has got there. */
+/** Authored physical position only; this does not claim a climb to the col. */
 function toCol(seed: number): ClimbState {
   const s = startClimb(seed, 3);
-  queueInput(s, { t: 'lead', dir: 'up' });
-  queueInput(s, { t: 'say', to: 'all', act: 'climb', force: 'ask' });
-  const arrived = () =>
-    s.leader.pos.place === 'col' &&
-    s.members.every((m) => m.pos.place === 'col' || !below.has(m.pos.leg ?? ''));
-  while (!arrived() && s.minute % 1440 < 14 * 60) step(s);
+  for (const member of s.members) {
+    member.pos = { place: 'col', leg: null, t: 0 };
+    member.path = ['meadow', 'moraine', 'snow'];
+  }
+  s.leader.pos = { place: 'col', leg: null, t: 0 };
   return s;
 }
 
@@ -25,7 +22,8 @@ function turnBack(force: Force) {
   const asked = s.inputs.length - 1;
   for (let i = 0; i < 30; i++) step(s);
   const verdicts = s.lines.filter((l) => l.input === asked).map((l) => l.verdict);
-  const after = wren ? (voiceOf(wren, 'leader')?.trust ?? 0) : 0;
+  const current = s.people.find((p) => p.id === 'wren');
+  const after = current ? (voiceOf(current, 'leader')?.trust ?? 0) : 0;
   return { verdicts, wrenTrust: after - before };
 }
 
@@ -49,5 +47,5 @@ it('control: insisting again and again on the way up wears trust down, through H
     queueInput(s, { t: 'say', to: 'wren', act: 'descend', force: 'insist' });
     for (let i = 0; i < 8; i++) step(s);
   }
-  expect(voiceOf(wren, 'leader')?.trust ?? 0).toBeLessThan(before);
+  expect(voiceOf(s.people.find((p) => p.id === 'wren')!, 'leader')?.trust ?? 0).toBeLessThan(before);
 });

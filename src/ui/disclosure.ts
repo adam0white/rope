@@ -4,8 +4,7 @@
  * state; never changes it.
  */
 
-import { readPerson } from '@adam0white/human-framework';
-import { type ClimbState, canHear, forkOf, MOUNTAINS, personOf } from '../sim/climb.ts';
+import { type ClimbState, canHear, forkOf, MOUNTAINS } from '../sim/climb.ts';
 import { memberOf } from '../sim/party.ts';
 
 export type Feature = 'insist' | 'tell' | 'promise' | 'rope' | 'fix' | 'pack' | 'share';
@@ -45,7 +44,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
     return {
       id: 'insist',
       unlock: 'insist',
-      text: 'Someone refused or delayed your request, or offered another action. You can wait, offer rest, change your plan, or **insist**. Insisting can turn “not now” into an unwilling yes. It cannot change a firm refusal. It reduces their trust in you.',
+      text: 'Someone refused or delayed your request, or offered another action. You can wait, offer rest, change your plan, or **insist**. Insisting can turn “not now” into an unwilling yes. It cannot change a firm refusal. It can damage their trust in you.',
     };
   if (s.climbNo === 1) {
     if (!seen('lead') && leaderInputs === 0)
@@ -73,7 +72,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
     if (!seen('watch') && s.lines.length > 0)
       return {
         id: 'watch',
-        text: 'Each person answers for themselves. Short steps and a bent back suggest tiredness. A bowed head may suggest sadness.',
+        text: 'Each person answers for themselves. Their words tell you what they choose.',
       };
   }
   const fork = forkOf(m);
@@ -110,14 +109,14 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       lit: 'fix',
       text: 'You can secure a rope to the route above. Open **more actions** and choose **Fix rope**. Securing the rope takes time. It makes the route safer for everyone who follows.',
     };
-  const tired = s.members.find(
-    (x) => x.homeAt === null && (readPerson(personOf(s, x.id)).body.fatigue > 0.45 || x.rations === 0),
-  );
-  if (!has(d, 'pack') && tired)
+  const available =
+    s.members.find((x) => x.homeAt === null && x.rations === 0) ??
+    (leaderInputs > 0 ? s.members.find((x) => x.homeAt === null) : undefined);
+  if (!has(d, 'pack') && available)
     return {
       id: 'pack',
       unlock: 'pack',
-      text: `${memberOf(tired.id).name} ${tired.rations === 0 ? 'has no food left' : 'looks tired'}. Pick ${memberOf(tired.id).name}, then open **more actions** to **take their pack** or **share food** from yours.`,
+      text: `${available.rations === 0 ? `${memberOf(available.id).name} has no food left. ` : ''}Pick ${memberOf(available.id).name}, then open **more actions** to **take their pack** or **share food** from yours. They can refuse.`,
     };
   return null;
 }

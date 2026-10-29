@@ -1,0 +1,18 @@
+{
+  "kind": "synthetic-browser-storage-control",
+  "viewport": [360, 690],
+  "chooserTarget": {
+    "width": 328,
+    "height": 74.390625
+  },
+  "viewportWidthFits": true,
+  "fileStartupNativeStoreOpens": 0,
+  "bytes": 18000018,
+  "saved": true,
+  "exact": true,
+  "conflict": false,
+  "stale": false,
+  "unchanged": true,
+  "removed": true,
+  "empty": true
+}

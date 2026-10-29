@@ -13,8 +13,7 @@ import {
   step,
 } from '../src/sim/climb.ts';
 import { inputPhrase } from '../src/sim/debrief.ts';
-import { narrationBlanked, narrationPeople } from './hf-narration-proof.ts';
-import { proofHash } from './prose-proof.ts';
+import { expectArchiveReplay } from './hf-narration-proof.ts';
 
 function fixture() {
   const s = startClimb(1, 3);
@@ -23,19 +22,15 @@ function fixture() {
   return s;
 }
 
-it('pins the current-cast pursuit state for old input verbs', () => {
+it('replays the full current HF archive after public pursuit inputs', () => {
   const s = startClimb(31, 3);
+  const start = snapshot(s);
   queueInput(s, { t: 'lead', dir: 'up' });
-  for (let i = 0; i < 80; i++) step(s);
+  for (let i = 0; i < 10; i++) step(s);
   queueInput(s, { t: 'lead', dir: 'with', who: 'tamar' });
-  for (let i = 0; i < 100; i++) step(s);
-  // Baseline d642cea; non-prose HF state is independently unchanged.
-  expect(proofHash(narrationBlanked(s))).toBe(
-    'e1792a5a0e87365968721d204d62081da9ddd0cba48c3ba9414c4d8ba5e83a0f',
-  );
-  expect(proofHash(narrationPeople(s.people))).toBe(
-    'b4a05d2634604a782534b7c7ea9413f0be0c2ba6dc7ede55ca7d1e5f72bf69c2',
-  );
+  for (let i = 0; i < 10; i++) step(s);
+  expectArchiveReplay(s);
+  expect(snapshot(replay(start, s.inputs, s.minute))).toBe(snapshot(s));
 });
 
 it('both people answer through HF, close the distance, and can then receive a rope offer', () => {
@@ -46,16 +41,14 @@ it('both people answer through HF, close the distance, and can then receive a ro
     ['tamar', 'assented'],
     ['nell', 'assented'],
   ]);
-  const a = memberState(s, 'tamar');
-  const b = memberState(s, 'nell');
-  const before = distance(s, a.pos, b.pos);
+  const before = distance(s, memberState(s, 'tamar').pos, memberState(s, 'nell').pos);
   for (let i = 0; i < 10; i++) step(s);
-  expect(distance(s, a.pos, b.pos)).toBeLessThan(40);
-  expect(distance(s, a.pos, b.pos)).toBeLessThan(before);
-  expect(b.turnedAt).toBeNull();
-  expect(b.pos.leg).toBe('meadow');
-  expect(b.pos.t).toBeCloseTo(0.5);
-  expect(offersFor(s, a.id, `rope:${b.id}`).some((x) => x.id === `rope:${b.id}`)).toBe(true);
+  expect(distance(s, memberState(s, 'tamar').pos, memberState(s, 'nell').pos)).toBeLessThan(40);
+  expect(distance(s, memberState(s, 'tamar').pos, memberState(s, 'nell').pos)).toBeLessThan(before);
+  expect(memberState(s, 'nell').turnedAt).toBeNull();
+  expect(memberState(s, 'nell').pos.leg).toBe('meadow');
+  expect(memberState(s, 'nell').pos.t).toBeCloseTo(0.5);
+  expect(offersFor(s, 'tamar', 'rope:nell').some((x) => x.id === 'rope:nell')).toBe(true);
   queueInput(s, { t: 'say', act: 'rope', to: 'tamar', with: 'nell', force: 'insist' });
   step(s);
   expect(s.lines.filter((x) => x.input === 1)).toHaveLength(2);
@@ -64,8 +57,8 @@ it('both people answer through HF, close the distance, and can then receive a ro
     ['nell', 'assented'],
   ]);
   for (let i = 0; i < 5; i++) step(s);
-  expect(a.ropedTo).toBe(b.id);
-  expect(b.ropedTo).toBe(a.id);
+  expect(memberState(s, 'tamar').ropedTo).toBe('nell');
+  expect(memberState(s, 'nell').ropedTo).toBe('tamar');
 });
 
 it('retains a genuine HF disagreement rather than moving everyone anyway', () => {
@@ -94,7 +87,7 @@ it('new close approach reaches pack distance without changing old pursuit', () =
     ['tamar', 'assented'],
   ]);
   for (let i = 0; i < 2; i++) step(s);
-  expect(a.pack).toBe(false);
+  expect(memberState(s, 'tamar').pack).toBe(false);
   expect(s.leader.carrying).toContain(a.id);
 });
 
@@ -143,17 +136,18 @@ it('gathers across branches through the fork, then releases the finite wait', ()
   b.pos.leg = second.id;
   queueInput(s, { t: 'say', act: 'gather', to: a.id, with: b.id, force: 'insist' });
   step(s);
-  const until = a.gather?.until;
+  const until = memberState(s, 'tamar').gather?.until;
   if (!until) throw new Error('missing gather plan');
   expect(s.lines.filter((x) => x.input === 0).every((x) => x.verdict === 'assented')).toBe(true);
-  while (s.minute < until - 2 && distance(s, a.pos, b.pos) >= 1) step(s);
-  expect(distance(s, a.pos, b.pos)).toBeLessThan(1);
-  expect(b.pos.leg).toBe(first.id);
-  expect(b.pos.t).toBeCloseTo(0.15);
-  expect(b.turnedAt).toBeNull();
+  while (s.minute < until - 2 && distance(s, memberState(s, 'tamar').pos, memberState(s, 'nell').pos) >= 1)
+    step(s);
+  expect(distance(s, memberState(s, 'tamar').pos, memberState(s, 'nell').pos)).toBeLessThan(1);
+  expect(memberState(s, 'nell').pos.leg).toBe(first.id);
+  expect(memberState(s, 'nell').pos.t).toBeCloseTo(0.15);
+  expect(memberState(s, 'nell').turnedAt).toBeNull();
   while (s.minute <= until) step(s);
-  expect(a.gather).toBeUndefined();
-  expect(b.gather).toBeUndefined();
+  expect(memberState(s, 'tamar').gather).toBeUndefined();
+  expect(memberState(s, 'nell').gather).toBeUndefined();
 });
 
 it('an unheard repeated gathering request cannot cancel an accepted one', () => {
@@ -202,9 +196,9 @@ it('gathering at a real summit records the ascent without recording an interior 
   nell.high = 'gully-top';
   queueInput(s, { t: 'say', act: 'gather', to: 'tamar', with: 'nell', force: 'insist' });
   for (let i = 0; i < 8; i++) step(s);
-  expect(nell.pos.place).toBe('summit');
-  expect(nell.high).toBe('summit');
-  expect(nell.summitAt).not.toBeNull();
+  expect(memberState(s, 'nell').pos.place).toBe('summit');
+  expect(memberState(s, 'nell').high).toBe('summit');
+  expect(memberState(s, 'nell').summitAt).not.toBeNull();
 });
 
 it('names the new inputs in the debrief', () => {

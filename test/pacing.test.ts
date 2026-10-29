@@ -49,6 +49,7 @@ interface Driver {
   renderSheet(): void;
   begin(c: ClimbState, start: string): void;
   closePage(): void;
+  flushSave(): Promise<void>;
   frame(): void;
 }
 beforeEach(() => {
@@ -78,6 +79,8 @@ async function setup() {
   const { season, climb } = newSeason(41);
   d.season = season;
   d.begin(climb, season.start as string);
+  await vi.runAllTimersAsync();
+  await d.flushSave();
   d.closePage();
   return d;
 }
@@ -122,7 +125,10 @@ it('stops a fast walk at its first delivered event, discards overshoot and prese
   d.acc = 0;
   vi.advanceTimersByTime(100);
   d.last = performance.now() - 100;
-  d.frame();
+  for (let i = 0; i < 200 && d.skipping; i++) {
+    d.last = performance.now() - 100;
+    d.frame();
+  }
   expect(snapshot(d.climb)).toBe(snapshot(expected));
   expect(d.acc).toBe(0);
   expect(d.skipping).toBe(false);
@@ -156,6 +162,8 @@ it('keeps the ending transition behind an open menu and resets transient deadlin
   const d = await setup();
   d.climb.over = true;
   d.frame();
+  await vi.runAllTimersAsync();
+  await d.flushSave();
   [...document.querySelectorAll<HTMLButtonElement>('button')]
     .find((b) => b.getAttribute('aria-label') === 'Game menu')
     ?.click();

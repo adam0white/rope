@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
+
 import type { Lab } from '@adam0white/lab-client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { ENGINE_VERSION } from '../src/sim/hf4.ts';
 import { fileEntry } from '../src/ui/continuity.ts';
 
 vi.mock('../src/ui/scene.ts', () => ({
@@ -38,9 +40,12 @@ beforeEach(() => {
     'fetch',
     vi.fn(
       async () =>
-        new Response(JSON.stringify({ app: '0.1.0', framework: '3.0.0', commit: 'synthetic', dirty: true }), {
-          status: 200,
-        }),
+        new Response(
+          JSON.stringify({ app: '0.1.0', framework: ENGINE_VERSION, commit: 'synthetic', dirty: true }),
+          {
+            status: 200,
+          },
+        ),
     ),
   );
   vi.stubGlobal('requestAnimationFrame', () => 0);

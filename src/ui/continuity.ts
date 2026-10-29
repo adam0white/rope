@@ -1,26 +1,37 @@
-import { ENGINE_VERSION, snapshot } from '@adam0white/human-framework';
-import type { Lab, LifePreparation, PersonaEnvelope, PersonaLife } from '@adam0white/lab-client';
+import { validatePortablePerson } from '@adam0white/human-framework';
+import type { Lab, PersonaEnvelope } from '@adam0white/lab-client';
 import {
-  anchorPersonaLife,
   canonicalCast,
-  claimCastChapterBatch,
+  canonicalPersona,
   closePersonaBranch,
   createPersona,
-  initialPersonaLife,
   type personaChannel,
+  portableWriteBlockers,
   validatePersona,
 } from '@adam0white/lab-client';
 import type { ClimbState } from '../sim/climb.ts';
+import { archiveOf, ENGINE_VERSION } from '../sim/hf4.ts';
 import { CAST, castIdOf } from '../sim/party.ts';
-import { admitClimber, type Chapter, climberTransfer, DIALECT, RULES } from '../sim/passport.ts';
+import { admitClimber, type Chapter, climberTransfer, DIALECT, portableOf, RULES } from '../sim/passport.ts';
 import { newSeason, openingParty, type SeasonState } from '../sim/season.ts';
 
 type State = { season: SeasonState; climb: ClimbState };
 const createGame = (seed: number, chapter?: Chapter): State => newSeason(seed, chapter);
 
 type Shelf = ReturnType<typeof personaChannel>;
-type SourceArchive = { revision: string; source: PersonaEnvelope['source']; snapshot: unknown };
-const maxArchive = 1_000_000;
+export type SourceArchive = {
+  revision: string;
+  source: PersonaEnvelope['source'];
+  envelope: PersonaEnvelope;
+  archiveSha256: string;
+};
+export type RawArchive = { sha256: string; raw: string };
+// A complete source is stored once even when all five people share its checkpoint.
+export const maxArchive = 128 * 1024 * 1024; // serialized UTF16 units; full sources are never shortened
+const digest = async (raw: string) =>
+  Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))), (b) =>
+    b.toString(16).padStart(2, '0'),
+  ).join('');
 
 /** Run-scoped ownership, recording and source archive. No current shelf reads on local load. */
 export class Continuity {
@@ -31,6 +42,7 @@ export class Continuity {
   status = 'Saving people’s histories in this browser and recording play for the lab are separate choices.';
   runId: string = crypto.randomUUID();
   sources: SourceArchive[] = [];
+  archives: RawArchive[] = [];
   private key = crypto.randomUUID();
   private operation = Promise.resolve();
   private state: State | null = null;
@@ -38,6 +50,7 @@ export class Continuity {
     readonly lab: Lab,
     readonly shelf: Shelf | null,
     readonly changed: () => void = () => {},
+    readonly archiveLimit = maxArchive,
   ) {
     this.fileOrigin = shelf === null;
     // No run exists on the title. Fresh/load closes the gate before attaching any actor.
@@ -67,6 +80,7 @@ export class Continuity {
     this.state = null;
     this.heads = [];
     this.sources = [];
+    this.archives = [];
   }
   async fresh(seed: number, localOnly = false) {
     const shelf = this.requireShelf();
@@ -83,44 +97,102 @@ export class Continuity {
       }
       if (generation !== this.generation)
         throw new Error('The run changed before its people could be prepared.');
-      let chapter: Chapter | undefined;
-      if (shelf.enabled && !localOnly) {
-        const result = await claimCastChapterBatch(
-          shelf,
-          CAST.map((c) => c.castId),
-          this.source(),
-          async (inputs: LifePreparation[]) => {
-            const initial = Object.fromEntries(openingParty(seed).map((p) => [p.id, structuredClone(p)]));
-            for (const input of inputs) {
-              const id = input.parent.castId.split('.')[2] ?? '';
-              const opening = initial[id];
-              if (!opening) throw new Error('This person is not part of this game’s cast.');
-              initial[id] = admitClimber(input, opening);
-            }
-            return initial;
-          },
-          { isCurrent: () => generation === this.generation },
-        );
-        if (result)
-          chapter = {
-            version: DIALECT,
-            initial: result.initial,
-            inputs: result.inputs,
-            claims: result.claims,
-          };
+      const heads = localOnly
+        ? []
+        : await Promise.all(
+            CAST.map(
+              async ({ castId }) =>
+                [castId, await shelf.request<PersonaEnvelope | null>({ action: 'get', castId })] as const,
+            ),
+          );
+      if (generation !== this.generation)
+        throw new Error('The run changed before its people could be prepared.');
+      const incoming: PersonaEnvelope[] = [];
+      const skipped = new Set<string>();
+      const reasons: string[] = [];
+      if (!localOnly)
+        for (const [castId, head] of heads) {
+          if (!head) continue;
+          const blockers = portableWriteBlockers(castId, 'rope');
+          if (blockers.length) {
+            skipped.add(castId);
+            reasons.push(
+              `${canonicalCast(castId).name}: shared history is unavailable until ${blockers.join(', ')} supports it.`,
+            );
+            continue;
+          }
+          await validatePersona(head);
+          if (
+            !head.transfer.portable ||
+            head.terminal ||
+            head.transfer.portableClaim ||
+            validatePortablePerson(head.transfer.portable).version === 1
+          ) {
+            skipped.add(castId);
+            continue;
+          }
+          portableOf(head);
+          incoming.push(head);
+        }
+      const initial = Object.fromEntries(openingParty(seed).map((p) => [p.id, p]));
+      for (const envelope of incoming) {
+        const id = CAST.find((c) => c.castId === envelope.castId)?.castId.split('.')[2];
+        const opening = id && initial[id];
+        if (!opening) throw new Error('This person has no role in this season.');
+        initial[id] = admitClimber(envelope, opening);
       }
-      if (generation !== this.generation) throw new Error('The run changed. No new chapter was started.');
+      const runId = crypto.randomUUID();
+      const claims: PersonaEnvelope[] = [];
+      if (!localOnly)
+        for (const [castId, head] of heads) {
+          if (skipped.has(castId)) continue;
+          claims.push(
+            await createPersona({
+              format: 'hf-persona/1',
+              castId,
+              castRevision: canonicalCast(castId).revision,
+              branchId: head?.branchId ?? crypto.randomUUID(),
+              parentRevision: head?.revision ?? null,
+              source: this.source(),
+              transfer: {
+                ...(head?.transfer ?? { castPassport: 'rope-hf4-active/1' }),
+                hostRun: runId,
+                portableClaim: { game: 'rope' },
+              },
+              limitations: [
+                ...(head?.limitations ?? []),
+                'This person belongs to this season until a supported checkpoint can be saved between activities.',
+              ],
+            }),
+          );
+        }
+      const chapter: Chapter | undefined = incoming.length
+        ? { version: DIALECT, initial, inputs: incoming, claims }
+        : undefined;
+      // Construct the complete receiving Run before claiming any shared head.
       const state = createGame(seed, chapter);
+      if (generation !== this.generation) throw new Error('The run changed before claiming its people.');
+      if (claims.length)
+        await shelf.request({
+          action: 'putBatch',
+          envelopes: claims,
+          expectedHeads: Object.fromEntries(heads.map(([castId, head]) => [castId, head?.revision ?? null])),
+        });
+      if (generation !== this.generation) throw new Error('The run changed. No new chapter was started.');
       this.state = state;
-      this.runId = crypto.randomUUID();
+      this.runId = runId;
       this.sources = [];
-      this.heads = chapter?.claims ?? [];
+      this.archives = [];
+      this.heads = claims;
       this.fileOrigin = false;
       this.status = chapter
         ? `This season uses ${chapter.inputs.length} saved browser histories. They were all reserved together. Everyone else starts with their original history.`
         : localOnly
           ? 'You started a new local chapter. Saved browser histories have not changed.'
-          : 'This chapter starts with the original cast. It uses no saved browser histories.';
+          : skipped.size
+            ? 'Older, occupied or ended histories remain unchanged on the shelf. This is a new local story for those people; it cannot overwrite their histories.'
+            : 'This chapter starts with the original cast. It uses no saved browser histories.';
+      if (reasons.length) this.status += ` ${reasons.join(' ')}`;
       // Caller installs the prepared state before opening any recording hook.
       return state;
     } finally {
@@ -130,9 +202,7 @@ export class Continuity {
   async validateRunEnvelopes(state: State) {
     if (state.season.chapter)
       await Promise.all(
-        [...state.season.chapter.claims, ...state.season.chapter.inputs.map((i) => i.parent)].map((p) =>
-          validatePersona(p),
-        ),
+        [...state.season.chapter.claims, ...state.season.chapter.inputs].map((p) => validatePersona(p)),
       );
   }
   async restoreOwnership(state: State, saved?: Ownership, file = false) {
@@ -156,7 +226,12 @@ export class Continuity {
       throw new Error('The saved permission to update these histories belongs to another run.');
     if (generation !== this.generation) throw new Error('The run changed while it was loading.');
     const sources = structuredClone(saved?.sources ?? []);
-    if (!Array.isArray(sources) || (!file && JSON.stringify(sources).length > maxArchive))
+    const archives = structuredClone(saved?.archives ?? []);
+    if (
+      !Array.isArray(sources) ||
+      !Array.isArray(archives) ||
+      (!file && JSON.stringify({ sources, archives }).length > this.archiveLimit)
+    )
       throw new Error('The saved archive is too large to load.');
     this.invalidate();
     this.state = state;
@@ -164,6 +239,7 @@ export class Continuity {
     this.runId = saved?.runId ?? crypto.randomUUID();
     this.fileOrigin = file || saved?.fileOrigin === true;
     this.sources = sources;
+    this.archives = archives;
     this.status =
       'The people saved with this run have been restored. Their current browser histories were not loaded. Importing a file gives this run no permission to update those histories.';
   }
@@ -172,6 +248,7 @@ export class Continuity {
       runId: this.runId,
       heads: this.heads,
       sources: this.sources,
+      archives: this.archives,
       fileOrigin: this.fileOrigin,
     });
   }
@@ -229,6 +306,11 @@ export class Continuity {
       const person = state.climb.people.find((p) => castIdOf(p.id) === castId);
       if (!person || !CAST.some((c) => c.castId === castId))
         throw new Error('This person is not part of this game’s cast.');
+      const blockers = portableWriteBlockers(castId, 'rope');
+      if (blockers.length)
+        throw new Error(
+          `${person.name}: shared history cannot be saved until ${blockers.join(', ')} supports it.`,
+        );
       const parent = this.heads.find((p) => p.castId === castId);
       let envelope: PersonaEnvelope;
       let raw: unknown;
@@ -236,18 +318,24 @@ export class Continuity {
         if (!parent)
           throw new Error('This run controls no living history for this person that it can close.');
         if (parent.terminal) return;
-        raw = snapshot(person);
-        const closed = await closePersonaBranch(parent, this.source(), person.now);
+        raw = canonicalPersona(archiveOf(state.climb));
+        const closed = await closePersonaBranch(parent, this.source(), Math.round(person.now * 60_000));
         const { revision: _revision, ...body } = closed;
-        envelope = await createPersona({ ...body, transfer: { ...body.transfer, hostRun: runId } });
+        envelope = await createPersona({
+          ...body,
+          transfer: {
+            ...body.transfer,
+            hostRun: runId,
+            terminalCheckpoint: {
+              sha256: await digest(raw as string),
+              atMs: archiveOf(state.climb).current.at,
+            },
+          },
+        });
       } else {
-        const captured = await climberTransfer(person);
+        const captured = await climberTransfer(state.climb, person.id);
         raw = captured.raw;
         const branchId = fork ? crypto.randomUUID() : (parent?.branchId ?? crypto.randomUUID());
-        const life =
-          !fork && parent?.transfer.life
-            ? anchorPersonaLife(parent.transfer.life as PersonaLife, castId, Date.now())
-            : initialPersonaLife(castId, branchId, Date.now());
         envelope = await createPersona({
           format: 'hf-persona/1',
           castId,
@@ -255,23 +343,29 @@ export class Continuity {
           branchId,
           parentRevision: fork ? null : (parent?.revision ?? null),
           source: this.source(),
-          transfer: { ...captured.transfer, life, hostRun: runId },
+          transfer: { ...captured.transfer, hostRun: runId },
           limitations: captured.limitations,
         });
       }
       if (!current()) throw new Error('The run changed before the history could be saved.');
       // Preserve full actual source before publication, including failed CAS attempts, local only.
       if (raw) {
+        if (typeof raw !== 'string') throw new Error('The complete HF source archive is unavailable.');
+        const sha256 = await digest(raw);
+        if (!current()) throw new Error('The run changed before the history could be saved.');
+        const existing = this.archives.find((a) => a.sha256 === sha256);
+        if (existing && existing.raw !== raw) throw new Error('Conflicting complete source archive.');
+        const archives = existing ? this.archives : [...this.archives, { sha256, raw }];
         const retained = [
           ...this.sources,
-          { revision: envelope.revision, source: envelope.source, snapshot: raw },
+          { revision: envelope.revision, source: envelope.source, envelope, archiveSha256: sha256 },
         ];
-        // Capacity is serialized JSON UTF16 code units, as in the native loader.
-        if (JSON.stringify(retained).length > maxArchive)
+        if (JSON.stringify({ sources: retained, archives }).length > this.archiveLimit)
           throw new Error(
             'Complete source archive exceeds capacity. Download this run. This history was not published.',
           );
         this.sources = retained;
+        this.archives = archives;
         this.changed();
       }
       if (!current()) throw new Error('The run changed before the history could be saved.');
@@ -323,16 +417,20 @@ export class Continuity {
       state = this.state,
       runId = this.runId;
     const current = () => generation === this.generation && state === this.state && runId === this.runId;
+    const failures: string[] = [];
     for (const c of CAST) {
       if (!current()) return;
       try {
         await this.checkpoint(c.castId);
       } catch (error) {
         if (!current()) return;
-        this.status = String(error);
+        failures.push(String(error));
       }
     }
-    if (current()) this.changed();
+    if (current()) {
+      if (failures.length) this.status = failures.join(' ');
+      this.changed();
+    }
   }
 }
 
@@ -341,6 +439,7 @@ export type Ownership = {
   heads: PersonaEnvelope[];
   fileOrigin: boolean;
   sources: SourceArchive[];
+  archives?: RawArchive[];
 };
 
 /** Only the protected path selects a file session. */

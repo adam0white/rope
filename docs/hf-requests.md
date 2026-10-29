@@ -32,3 +32,8 @@ The requests above record historical evidence.
 - Request 6 / F-012: field rules use released HF bladder state, completed water outcomes and completed voiding outcomes. Settled footing and an untied person gate the offer. `test/field.test.ts` and `scripts/field-control.ts` cover this. Historical owner exports stay unchanged.
 - Request 7: field-rule descent offers say turn back when they concern the current leg. HF still owns the early goal; the host does not replace it with a rule.
 - Request 1: Rope advertises bounded physical forecasts. Broader generic future-body reasoning belongs in HF. This batch adds no framework logic to Rope.
+
+
+## HF4 reconciliation (2026-10-28)
+
+The HF3 API descriptions above are historical. Current source uses published HF4.8.1 Run inputs, requests, receipts and full archives. There are no optional physiology faculties, manual trust writes or private body-based presentation. Retained place/voice references admit through honest initial world facts. Current controls establish no G2 or G6 blocker. G4 remains the broader public observation/projection need; this port explicitly says current condition is unavailable rather than exposing privileged truth. No HF edit or new framework gap is claimed.
