@@ -49,39 +49,46 @@ it('camp fallback identifies the speaker without showing internal verdict and re
   expect(answer).toBe('The journal records Wren’s answer: “Let me climb the hut path first.”');
 });
 
-it('covers all fifteen real voice variants for a deferred action', async () => {
+it('covers all twenty real voice variants for a deferred action', async () => {
   const { voiced } = await import('../src/sim/voice.ts');
   const expected: Record<string, string[]> = {
     tamar: [
       'I will consider it after I climb the hut path, but not before.',
       'I need to climb the hut path first. Then I will think about it.',
       'Let me climb the hut path properly first.',
+      'First I need to climb the hut path. We can discuss it then.',
     ],
     oskar: [
       'Let me climb the hut path first. We are so close.',
       'Let me climb the hut path first! Come on.',
       'Not yet. Let me climb the hut path first. Then I will do it.',
+      'Hang on, let me climb the hut path first!',
     ],
     nell: [
       'Can I just climb the hut path first? Then I will do it.',
       'Can I climb the hut path first? I would like to.',
       'Let me climb the hut path first, if that is all right.',
+      'Could I climb the hut path first? Then we can talk about it.',
     ],
     bilal: [
       'Let me climb the hut path. Then I’ll listen.',
       'I will listen after I climb the hut path, my friend.',
       'Give me time to climb the hut path, then I’ll come.',
+      'First let me climb the hut path, friend. Then we can talk.',
     ],
     wren: [
       'Let me climb the hut path first. I’m not stopping now.',
       'I will not do that until I climb the hut path.',
       'I’ll climb the hut path. Then ask me again.',
+      'First I’ll climb the hut path. The rest can wait.',
     ],
   };
   for (const [who, variants] of Object.entries(expected)) {
     const displayed = new Set<string>();
     for (let seed = 0; seed < 100; seed++)
-      displayed.add(displayText(voiced(seed, who, 480, 'deferred', '', '', 'climb', 'climb the hut path')));
+      displayed.add(
+        displayText(voiced(seed, who, 480, 'deferred', '', '', 'climb', 'climb the hut path', seed % 4)),
+      );
     expect([...displayed].sort()).toEqual(variants.sort());
   }
 });
@@ -92,8 +99,10 @@ it('authors unavailable replies and reluctant agreement directly in each voice',
   const reluctant = new Set<string>();
   for (const who of ['tamar', 'oskar', 'nell', 'bilal', 'wren'])
     for (let seed = 0; seed < 100; seed++) {
-      unavailable.add(voiced(seed, who, 480, 'refused', 'Not from here.', 'unavailable'));
-      reluctant.add(voiced(seed, who, 480, 'complied', 'Fine.'));
+      unavailable.add(
+        voiced(seed, who, 480, 'refused', 'Not from here.', 'unavailable', '', undefined, seed % 4),
+      );
+      reluctant.add(voiced(seed, who, 480, 'complied', 'Fine.', '', '', undefined, seed % 4));
     }
   expect([...unavailable].every((line) => /cannot|can’t|can (?:I|do)/.test(line))).toBe(true);
   expect(reluctant).toContain('I will do it if you insist, but I don’t like it.');

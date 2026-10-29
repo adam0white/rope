@@ -1,6 +1,7 @@
 import {
   inspect,
   preview,
+  readRunHistory,
   replay as replayHF,
   restoreRun,
   step as stepHF,
@@ -8,7 +9,7 @@ import {
 import { createPersona } from '@adam0white/lab-client';
 import { expect, it } from 'vitest';
 import { advanceFrame, queueInput, replay, restore, snapshot, startClimb, step } from '../src/sim/climb.ts';
-import { archiveOf, hfRunOf, need } from '../src/sim/hf4.ts';
+import { archiveOf, FRAMEWORK_VERSION, hfRunOf, need } from '../src/sim/hf4.ts';
 import { castIdOf } from '../src/sim/party.ts';
 import {
   admitClimber,
@@ -25,7 +26,7 @@ it('records current HF4 requests, costed physical work and exact HF replay', () 
   for (let i = 0; i < 10; i++) step(climb);
   expect(climb.people.some((p) => p.activity)).toBe(true);
   const archived = archiveOf(climb);
-  expect(archived.engine.package).toBe('@adam0white/human-framework@4.8.1');
+  expect(archived.engine.package).toBe(`@adam0white/human-framework@${FRAMEWORK_VERSION}`);
   const replayed = replayHF(archived);
   expect(replayed.ok).toBe(true);
   const resumed = restore(snapshot(climb));
@@ -54,7 +55,7 @@ it('records an actual public climbing answer and a costed completed hut-path rec
   expect(climb.lines.some((line) => line.input === input && line.who === 'oskar')).toBe(true);
   expect(climb.members.find((m) => m.id === 'oskar')!.path).toContain('meadow');
   const archive = archiveOf(climb);
-  const completed = archive.history
+  const completed = readRunHistory(archive)
     .flatMap((t) => t.inputs)
     .find(
       (i) =>
@@ -118,7 +119,7 @@ it('ends optional chapter goals only after an actual costed release choice and p
     castRevision: '1',
     branchId: 'lived-control',
     parentRevision: null,
-    source: { game: 'rope', build: 'control', engine: '4.8.1', rules: RULES },
+    source: { game: 'rope', build: 'control', engine: FRAMEWORK_VERSION, rules: RULES },
     transfer: captured.transfer,
     limitations: captured.limitations,
   });
@@ -127,7 +128,7 @@ it('ends optional chapter goals only after an actual costed release choice and p
   const claim = await createPersona({
     ...body,
     parentRevision: revision,
-    source: { game: 'rope', build: 'control', engine: '4.8.1', rules: RULES },
+    source: { game: 'rope', build: 'control', engine: FRAMEWORK_VERSION, rules: RULES },
     transfer: {
       ...body.transfer,
       hostRun: 'admission-control',
@@ -145,7 +146,7 @@ it('ends optional chapter goals only after an actual costed release choice and p
   const target = admitted.climb;
   step(target);
   expect(replayHF(archiveOf(target)).ok).toBe(true);
-  const exported = exportClimb(admitted.season.start!, target, '4.8.1', chapter);
+  const exported = exportClimb(admitted.season.start!, target, FRAMEWORK_VERSION, chapter);
   expect(snapshot(replayExport(exported))).toBe(exported.state);
   const changed = structuredClone(chapter);
   changed.claims[0]!.limitations = ['replaced original history'];
@@ -171,7 +172,7 @@ it('continues the same public Run through a short valley interval', () => {
   const from = climb.minute;
   valley(climb, from + 120);
   const after = archiveOf(climb);
-  expect(after.history.length).toBeGreaterThan(before.history.length);
+  expect(readRunHistory(after).length).toBeGreaterThan(readRunHistory(before).length);
   expect(after.initial).toEqual(before.initial);
   expect(replayHF(after).ok).toBe(true);
   const resumed = restore(snapshot(climb));

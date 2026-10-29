@@ -15,6 +15,7 @@ import {
   type Result,
   type Run,
   type RunArchive,
+  readRunHistory,
   restoreRun,
   type StepResult,
   type VisibleEvent,
@@ -63,7 +64,7 @@ export type PersonReading = {
   agenda: Part<'agenda'>;
   will: Part<'relationships'>;
   activity: Activity | null;
-  events: VisibleEvent[];
+  events: (VisibleEvent & { choiceIndex?: number })[];
   lexicon?: { plainEnglish: boolean };
 };
 export type Person = PersonReading;
@@ -144,6 +145,7 @@ export interface SuggestionResolution {
   says: string;
   chosenAction?: string;
   chosenLabel?: string;
+  choiceIndex?: number;
   reason: string;
   kind?: string;
   counterOffer?: { affordanceId?: string; label: string };
@@ -224,7 +226,7 @@ function runtimeOf(s: ClimbState): Runtime {
   let runtime = runtimes.get(s);
   if (!runtime) {
     const identities = new Map(s.hf.initial.people.map((p) => [p.id, p.identity]));
-    for (const tx of s.hf.history)
+    for (const tx of readRunHistory(s.hf))
       for (const input of tx.inputs)
         if (input.kind === 'person.arrived')
           identities.set(input.payload.authored.id, input.payload.authored.identity);
@@ -244,7 +246,11 @@ export function hfRunOf(s: ClimbState): Run {
 export function archiveOf(s: ClimbState): RunArchive {
   return exportRun(hfRunOf(s)) as RunArchive;
 }
-export function syncReadings(s: ClimbState): void {
+export function syncReadings(
+  s: ClimbState,
+  emitted: readonly { id: string; wording?: { readonly index: number } }[] = [],
+): void {
+  const wordings = new Map(emitted.map((e) => [e.id, e.wording?.index]));
   const run = hfRunOf(s),
     runtime = runtimeOf(s),
     oldPeople = new Map(s.people.map((p) => [p.id, p]));
@@ -286,7 +292,15 @@ export function syncReadings(s: ClimbState): void {
       agenda,
       will: structuredClone(part('relationships')),
       activity: s.hfActive?.[view.id] ?? null,
-      events: [...(oldPeople.get(view.id)?.events ?? []), ...part('events')].slice(-128),
+      events: [
+        ...(oldPeople.get(view.id)?.events ?? []),
+        ...part('events').map((e) => ({
+          ...e,
+          ...(wordings.has(e.id) && wordings.get(e.id) !== undefined
+            ? { choiceIndex: wordings.get(e.id) }
+            : {}),
+        })),
+      ].slice(-128),
       lexicon: { plainEnglish: true },
     } as Person;
   });
@@ -764,7 +778,7 @@ export function* stepPeople(
   for (let limit = 0; limit < 10000; limit++) {
     if (!alreadyRead) {
       runtime.at = result.at;
-      syncReadings(s);
+      syncReadings(s, result.events);
       if (result.events.length) s.hfEventCursor = result.events.at(-1)!.id;
       s.minute = Math.floor(runtime.at / MINUTE);
       makeWorld(s).observed?.(runtime.at / MINUTE);

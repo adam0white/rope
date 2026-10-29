@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { readRunHistory } from '@adam0white/human-framework';
 import { expect, it } from 'vitest';
 import { canHear, memberState, queueInput, replay, startClimb, step } from '../src/sim/climb.ts';
 import { archiveOf } from '../src/sim/hf4.ts';
@@ -52,8 +53,8 @@ it('an escort request produces a real HF answer and honest physical effects', ()
     s.journal.some((j) => j.who === 'tamar' && j.text.includes('went down with Nell, roped together')),
   ).toBe(true);
   for (let i = 0; i < 90; i++) step(s);
-  const receipt = archiveOf(s)
-    .history.flatMap((t) => t.inputs)
+  const receipt = readRunHistory(archiveOf(s))
+    .flatMap((t) => t.inputs)
     .find(
       (i) =>
         i.kind === 'action.resolved' &&

@@ -1,3 +1,4 @@
+import { readRunHistory } from '@adam0white/human-framework';
 import { describe, expect, it } from 'vitest';
 import { queueInput, replay, snapshot, startClimb, step } from '../src/sim/climb.ts';
 import { archiveOf } from '../src/sim/hf4.ts';
@@ -11,8 +12,8 @@ describe('a current climb', () => {
     queueInput(s, { t: 'lead', dir: 'up' });
     for (let i = 0; i < 110; i++) step(s);
     expect(s.members.find((m) => m.id === 'oskar')?.path).toContain('meadow');
-    const receipt = archiveOf(s)
-      .history.flatMap((tx) => tx.inputs)
+    const receipt = readRunHistory(archiveOf(s))
+      .flatMap((tx) => tx.inputs)
       .find(
         (input) =>
           input.kind === 'action.resolved' &&

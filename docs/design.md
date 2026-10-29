@@ -108,3 +108,14 @@ No real framework blocker is currently established. Supported initial world fact
 ### Shared-person compatibility, 2026-10-28
 
 The current SDK reports that peer games have not certified portable reading for the five Rope people. Rope skips each blocked incoming history and refuses its source projection or terminal write; local climbs remain available. The SDK controls when each peer becomes eligible. This is the existing G2 portable-admission dependency in `docs/hf-requests.md`, not a new framework gap. Recheck peer certification by 2026-11-03.
+
+
+## HF4.10 narration adapter (coordinator ruling 2026-10-29T12:30Z)
+
+Rope keeps six reply meanings: AFTER, INSTEAD, NO, CANNOT, YES and GRUDGING. Each has four alternatives in each climber’s voice. HF’s public `suggestion-resolved` event records `wording.index` for `suggestion.resolved`; the host uses that index unchanged to select the corresponding Rope table entry. All tables and HF’s default template have four entries. This shares HF’s event-time seeded selection, mood/trust context and last-two exclusion window across reply meanings for each person. There is no host random draw or minute hash. Repeated reads and exported replay use the recorded choice. No verdict or reason is inferred from the rendered English.
+
+The host adapter maps actual HF verdicts and reasons to a meaning, substitutes the actual selected offer’s Rope label for deferrals/counteroffers, and adds only known authored reason sentences. Unknown reasons add no text. Raw HF narration and reason codes never reach the player. Absent wording uses entry zero for non-event compatibility callers; live replies use the recorded suggestion event. Arrivals keep their real preparation/wait at the hut.
+
+HF4.10 phrasebooks accept only published semantic keys and exact slots. `suggestion.resolved` requires `{verdict}` and HF supplies the predicate. Directly submitting Rope’s six tables would fail validation or replace their meanings. The coordinator explicitly approved this temporary host adapter as option 1 rather than claiming full phrasebook support.
+
+Framework dependency: HF 4.x phrasebooks accept game-authored verdict predicates and reason sentences as an ordinary faculty, following HF4.0 “game requests become ordinary faculties”. Target: next HF minor after 4.11; checkpoint 2026-11-03. Remove the host adapter when this support ships. Adam’s feel acceptance remains separate.

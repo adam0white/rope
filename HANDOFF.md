@@ -1,3 +1,15 @@
+# HF4.10 voice adapter — 2026-10-29
+
+Remaining: one PR, exact green source and merged CI, deployment and live dirty:false verification. Adam accepts feel separately. Hosted review is waived by the owner because capacity is exhausted; no extra review.
+
+The coordinator ruling at 2026-10-29T12:30Z in `~/code/.lab-scratch/hfroad/V3-COORDINATION.md` selects option 1. Rope retains AFTER/INSTEAD/NO/CANNOT/YES/GRUDGING, four lines per climber per meaning. `suggestion-resolved.wording.index` selects the Rope line. HF owns the seeded event-time choice, mood/trust context and recent-choice window; reading and replay do not select again. The host maps the actual verdict/reason and selected offer to Rope’s words. Raw HF narration and unknown reason codes never become player text.
+
+Temporary framework dependency: HF 4.x phrasebooks must accept game-authored verdict predicates and reason sentences as an ordinary faculty (HF4.0 “game requests become ordinary faculties”). Target: next HF minor after 4.11; checkpoint 2026-11-03. Remove this adapter when that ships. See `docs/design.md` for the supported API limit and index contract.
+
+Verified locally: direct `check:lane`, fresh full suite (225 tests / 47 files), 25 focused voice/upgrade/plain-English tests, production build and the unmocked 110-minute exact-replay headless control. Chromium phone file play exercised rest, five recorded answers, climb request and journal. Current-runtime full-state hash is `f6ada1620dd2949f6e9d06c5fb3e84b7f340af063b1be382bd8c68ee05c4a3bc`; the change retains the recorded HF index in host readings. Historical fixtures are unchanged.
+
+Current pins: HF4.10.0/client0.5.9/kit0.5.26. Public pooled history reads, stable save key and start-fresh refusal for old engine saves are retained. Arrivals still prepare and wait at the hut. Full-state replay and historical fixtures remain required; no archive is trimmed. Recovery evidence and delivery report: `~/code/.lab-scratch/codex/rope-hf410.md`.
+
 # HF4 port — 2026-10-28, candidate
 
 Remaining: finish current-pin checks, the one hosted Codex review, signed merge, exact merged CI, deployment and live release verification. Adam retains gameplay feel acceptance. This candidate is not the deployed game.

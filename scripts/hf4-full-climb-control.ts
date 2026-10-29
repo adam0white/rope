@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
-import { replay as replayHF } from '@adam0white/human-framework';
+import { readRunHistory, replay as replayHF } from '@adam0white/human-framework';
 import { snapshot, startClimb } from '../src/sim/climb.ts';
 import { FRAMEWORK_VERSION } from '../src/sim/hf4.ts';
 import { exportClimb, replayExport } from '../src/sim/season.ts';
@@ -33,7 +33,7 @@ console.log(
     minute: climb.minute,
     over: climb.over,
     inputs: climb.inputs.length,
-    transactions: archive.history.length,
+    transactions: readRunHistory(archive).length,
     bytes: Buffer.byteLength(JSON.stringify(exported)),
     hfFullHash: archive.hashes.full,
     gameReplayExact: true,

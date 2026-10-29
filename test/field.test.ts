@@ -1,3 +1,4 @@
+import { readRunHistory } from '@adam0white/human-framework';
 import { expect, it } from 'vitest';
 import { offersFor, personOf, queueInput, replay, snapshot, startClimb, step } from '../src/sim/climb.ts';
 import { archiveOf, FRAMEWORK_VERSION, readBladder } from '../src/sim/hf4.ts';
@@ -56,7 +57,7 @@ it('only a reached and heard scout report supplies observed route knowledge', ()
   const mem = s.members.find((x) => x.id === 'tamar');
   if (!mem?.scoutReport) throw new Error('No completed scout report');
   expect(s.journal.some((j) => j.text.includes('reported the route'))).toBe(false);
-  const receipts = archiveOf(s).history.flatMap((tx) => tx.inputs);
+  const receipts = readRunHistory(archiveOf(s)).flatMap((tx) => tx.inputs);
   const completed = receipts.find(
     (input) =>
       input.kind === 'action.resolved' &&
@@ -83,7 +84,7 @@ it('does not invent a scout report before the actual crossing completes', () => 
   const answer = s.lines.find((line) => line.input === 1 && line.who === 'tamar');
   expect(answer).toMatchObject({ verdict: 'assented', reason: 'suggestion:leader' });
   expect(personOf(s, 'tamar').activity?.affordanceId).toMatch(/^scout:/);
-  const receipts = archiveOf(s).history.flatMap((tx) => tx.inputs);
+  const receipts = readRunHistory(archiveOf(s)).flatMap((tx) => tx.inputs);
   expect(
     receipts.some(
       (input) =>
