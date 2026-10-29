@@ -23,6 +23,7 @@ import {
 import frameworkPackage from '@adam0white/human-framework/package.json' with { type: 'json' };
 import type { ClimbState } from './climb.ts';
 import { SEASON } from './mountain.ts';
+import { VOICES } from './voice.ts';
 export const FRAMEWORK_VERSION = frameworkPackage.version;
 export const ENGINE_VERSION = FRAMEWORK_VERSION;
 /** Diagnostic timings for each actual public step call; excludes host work and archive export. */
@@ -64,7 +65,7 @@ export type PersonReading = {
   agenda: Part<'agenda'>;
   will: Part<'relationships'>;
   activity: Activity | null;
-  events: (VisibleEvent & { choiceIndex?: number })[];
+  events: VisibleEvent[];
   lexicon?: { plainEnglish: boolean };
 };
 export type Person = PersonReading;
@@ -143,9 +144,6 @@ export interface SuggestionResolution {
   voiceId: string;
   verdict: 'assented' | 'complied' | 'deferred' | 'modified' | 'refused' | 'commanded';
   says: string;
-  chosenAction?: string;
-  chosenLabel?: string;
-  choiceIndex?: number;
   reason: string;
   kind?: string;
   counterOffer?: { affordanceId?: string; label: string };
@@ -246,11 +244,7 @@ export function hfRunOf(s: ClimbState): Run {
 export function archiveOf(s: ClimbState): RunArchive {
   return exportRun(hfRunOf(s)) as RunArchive;
 }
-export function syncReadings(
-  s: ClimbState,
-  emitted: readonly { id: string; wording?: { readonly index: number } }[] = [],
-): void {
-  const wordings = new Map(emitted.map((e) => [e.id, e.wording?.index]));
+export function syncReadings(s: ClimbState): void {
   const run = hfRunOf(s),
     runtime = runtimeOf(s),
     oldPeople = new Map(s.people.map((p) => [p.id, p]));
@@ -292,15 +286,7 @@ export function syncReadings(
       agenda,
       will: structuredClone(part('relationships')),
       activity: s.hfActive?.[view.id] ?? null,
-      events: [
-        ...(oldPeople.get(view.id)?.events ?? []),
-        ...part('events').map((e) => ({
-          ...e,
-          ...(wordings.has(e.id) && wordings.get(e.id) !== undefined
-            ? { choiceIndex: wordings.get(e.id) }
-            : {}),
-        })),
-      ].slice(-128),
+      events: [...(oldPeople.get(view.id)?.events ?? []), ...part('events')].slice(-128),
       lexicon: { plainEnglish: true },
     } as Person;
   });
@@ -485,6 +471,7 @@ export function createClimbRun(s: ClimbState, people: PersonAuthoring[]): void {
           roles: {},
           prefer: 'name',
           actions: {},
+          voices: VOICES,
         },
         calendar: {
           id: 'rope-calendar',
@@ -778,7 +765,7 @@ export function* stepPeople(
   for (let limit = 0; limit < 10000; limit++) {
     if (!alreadyRead) {
       runtime.at = result.at;
-      syncReadings(s, result.events);
+      syncReadings(s);
       if (result.events.length) s.hfEventCursor = result.events.at(-1)!.id;
       s.minute = Math.floor(runtime.at / MINUTE);
       makeWorld(s).observed?.(runtime.at / MINUTE);
