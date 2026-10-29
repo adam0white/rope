@@ -80,9 +80,9 @@ it('does not invent a scout report before the actual crossing completes', () => 
   queueInput(s, { t: 'field-rules', bladder: false });
   queueInput(s, { t: 'say', to: 'tamar', act: 'scout-route', force: 'insist' });
   for (let i = 0; i < 2; i++) step(s);
-  expect(
-    s.lines.some((line) => line.input === 1 && line.who === 'tamar' && line.says.includes('climb')),
-  ).toBe(true);
+  const answer = s.lines.find((line) => line.input === 1 && line.who === 'tamar');
+  expect(answer).toMatchObject({ verdict: 'assented', reason: 'suggestion:leader' });
+  expect(personOf(s, 'tamar').activity?.affordanceId).toMatch(/^scout:/);
   const receipts = archiveOf(s).history.flatMap((tx) => tx.inputs);
   expect(
     receipts.some(

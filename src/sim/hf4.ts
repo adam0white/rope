@@ -142,6 +142,8 @@ export interface SuggestionResolution {
   voiceId: string;
   verdict: 'assented' | 'complied' | 'deferred' | 'modified' | 'refused' | 'commanded';
   says: string;
+  chosenAction?: string;
+  chosenLabel?: string;
   reason: string;
   kind?: string;
   counterOffer?: { affordanceId?: string; label: string };
@@ -648,7 +650,7 @@ function decisionAt(p: Person, offer: Affordance): DecisionRecord {
   if (!e || e.data.kind !== 'decision') return {};
   const convert = (r: NonNullable<typeof e.data.decision.suggestion>): SuggestionResolution => ({
     ...r,
-    says: e.narration.map((l) => l.text).join(' ') || r.reason,
+    says: '',
   });
   return {
     ...e.data.decision,

@@ -5,6 +5,7 @@ import {
   canonicalPersona,
   closePersonaBranch,
   createPersona,
+  type LifePreparation,
   type personaChannel,
   portableWriteBlockers,
   validatePersona,
@@ -108,6 +109,7 @@ export class Continuity {
       if (generation !== this.generation)
         throw new Error('The run changed before its people could be prepared.');
       const incoming: PersonaEnvelope[] = [];
+      const preparations: LifePreparation[] = [];
       const skipped = new Set<string>();
       const reasons: string[] = [];
       if (!localOnly)
@@ -132,6 +134,10 @@ export class Continuity {
             continue;
           }
           portableOf(head);
+          const preparation = await shelf.request<LifePreparation | null>({ action: 'prepare', castId });
+          if (!preparation || canonicalPersona(preparation.parent) !== canonicalPersona(head))
+            throw new Error('The shared history changed while preparing the arrival. Choose again.');
+          preparations.push(preparation);
           incoming.push(head);
         }
       const initial = Object.fromEntries(openingParty(seed).map((p) => [p.id, p]));
@@ -156,6 +162,9 @@ export class Continuity {
               source: this.source(),
               transfer: {
                 ...(head?.transfer ?? { castPassport: 'rope-hf4-active/1' }),
+                ...(preparations.find((p) => p.parent.castId === castId)
+                  ? { life: preparations.find((p) => p.parent.castId === castId)!.life }
+                  : {}),
                 hostRun: runId,
                 portableClaim: { game: 'rope' },
               },
@@ -167,7 +176,7 @@ export class Continuity {
           );
         }
       const chapter: Chapter | undefined = incoming.length
-        ? { version: DIALECT, initial, inputs: incoming, claims }
+        ? { version: DIALECT, initial, inputs: incoming, claims, preparations }
         : undefined;
       // Construct the complete receiving Run before claiming any shared head.
       const state = createGame(seed, chapter);

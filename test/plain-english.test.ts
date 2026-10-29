@@ -81,9 +81,7 @@ it('covers all fifteen real voice variants for a deferred action', async () => {
   for (const [who, variants] of Object.entries(expected)) {
     const displayed = new Set<string>();
     for (let seed = 0; seed < 100; seed++)
-      displayed.add(
-        displayText(voiced(seed, who, 480, 'deferred', 'After I climb the hut path, then I will.')),
-      );
+      displayed.add(displayText(voiced(seed, who, 480, 'deferred', '', '', 'climb', 'climb the hut path')));
     expect([...displayed].sort()).toEqual(variants.sort());
   }
 });

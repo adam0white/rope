@@ -12,6 +12,7 @@ import {
   type PersonaRequest,
   type PersonaShelfState,
   portableWriteBlockers,
+  preparePersonaLife,
 } from '@adam0white/lab-client';
 import { expect, it, vi } from 'vitest';
 import { queueInput, step } from '../src/sim/climb.ts';
@@ -47,6 +48,10 @@ function control(enabled = false, seedData: PersonaShelfState = { heads: {}, rev
       requests.push(r);
       if (r.action === 'get')
         return (data.revisions.find((p) => p.revision === data.heads[r.castId ?? '']) ?? null) as T;
+      if (r.action === 'prepare') {
+        const head = data.revisions.find((p) => p.revision === data.heads[r.castId ?? '']);
+        return (head ? preparePersonaLife(head, 1800000000000) : null) as T;
+      }
       if (r.action === 'recording') return { recordingEpoch: 'control-epoch' } as T;
       if (r.action === 'prepareBatch')
         return {

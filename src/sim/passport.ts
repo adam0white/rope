@@ -5,7 +5,13 @@ import {
   type PortablePerson,
   validatePortablePerson,
 } from '@adam0white/human-framework';
-import { canonicalCast, canonicalPersona, type PersonaEnvelope } from '@adam0white/lab-client';
+import {
+  canonicalCast,
+  canonicalPersona,
+  type LifePreparation,
+  type PersonaEnvelope,
+  preparePersonaLife,
+} from '@adam0white/lab-client';
 import type { ClimbState } from './climb.ts';
 import { ACTIONS, archiveOf, hfRunOf, need } from './hf4.ts';
 import { CAST, castIdOf } from './party.ts';
@@ -16,6 +22,7 @@ export type Chapter = {
   version: typeof DIALECT;
   inputs: PersonaEnvelope[];
   claims: PersonaEnvelope[];
+  preparations?: LifePreparation[];
   initial: Record<string, PersonAuthoring>;
 };
 const SOURCE_ROLES: Record<string, Record<string, string>> = {
@@ -151,6 +158,14 @@ export function checkChapter(chapter: Chapter) {
     !same(Object.keys(chapter.initial).sort(), CAST.map((c) => c.castId.split('.')[2]).sort())
   )
     throw Error('This saved starting party is unsupported. Keep the file and start a fresh season.');
+  if (
+    chapter.preparations &&
+    (chapter.preparations.length !== chapter.inputs.length ||
+      chapter.preparations.some(
+        (p, i) => !same(p.parent, chapter.inputs[i]) || !same(p, preparePersonaLife(p.parent, p.clockMs)),
+      ))
+  )
+    throw Error('The saved arrival preparation does not match its source history.');
   for (const parent of chapter.inputs) {
     const claim = chapter.claims.find((c) => c.castId === parent.castId);
     if (
@@ -166,7 +181,14 @@ export function checkChapter(chapter: Chapter) {
     const inherited = { ...claim.transfer };
     delete inherited.hostRun;
     delete inherited.portableClaim;
+    const prepared = chapter.preparations?.find((p) => p.parent.castId === parent.castId);
+    if (prepared) {
+      if (!same(inherited.life, prepared.life))
+        throw Error('The saved claim replaced its arrival preparation.');
+      delete inherited.life;
+    }
     const original = { ...parent.transfer };
+    if (prepared) delete original.life;
     delete original.hostRun;
     delete original.portableClaim;
     if (!same(inherited, original)) throw Error('The saved claim replaced part of its source history.');

@@ -5,7 +5,7 @@
  * season ends after the last mountain or when the party can no longer climb. Not modelled: jobs, families, travel.
  */
 import type { PersonAuthoring } from '@adam0white/human-framework';
-import { canonicalPersona } from '@adam0white/lab-client';
+import { canonicalPersona, lifeAdmission } from '@adam0white/lab-client';
 import {
   type ClimbState,
   hurtLevel,
@@ -83,6 +83,31 @@ export function newSeason(seed: number, chapter?: Chapter): { season: SeasonStat
       })
     : openingParty(seed);
   const climb = startClimb(seed, day, people, SEASON[0]?.id ?? 'hollin', 1);
+  for (const preparation of chapter?.preparations ?? []) {
+    const life = lifeAdmission(preparation, 'rope');
+    const id = preparation.parent.castId.split('.')[2]!;
+    const member = climb.members.find((m) => m.id === id)!;
+    const name = MEMBERS.find((m) => m.id === id)!.name;
+    const routine =
+      life.life.work === 'free-time'
+        ? 'left time free'
+        : life.life.work === 'local-help'
+          ? 'set aside time for local help'
+          : 'kept time for their own routine';
+    const place =
+      life.life.place === 'home'
+        ? 'home'
+        : life.life.place === 'local-workplace'
+          ? 'their local workplace'
+          : 'the public garden';
+    if (!life.availableForExtraWork) member.idleUntil = climb.minute + (life.startsAtHome ? 8 : 4);
+    climb.journal.push({
+      at: climb.minute,
+      who: id,
+      text: `${name} is assigned to ${life.assignment} and ${routine}; their last local stop was ${place}.${life.contacts.length ? ` They read public work notes from ${life.contacts.join(', ')}.` : ''} ${life.availableForExtraWork ? 'They have time to help with preparations.' : 'They have preparations to make at the hut.'}`,
+      story: true,
+    });
+  }
   const season: SeasonState = {
     v: 1,
     seed,
