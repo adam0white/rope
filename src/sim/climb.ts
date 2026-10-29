@@ -53,7 +53,6 @@ import {
 } from './mountain.ts';
 import { createParty, LEADER, MEMBERS, memberOf } from './party.ts';
 import { DRAW, hashUnit } from './rng.ts';
-import { voiced } from './voice.ts';
 
 function memberIn(s: ClimbState, id: string) {
   const member = memberOf(id);
@@ -744,24 +743,7 @@ function line(s: ClimbState, who: string, input: number, r: SuggestionResolution
       delete memberState(s, who).gather;
     }
   }
-  const own = voiced(
-    s.seed,
-    who,
-    s.minute,
-    r.verdict,
-    r.says,
-    r.reason,
-    r.chosenAction,
-    r.chosenLabel,
-    r.choiceIndex,
-  );
-  const says = withCause(
-    s,
-    who,
-    input,
-    r,
-    withForecast(s, who, input, r, withPromise(s, who, { ...r, says: own })),
-  );
+  const says = withCause(s, who, input, r, withForecast(s, who, input, r, withPromise(s, who, r)));
   // Reconsidering the same standing request across an interruption is one
   // outward answer unless HF changes its verdict or reason.
   if (
@@ -2638,20 +2620,7 @@ export function makeWorld(s: ClimbState): World {
           (e) => e.data.kind === 'decision' && e.data.decision.id === decisionId,
         );
         const result = resolved.data.resolution;
-        // Labels come from Rope's own offers, not the HF counter-offer narration.
-        const selected = s.hfOffers[p.id]?.offers.find(
-          (o) =>
-            o.id ===
-            (result.insteadAffordanceId ??
-              (event?.data.kind === 'decision' ? event.data.decision.chosenAffordanceId : undefined)),
-        );
-        const answer = {
-          ...result,
-          says: '',
-          chosenAction: selected?.action,
-          chosenLabel: selected?.label,
-          choiceIndex: resolved.choiceIndex,
-        };
+        const answer = { ...result, says: resolved.narration.map((l) => l.text).join(' ') };
         line(s, p.id, pending.input, answer);
         const switching =
           p.activity &&

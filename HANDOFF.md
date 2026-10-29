@@ -1,4 +1,12 @@
-# HF4.10 voice adapter — 2026-10-29
+# HF4.12 phrasebook adoption — 2026-10-29
+
+Remaining: source integration, the authorized hosted review, merged CI, deployment and live verification. Adam accepts feel separately. This worktree is a candidate, not a release.
+
+Rope uses published HF4.12.0 and immutable client0.5.12/kit0.5.29. The five climbers provide six reply meanings and reason sentences through HF `lexicon.voices`. HF records and renders the selected fragments; the host reads the public event narration. Deferred and modified replies quote the recorded alternative label. The host index adapter is removed. Older engine archives keep the existing start-fresh boundary. Prior HF4.10 work was delivered and is not reapplied.
+
+The removed plain-English assertions called the retired adapter directly. The replacement verifies all six four-variant families for five speakers and matches actual inspected narration to recorded verdict and reason fragments, including the selected route label. It does not exercise every phrase through live events.
+
+# Historical: HF4.10 voice adapter — 2026-10-29
 
 Remaining: one PR, exact green source and merged CI, deployment and live dirty:false verification. Adam accepts feel separately. Hosted review is waived by the owner because capacity is exhausted; no extra review.
 
