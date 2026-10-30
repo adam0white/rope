@@ -154,11 +154,19 @@ it('uses plain refusal text and keeps raw file errors behind lab=1', async () =>
     driver.savedText = JSON.stringify({ v: 1 });
     expect(driver.load()).toBeNull();
     const notice =
-      'This saved season is from an earlier version of Rope. It has not been deleted. Start a new game to play this version.';
+      'This saved season cannot be opened in this version of Rope. It has not been deleted. Start a new game to play.';
     expect(driver.startupError).toBe(notice);
     driver.titlePage();
     expect(root.querySelector('.page-body [role="status"]')?.textContent).toBe(notice);
     expect(root.querySelector('[data-a="new"]')).not.toBeNull();
+    for (const engine of [ENGINE_VERSION, '999.0.0']) {
+      driver.savedText = JSON.stringify({ v: 2, engine, state: null });
+      expect(driver.load()).toBeNull();
+      driver.titlePage();
+      expect(root.querySelector('.page-body [role="status"]')?.textContent).toBe(notice);
+      expect(driver.startupError).toBe(notice);
+      expect(root.textContent).not.toContain('earlier version');
+    }
     driver.entry = 'file';
     driver.filePage();
     await choose(root, readFileSync('test/fixtures/rope-hf3-native.json'));

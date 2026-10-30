@@ -340,7 +340,7 @@ it('keeps an unsupported HF3 local save and explains it cannot resume', async ()
   const saved = JSON.stringify({ v: 1, engine: '2.23.0' });
   localStorage.setItem('rope.save.cast.v1', saved);
   await boot();
-  expect(document.body.textContent).toContain('from an earlier version of Rope');
+  expect(document.body.textContent).toContain('cannot be opened in this version of Rope');
   expect(document.body.textContent).toContain('It has not been deleted. Start a new game');
   expect([...document.querySelectorAll('button')].some((button) => button.textContent === 'Resume')).toBe(
     false,

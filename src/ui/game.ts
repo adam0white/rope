@@ -398,7 +398,7 @@ export class Game {
       if (saved.v !== 2 || saved.engine !== ENGINE_VERSION || typeof saved.state !== 'string') {
         this.unsupportedSave = true;
         this.startupError =
-          'This saved season is from an earlier version of Rope. It has not been deleted. Start a new game to play this version.';
+          'This saved season cannot be opened in this version of Rope. It has not been deleted. Start a new game to play.';
         return null;
       }
       return saved;
@@ -2490,7 +2490,7 @@ export class Game {
     const sv = this.load();
     const cont = sv && !sv.season.over;
     this.openPage(
-      `<div class="title-scene"><h1>The Rope</h1><p class="sub">Five people will climb three mountains.</p>${this.peaksSvg(cont ? sv.season.history.length : 0)}</div><div class="page-body"><p class="title-goal">Lead them up and bring them home. They can say no.</p>${this.unsupportedSave ? '<p role="status">This saved season is from an earlier version of Rope. It has not been deleted. Start a new game to play this version.</p>' : ''}${cont ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}<div data-new-confirm hidden><p>Starting a new game replaces your saved season.</p><button class="btn" data-yes>Start new game</button><button class="btn" data-no>No</button></div></div><div class="page-actions">${cont ? '<button class="btn go" data-a="continue">Resume</button>' : ''}<button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'New game' : 'New game'}</button>${this.footer()}</div>`,
+      `<div class="title-scene"><h1>The Rope</h1><p class="sub">Five people will climb three mountains.</p>${this.peaksSvg(cont ? sv.season.history.length : 0)}</div><div class="page-body"><p class="title-goal">Lead them up and bring them home. They can say no.</p>${this.unsupportedSave ? '<p role="status">This saved season cannot be opened in this version of Rope. It has not been deleted. Start a new game to play.</p>' : ''}${cont ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}<div data-new-confirm hidden><p>Starting a new game replaces your saved season.</p><button class="btn" data-yes>Start new game</button><button class="btn" data-no>No</button></div></div><div class="page-actions">${cont ? '<button class="btn go" data-a="continue">Resume</button>' : ''}<button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'New game' : 'New game'}</button>${this.footer()}</div>`,
       (el) => {
         el.querySelector('[data-a="continue"]')?.addEventListener('click', () => {
           if (sv) this.resume(sv);
