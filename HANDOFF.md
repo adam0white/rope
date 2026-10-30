@@ -1,3 +1,9 @@
+# Refusal text follow-up — 2026-10-30 candidate
+
+Remaining: coordinator CLEAR at the signed source, exact source and merge CI, deployment and live clean release verification. This bounded follow-up changes only displayed text. Unopenable saved seasons are described as unable to open in this version, with New game offered. The same existing refusal path also covers malformed current saves and unknown future versions, so it does not establish an earlier version. The file chooser displays known readable refusal messages or a fixed recovery sentence. Raw file errors appear only in collapsed Debug under exact `?lab=1`. History permission failures do not claim the file is older, because that is not established by that failure. All validators, ownership checks, simulation, replay and difficulty stay unchanged. Adam retains feel acceptance.
+
+One new focused regression covers the title notice and file refusal/diagnostic gate. Existing technical refusal assertions now read the lab diagnostic surface; replay-hash tests remain unchanged.
+
 # Native permission restoration — 2026-10-30 r5 candidate
 
 Remaining: same-reviewer disposition through director, integration and release/live qualification. Restore now rejects missing/null native ownership before activation. Fresh local-only play persists a validated boolean localOnly flag, keeps fileOrigin false, owns no heads and invents no skips. It can resume and play, but checkpoint/fork/terminal/source publication refuses before staging. Fresh shared play on an empty SDK shelf still claims all five roles and resumes normally. R4 proofs/packages remain immutable; r5 packet is `~/code/.lab-scratch/games-deferred/resume-rope-reader-r5-*`. No new dependency, gameplay or framework change; no commit/deploy/certificate.
