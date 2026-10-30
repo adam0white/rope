@@ -367,7 +367,7 @@ it('starts a fresh local role while preserving an unsupported profile-only shelf
   expect(c.heads.some((p) => p.castId === legacy.castId)).toBe(false);
   expect(requests.at(-1)?.envelopes?.some((p) => p.castId === legacy.castId)).toBe(false);
   expect(await shelf.request({ action: 'get', castId: legacy.castId })).toEqual(legacy);
-  expect(c.status).toContain('Older, occupied or ended histories remain unchanged');
+  expect(c.status).toContain('Some people could not join from other games');
 });
 
 it('blocks checkpoint before projection or shelf publication when peers are unsupported', async () => {
@@ -392,7 +392,7 @@ it('preserves an unsupported shared head and names the skipped person', async ()
   expect(state.season.chapter).toBeUndefined();
   expect(requests.at(-1)?.envelopes?.some((p) => p.castId === head.castId)).toBe(false);
   expect(continuity.status).toContain('Oskar');
-  expect(continuity.status).toContain('other games support it');
+  expect(continuity.status).toContain('other games cannot share them yet');
 });
 
 it('blocks terminal closure before changing the source or publishing', async () => {
@@ -404,4 +404,43 @@ it('blocks terminal closure before changing the source or publishing', async () 
   await expect(continuity.checkpoint('hf.cast.oskar.rope')).rejects.toThrow(/commonstead/);
   expect(continuity.ownership()).toEqual(before);
   expect(requests.slice(count).some((r) => r.action === 'put')).toBe(false);
+});
+it('batch checkpoints skip local-only and denied people, and report real failures once', async () => {
+  const { continuity: c, requests } = control(true);
+  await c.fresh(42, true);
+  const checkpoint = vi.spyOn(c, 'checkpoint').mockRejectedValue(new Error('secret failure'));
+  requests.length = 0;
+  await c.checkpointAll();
+  expect(checkpoint).not.toHaveBeenCalled();
+  expect(requests).toEqual([]);
+  Object.assign(c, {
+    localOnly: false,
+    skipped: [{ castId: 'hf.cast.oskar.rope', reason: 'Oskar starts fresh.' }],
+  });
+  await c.checkpointAll();
+  expect(checkpoint).toHaveBeenCalledTimes(4);
+  expect(checkpoint).not.toHaveBeenCalledWith('hf.cast.oskar.rope');
+  expect(requests).toEqual([]);
+  expect(c.status).toBe("Some people's histories could not be saved this time. Your season continues.");
+});
+it('attempts real eligible checkpoints without writing a denied identity', async () => {
+  const { continuity: c, shelf, requests } = await finishedControl();
+  c.skipped = [{ castId: 'hf.cast.tamar.rope', reason: 'Tamar starts fresh.' }];
+  requests.length = 0;
+  const checkpoint = vi.spyOn(c, 'checkpoint');
+  const request = shelf.request;
+  shelf.request = async <T>(r: PersonaRequest): Promise<T> => {
+    if (r.action === 'put') {
+      requests.push(r);
+      throw new Error('private transport detail');
+    }
+    return request<T>(r);
+  };
+  await c.checkpointAll();
+  expect(checkpoint).toHaveBeenCalledTimes(4);
+  expect(checkpoint).not.toHaveBeenCalledWith('hf.cast.tamar.rope');
+  const puts = requests.filter((r) => r.action === 'put');
+  expect(puts.length).toBeGreaterThan(0);
+  expect(puts.every((r) => r.envelope?.castId !== 'hf.cast.tamar.rope')).toBe(true);
+  expect(c.status).toBe("Some people's histories could not be saved this time. Your season continues.");
 });

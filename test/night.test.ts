@@ -105,7 +105,8 @@ it('refuses the historical HF3 native save without replacing it', async () => {
   const driver = game as unknown as Driver;
   await driver.resume({ engine: '2.23.0', v: 1, season, start: season.start, inputs: [], minute: 5699 });
   expect(document.body.textContent).toContain('The game could not resume');
-  expect(document.body.textContent).toContain('has not been replaced');
+  expect(document.body.textContent).toContain('has not been deleted');
+  expect(document.body.textContent).toContain('Start a new game');
 });
 
 it('the ended current climb presents the next-climb action', async () => {
