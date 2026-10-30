@@ -80,6 +80,14 @@ async function boot(all = false, seed = 20261018) {
     const { season, climb } = newSeason(seed);
     await (game as unknown as Driver).resume({
       v: 2,
+      ownership: {
+        runId: 'local-test-fixture',
+        heads: [],
+        sources: [],
+        archives: [],
+        fileOrigin: false,
+        localOnly: true,
+      },
       engine: ENGINE_VERSION,
       state: snapshot(climb),
       season,
@@ -302,6 +310,14 @@ it('shows the saved climb, mountain and time beside Continue without advancing t
   for (let i = 0; i < 13; i++) step(climb);
   const saved = JSON.stringify({
     v: 2,
+    ownership: {
+      runId: 'local-test-fixture',
+      heads: [],
+      sources: [],
+      archives: [],
+      fileOrigin: false,
+      localOnly: true,
+    },
     engine: ENGINE_VERSION,
     state: snapshot(climb),
     season,

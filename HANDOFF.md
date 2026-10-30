@@ -1,3 +1,25 @@
+# Native permission restoration — 2026-10-30 r5 candidate
+
+Remaining: same-reviewer disposition through director, integration and release/live qualification. Restore now rejects missing/null native ownership before activation. Fresh local-only play persists a validated boolean localOnly flag, keeps fileOrigin false, owns no heads and invents no skips. It can resume and play, but checkpoint/fork/terminal/source publication refuses before staging. Fresh shared play on an empty SDK shelf still claims all five roles and resumes normally. R4 proofs/packages remain immutable; r5 packet is `~/code/.lab-scratch/games-deferred/resume-rope-reader-r5-*`. No new dependency, gameplay or framework change; no commit/deploy/certificate.
+
+# Reader integrity repair — 2026-10-30 r4 candidate
+
+Remaining: director's bounded reviewer disposition, integration, release and exact live qualification. Preparation transport, missing result and wrong-parent failures now abort before batch publication or receiving installation. One shared skip-metadata validator checks native/public/file boundaries before omission or installation and rejects malformed fields or overlap with retained claims, inputs, original ownership and source pins. Native saves missing the permissions/denials needed to account for their cast refuse with start-fresh copy. File imports retain original bytes and no publication authority. Pins stay HF4.15/client0.5.15/kit0.5.32. R3 artifacts/packages remain unchanged; r4 evidence is `~/code/.lab-scratch/games-deferred/resume-rope-reader-r4-*`. No commit/deploy/certificate.
+
+# HF4.15 and published SDK adoption — 2026-10-30 candidate
+
+Remaining: director review/integration, release and exact live reader qualification. This tree is not deployed or certified. Direct HF4.15.0 and published client0.5.15/kit0.5.32 use verified official artifacts. They share one physical current HF4.15 module, with no override. R2 metadata-only skips and all guards remain; unowned skipped envelopes stay solely on the shelf. Complete accepted-source archives and file nonownership remain unchanged.
+
+Older4.13 native saves/files are refused with a keep-file/start-fresh explanation. No actor/state conversion, faculty switches or tuning is added. The4.14 live fork and4.15 host-current selectors need no host adoption here. Current full-state replay hash changes with engine identity; the seed7 five-minute control differs from4.13 only in engine identity and archive hashes, with identical host and current HF state. R3 proof/patch/backup: `~/code/.lab-scratch/games-deferred/resume-rope-reader-r3-*`. Earlier r2 source/proof remains archived and unchanged.
+
+# Portable reader repair — 2026-10-30 candidate
+
+Remaining: director review/integration and release, then exact live reader qualification. No certificate or deployment is claimed. Pins remain HF4.13.0/client0.5.12/kit0.5.29.
+
+Fresh seasons catch unsupported or occupied histories per person. Public menu notices name the separate local stories. Native saves, public exports and file roundtrips retain only skipped IDs and plain reasons. Those IDs deny checkpoint, fork and terminal writes after reload; they grant no source, recording or custody ownership. Complete original skipped envelopes stay unchanged on the shelf. All requested heads, including skipped people, remain in batch CAS. Complete accepted-source archives and file nonownership remain unchanged. Evidence and exact patch: `~/code/.lab-scratch/games-deferred/resume-rope-reader-r2-*`.
+
+The earlier report incorrectly treated absent copies of skipped envelopes in run exports as a blocker. The director corrected that requirement: shelf preservation, named skips and persistent write refusal are the reader obligations. Earlier live evidence remains unchanged.
+
 # HF4.12 phrasebook adoption — 2026-10-29
 
 Remaining: source integration, the authorized hosted review, merged CI, deployment and live verification. Adam accepts feel separately. This worktree is a candidate, not a release.
