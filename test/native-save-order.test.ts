@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { snapshot, step } from '../src/sim/climb.ts';
 import { FRAMEWORK_VERSION } from '../src/sim/hf4.ts';
+import * as seasons from '../src/sim/season.ts';
 import { newSeason } from '../src/sim/season.ts';
 import { Game } from '../src/ui/game.ts';
 
@@ -44,6 +45,7 @@ beforeEach(async () => {
   d = game;
 });
 afterEach(async () => {
+  vi.restoreAllMocks();
   await d.flushSave();
   game.destroy();
   await d.flushSave();
@@ -99,4 +101,60 @@ it('a stale pending save cannot overwrite a replacement run', async () => {
   const saved = JSON.parse(localStorage.getItem('rope.save.cast.v1')!);
   expect(saved.state).toBe(snapshot(climb));
   expect(saved.season.seed).toBe(8);
+});
+
+it('keeps failure details in lab Debug while recovery and season notices stay plain', async () => {
+  vi.stubGlobal(
+    'Worker',
+    class {
+      postMessage() {}
+      terminate() {}
+    },
+  );
+  const raw = 'synthetic internal <failure>';
+  await d.continuity.fresh(7, true);
+  expect(d.continuity.status).toBe(
+    'This season is played on its own. Saved histories from other games have not changed.',
+  );
+  await d.continuity.fresh(7);
+  expect(d.continuity.status).toBe('This season starts with the original climbers.');
+  begin(7);
+  await d.flushSave();
+  expect(d.continuity.status).not.toContain('chapter');
+  for (const query of ['', '?lab=0', '?lab=1']) {
+    history.replaceState(null, '', `/${query}`);
+    const lab = query === '?lab=1';
+    const save = vi.spyOn(d, 'nativeSaveText').mockImplementation(() => {
+      throw new Error(raw);
+    });
+    d.save();
+    await d.flushSave();
+    expect(d.saveNotice.textContent).toContain('This progress was not saved. Download before closing.');
+    expect(d.saveNotice.textContent.includes(raw)).toBe(lab);
+    if (lab) expect(d.saveNotice.querySelector('details')?.open).toBe(false);
+    save.mockRestore();
+
+    const fresh = vi.spyOn(d.continuity, 'fresh').mockRejectedValue(new Error(raw));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await d.newGame();
+    expect(d.pageEl.textContent).toContain('Your saved season has not been replaced.');
+    expect(d.pageEl.textContent.includes(raw)).toBe(lab);
+    d.gameMenu();
+    expect(document.body.textContent.includes(raw)).toBe(lab);
+    d.menuEl.querySelector('[data-menu-close]').click();
+    fresh.mockRestore();
+    consoleError.mockRestore();
+
+    d.climb.over = true;
+    d.debriefPage();
+    const next = vi.spyOn(seasons, 'nextClimbFrames').mockImplementation(() => {
+      throw new Error(raw);
+    });
+    await d.advanceNow();
+    expect(d.pageEl.textContent).toContain('The next climb could not start.');
+    expect(d.pageEl.textContent.includes(raw)).toBe(lab);
+    expect(d.pageEl.querySelector('[data-a="next"]').disabled).toBe(false);
+    next.mockRestore();
+  }
+  history.replaceState(null, '', '/');
 });
