@@ -69,6 +69,7 @@ import { PACE } from './pace.ts';
 import { displayText } from './plain-english.ts';
 import { attentionNeeded, eventStamp, playbackRate, skipEventStamp } from './playback.ts';
 import { Scene } from './scene.ts';
+import { skippedMetadata } from './skip-metadata.ts';
 import { RopeStage } from './stage.ts';
 import * as nativeStore from './store.ts';
 
@@ -2090,7 +2091,7 @@ export class Game {
     const menu = h(
       'div',
       'menu-backdrop',
-      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div><a class="menu-link" data-cast-shelf href="https://human.adamwhite.work/lab/people/">People across games</a><fieldset class="menu-pacing"><legend>Pace: Automatic</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset><button class="btn" data-menu-export ${this.climb ? '' : 'disabled'}>Download this run</button><a class="menu-link" href="/file/">Open a run file</a><button class="btn" data-menu-title>Title page</button><div class="privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a><details data-debug><summary>Debug</summary><p>Human Framework ${FRAMEWORK_VERSION}</p>${this.startupError ? `<pre>${esc(this.startupError)}</pre>` : ''}</details></div></div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
+      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><p role="status" data-continuity-status>${esc(this.continuity.skipped.map((s) => s.reason).join(' '))}</p><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div><a class="menu-link" data-cast-shelf href="https://human.adamwhite.work/lab/people/">People across games</a><fieldset class="menu-pacing"><legend>Pace: Automatic</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset><button class="btn" data-menu-export ${this.climb ? '' : 'disabled'}>Download this run</button><a class="menu-link" href="/file/">Open a run file</a><button class="btn" data-menu-title>Title page</button><div class="privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a><details data-debug><summary>Debug</summary><p>Human Framework ${FRAMEWORK_VERSION}</p>${this.startupError ? `<pre>${esc(this.startupError)}</pre>` : ''}</details></div></div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
     );
     const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => {
@@ -2355,6 +2356,7 @@ export class Game {
       ...exportClimb(this.start, this.climb, FRAMEWORK_VERSION, this.season.chapter, this.season.past),
       castSources: structuredClone(this.continuity.sources),
       castArchives: structuredClone(this.continuity.archives),
+      ...(this.continuity.skipped.length ? { castSkipped: structuredClone(this.continuity.skipped) } : {}),
     };
   }
 
@@ -2380,6 +2382,7 @@ export class Game {
         ...exportClimb(start, climb, FRAMEWORK_VERSION, season.chapter, season.past),
         castSources: structuredClone(this.continuity.sources),
         castArchives: structuredClone(this.continuity.archives),
+        ...(this.continuity.skipped.length ? { castSkipped: structuredClone(this.continuity.skipped) } : {}),
       },
     };
   }
@@ -2965,6 +2968,13 @@ async function validateFileSources(save: Save, original?: Ownership): Promise<vo
     ...(save.season.chapter?.claims ?? []),
     ...(save.season.chapter?.inputs ?? []),
   ];
+  const retained = [
+    ...records,
+    ...ownership.sources.map((s) => s.envelope),
+    ...(original?.sources ?? []).map((s) => s.envelope),
+  ];
+  skippedMetadata(ownership, 'skipped', retained);
+  skippedMetadata(original, 'skipped', retained);
   await Promise.all(records.map((p) => validatePersona(p)));
   const pool = ownership.archives ?? [];
   if (!Array.isArray(pool) || new Set(pool.map((a) => a.sha256)).size !== pool.length)
@@ -3060,7 +3070,11 @@ function checkReplayBudget(start: string, inputs: ClimbState['inputs'], minute: 
   }
 }
 function checkPublicReplay(
-  raw: ReturnType<typeof exportClimb> & { castSources?: unknown; castArchives?: unknown },
+  raw: ReturnType<typeof exportClimb> & {
+    castSources?: unknown;
+    castArchives?: unknown;
+    castSkipped?: unknown;
+  },
 ): ClimbState {
   if (!raw || raw.game !== 'rope' || raw.v !== 2 || raw.engine !== FRAMEWORK_VERSION)
     throw new Error('Unsupported public Rope export.');
@@ -3069,12 +3083,19 @@ function checkPublicReplay(
   for (const prior of raw.past ?? [])
     checkReplayBudget(prior.start, prior.inputs, finiteJSON(prior.state).minute);
   const climb = replayExport(raw);
-  const { castSources: _sources, castArchives: _archives, ...packet } = raw;
+  skippedMetadata(raw, 'castSkipped', [
+    ...(raw.chapter?.claims ?? []),
+    ...(raw.chapter?.inputs ?? []),
+    ...(Array.isArray(raw.castSources) ? raw.castSources.map((s) => s?.envelope) : []),
+  ]);
+  const { castSources: _sources, castArchives: _archives, castSkipped: _skipped, ...packet } = raw;
   if (!sameFileValue(packet, exportClimb(raw.start, climb, FRAMEWORK_VERSION, raw.chapter, raw.past)))
     throw new Error('The public export metadata does not match its complete replay.');
   return climb;
 }
 function nativeFileSave(raw: Save): { save: Save; climb: ClimbState; start: string } {
+  if (raw?.engine !== undefined && raw.engine !== ENGINE_VERSION)
+    throw new Error('This file uses an unsupported edition. Keep the file and start a fresh season.');
   if (
     !raw ||
     raw.v !== 2 ||
@@ -3088,6 +3109,12 @@ function nativeFileSave(raw: Save): { save: Save; climb: ClimbState; start: stri
     typeof raw.disclosure !== 'object'
   )
     throw new Error('Unsupported native Rope file.');
+  skippedMetadata(raw.ownership, 'skipped', [
+    ...(raw.ownership?.heads ?? []),
+    ...(raw.season.chapter?.claims ?? []),
+    ...(raw.season.chapter?.inputs ?? []),
+    ...(raw.ownership?.sources ?? []).map((s) => s.envelope),
+  ]);
   const save = structuredClone(raw);
   const start = save.start || save.season.start || '';
   const initial = finiteJSON(start);
@@ -3170,6 +3197,7 @@ async function decodeFile(text: string, selectedDigest?: string) {
         ),
         castSources: prepared.save.ownership?.sources ?? [],
         castArchives: prepared.save.ownership?.archives ?? [],
+        ...(prepared.save.ownership?.skipped?.length ? { castSkipped: prepared.save.ownership.skipped } : {}),
       })
     )
       throw new Error('The complete current state does not match its native replay.');
@@ -3185,6 +3213,7 @@ async function decodeFile(text: string, selectedDigest?: string) {
       !sameFileValue(played.inputs.slice(0, base.inputs.length), base.inputs) ||
       !sameFileValue(prepared.save.ownership?.sources, base.ownership?.sources) ||
       !sameFileValue(prepared.save.ownership?.archives ?? [], base.ownership?.archives ?? []) ||
+      !sameFileValue(prepared.save.ownership?.skipped ?? [], base.ownership?.skipped ?? []) ||
       !sameFileValue(prepared.save.season.chapter, base.season.chapter) ||
       prepared.save.ownership?.heads.length ||
       prepared.save.ownership?.fileOrigin !== true
@@ -3195,7 +3224,8 @@ async function decodeFile(text: string, selectedDigest?: string) {
     finiteJSON(interpretation);
     if (raw.format) throw new Error('Unsupported Rope file format.');
     if (raw.game === 'rope') {
-      if (raw.engine !== FRAMEWORK_VERSION) throw new Error('Unsupported public Rope export edition.');
+      if (raw.engine !== FRAMEWORK_VERSION)
+        throw new Error('This file uses an unsupported edition. Keep the file and start a fresh season.');
       const climb = checkPublicReplay(raw);
       const season = validateSeasonStart(climb.seed, raw.chapter, raw.past ?? [], raw.start);
       prepared = {
@@ -3217,6 +3247,7 @@ async function decodeFile(text: string, selectedDigest?: string) {
             fileOrigin: true,
             sources: structuredClone(raw.castSources ?? []),
             archives: structuredClone(raw.castArchives ?? []),
+            ...(Object.hasOwn(raw, 'castSkipped') ? { skipped: skippedMetadata(raw, 'castSkipped')! } : {}),
           },
         },
       };
@@ -3244,6 +3275,7 @@ async function decodeFile(text: string, selectedDigest?: string) {
       ),
       castSources: prepared.save.ownership.sources,
       castArchives: prepared.save.ownership.archives ?? [],
+      ...(prepared.save.ownership.skipped?.length ? { castSkipped: prepared.save.ownership.skipped } : {}),
     },
   });
   finiteJSON(measured, SESSION_BYTES);

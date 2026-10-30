@@ -17,7 +17,7 @@ The pre-repair actual App let per-element font2x clock/status text cross the fix
 
 ## Deferred (with targets)
 
-- **Source-owner contract/runtime evidence, review2026-10-30:** SDK15 publishes prepare/put helpers but no exact owned-departure/receiver-ACK binding. Finite native Rope/Commonstead Oskar admission is present; unsupported dialects cannot borrow provenance. Actual owner-profile/active-SW preservation, live ownership/claim, stored ACK/retirement and ingestion remain unproved and distinct. No owner/profile/queue actions are authorized here.
+- **Source-owner contract/runtime evidence, review2026-11-03:** SDK15 publishes prepare/put helpers but no exact owned-departure/receiver-ACK binding. Finite native Rope/Commonstead Oskar admission is present; unsupported dialects cannot borrow provenance. Actual owner-profile/active-SW preservation, live ownership/claim, stored ACK/retirement and ingestion remain unproved and distinct. No owner/profile/queue actions are authorized here.
 
 - Adam accepts feel and readiness on 2026-11-03. His exact old screen/page sequence for `r-4sha5x28jz` remains unavailable: the export contains no navigation log. Existing ending and journal-return regressions cover the reproduced trap; they cannot reconstruct unseen navigation. Source: owner report 2026-10-20.
 - Camp conversation through Workers AI waits for actual owner/player judgment that the core is fun (input gate, review 2026-11-03). Inference is off. The labelled deterministic journal fallback runs without a network request. The existing Worker cap, kill switch and $5 total budget remain for any later authorized prototype. This task makes no model calls.

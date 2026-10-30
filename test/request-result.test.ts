@@ -65,6 +65,14 @@ async function boot() {
   const { season, climb } = newSeason(20261018);
   await driver.resume({
     v: 2,
+    ownership: {
+      runId: 'local-test-fixture',
+      heads: [],
+      sources: [],
+      archives: [],
+      fileOrigin: false,
+      localOnly: true,
+    },
     engine: ENGINE_VERSION,
     state: snapshot(climb),
     season,

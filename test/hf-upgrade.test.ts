@@ -6,14 +6,14 @@ import { exportClimb, newSeason, replayExport } from '../src/sim/season.ts';
 import { proofHash } from './prose-proof.ts';
 
 it('pins the current published HF runtime in complete replay and source archives', () => {
-  expect(FRAMEWORK_VERSION).toBe('4.13.0');
+  expect(FRAMEWORK_VERSION).toBe('4.15.0');
   const { climb, season } = newSeason(7);
   queueInput(climb, { t: 'lead', dir: 'up' });
   for (let i = 0; i < 3; i++) step(climb);
   const exported = exportClimb(season.start!, climb, FRAMEWORK_VERSION);
   expect(exported.v).toBe(2);
   expect(snapshot(replayExport(exported))).toBe(exported.state);
-  expect(archiveOf(climb).engine.package).toBe('@adam0white/human-framework@4.13.0');
+  expect(archiveOf(climb).engine.package).toBe('@adam0white/human-framework@4.15.0');
 });
 it('refuses old HF3 saves explicitly instead of converting private actors', () => {
   expect(() => restore(JSON.stringify({ v: 1, castEdition: 'one-cast-1', people: [] }))).toThrow(
@@ -24,16 +24,16 @@ it('refuses old HF3 saves explicitly instead of converting private actors', () =
     expect(historical.raw).toBeDefined(); // Preserve the exact original fixture as historical evidence.
   }
 });
-it('tells players to start fresh when a 4.8 save is restored', () => {
+it.each(['4.8.1', '4.13.0'])('tells players to start fresh when a %s save is restored', (version) => {
   const { climb } = newSeason(7);
   const old = JSON.parse(snapshot(climb));
-  old.hf.engine.package = '@adam0white/human-framework@4.8.1';
+  old.hf.engine.package = `@adam0white/human-framework@${version}`;
   expect(() => restore(JSON.stringify(old))).toThrow(/start a fresh season/i);
 });
 it('retains current full-state replay hashes', () => {
   const { climb } = newSeason(7);
   for (let i = 0; i < 3; i++) step(climb);
   expect(proofHash(JSON.parse(snapshot(climb)))).toBe(
-    '4874e8e73005a0423286fc878157ffc16d7c5d9c106c3d9e9f32b70d640f0380',
+    'd50b262d6b2552a687153fc611c7ebcb68e5cc6c23abd7a7778635689caacd82',
   );
 });

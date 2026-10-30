@@ -165,7 +165,13 @@ it('recording-off Continue never depends on the shelf permission service', async
 
 it('recording linkage survives permission-service failure', async () => {
   const { continuity, shelf, lab, requests } = control(true);
-  await continuity.restoreOwnership(newSeason(42));
+  await continuity.restoreOwnership(newSeason(42), {
+    runId: 'local-control',
+    heads: [],
+    sources: [],
+    fileOrigin: false,
+    localOnly: true,
+  });
   continuity.heads = [
     { castId: 'hf.cast.oskar.rope', branchId: 'control', revision: 'a'.repeat(64) } as never,
   ];
@@ -386,7 +392,7 @@ it('preserves an unsupported shared head and names the skipped person', async ()
   expect(state.season.chapter).toBeUndefined();
   expect(requests.at(-1)?.envelopes?.some((p) => p.castId === head.castId)).toBe(false);
   expect(continuity.status).toContain('Oskar');
-  expect(continuity.status).toContain('commonstead');
+  expect(continuity.status).toContain('other games support it');
 });
 
 it('blocks terminal closure before changing the source or publishing', async () => {

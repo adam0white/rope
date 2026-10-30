@@ -150,6 +150,24 @@ it('refuses the preserved HF3 file without replacing the native season', async (
 });
 
 it.each([native, publicExport])(
+  'refuses a 4.13 file with a start-fresh explanation and keeps native bytes',
+  async (fixture) => {
+    const owner = 'native season untouched by older file';
+    localStorage.setItem('rope.save.cast.v1', owner);
+    const packet = fixture();
+    packet.engine = '4.13.0';
+    const original = JSON.stringify(packet);
+    const { root } = await open();
+    await choose(root, original);
+    expect(root.querySelector('[data-file-status]')?.textContent).toMatch(
+      /keep.*file.*start a fresh season/i,
+    );
+    expect(localStorage.getItem('rope.save.cast.v1')).toBe(owner);
+    expect(control.channels).toBe(0);
+  },
+);
+
+it.each([native, publicExport])(
   'retains selected BOM bytes, exact current state and file ownership through download and reimport',
   async (fixture) => {
     const owner = 'owner season untouched';
@@ -349,6 +367,8 @@ it.each([false, true])(
     vi.stubGlobal('indexedDB', undefined);
     history.replaceState(null, '', '/');
     const packet = native();
+    // This synthetic checkpoint has no owned histories; it is explicitly local-only.
+    packet.ownership.localOnly = true;
     if (mismatch) packet.minute++;
     const saved = JSON.stringify(packet);
     localStorage.setItem('rope.save.cast.v1', saved);
@@ -379,3 +399,203 @@ it('keeps chooser targets at least 44px in the authored stylesheet', () => {
     expect(block).toMatch(/min-height:\s*44px/);
   }
 });
+
+it.each([{ length: 0, unexpected: true }, 0, true, null])(
+  'rejects malformed public skip metadata %j before replacing a file',
+  async (castSkipped) => {
+    const owner = 'native bytes before malformed skip metadata';
+    localStorage.setItem('rope.save.cast.v1', owner);
+    const { root, active } = await open();
+    await choose(root, JSON.stringify(publicExport()));
+    const before = JSON.stringify(active.runExport());
+    root.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
+    await choose(root, JSON.stringify({ ...publicExport(), castSkipped }));
+    expect(root.querySelector('[data-file-status]')?.textContent).toMatch(/skip|history|histories/i);
+    expect(JSON.stringify(active.runExport())).toBe(before);
+    expect(localStorage.getItem('rope.save.cast.v1')).toBe(owner);
+  },
+);
+
+it('rejects a public skipped ID overlapping a retained chapter claim before replacing the active file', async () => {
+  const { openingParty } = await import('../src/sim/season.ts');
+  const { DIALECT } = await import('../src/sim/passport.ts');
+  const castId = 'hf.cast.tamar.rope';
+  const claim = await createPersona({
+    format: 'hf-persona/1',
+    castId,
+    castRevision: '1',
+    branchId: 'overlap-control',
+    parentRevision: null,
+    source: { game: 'rope', engine: ENGINE_VERSION, build: 'synthetic', rules: 'rope-hf4-1' },
+    transfer: {
+      castPassport: 'rope-hf4-active/1',
+      hostRun: 'overlap-control',
+      portableClaim: { game: 'rope' },
+    },
+    limitations: [],
+  });
+  const { season, climb } = newSeason(7, {
+    version: DIALECT,
+    initial: Object.fromEntries(openingParty(7).map((p) => [p.id, p])),
+    inputs: [],
+    claims: [claim],
+  });
+  const packet = {
+    ...exportClimb(season.start!, climb, ENGINE_VERSION, season.chapter, season.past),
+    castSources: [],
+    castArchives: [],
+    castSkipped: [{ castId, reason: 'Tamar: a separate local story.' }],
+  };
+  const owner = 'native bytes before overlap';
+  localStorage.setItem('rope.save.cast.v1', owner);
+  const { root, active } = await open();
+  await choose(root, JSON.stringify(publicExport()));
+  const before = JSON.stringify(active.runExport());
+  root.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
+  await choose(root, JSON.stringify(packet));
+  expect(root.querySelector('[data-file-status]')?.textContent).toMatch(/skip|histories/i);
+  expect(JSON.stringify(active.runExport())).toBe(before);
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe(owner);
+});
+
+it.each([false, true])(
+  'resumes a real fresh empty-shelf/local-only native run and continues exactly (localOnly:%s)',
+  async (localOnly) => {
+    const { acceptPersonaBatch } = await import('@adam0white/lab-client');
+    const { Continuity } = await import('../src/ui/continuity.ts');
+    const { replayExport } = await import('../src/sim/season.ts');
+    const requests: string[] = [];
+    let shelfState: import('@adam0white/lab-client').PersonaShelfState = { heads: {}, revisions: [] };
+    const shelf = {
+      enabled: true,
+      ready: Promise.resolve(true),
+      setEnabled() {},
+      async request<T>(q: import('@adam0white/lab-client').PersonaRequest): Promise<T> {
+        requests.push(q.action);
+        if (q.action === 'get') return null as T;
+        if (q.action === 'putBatch') {
+          shelfState = acceptPersonaBatch(shelfState, q.envelopes ?? [], q.expectedHeads);
+          return null as T;
+        }
+        throw Error(`Unexpected request ${q.action}`);
+      },
+    };
+    const continuity = new Continuity(control.lab, shelf);
+    const state = await continuity.fresh(7, localOnly);
+    const ownership = continuity.ownership();
+    expect(ownership.fileOrigin).toBe(false);
+    expect(ownership.localOnly).toBe(localOnly);
+    expect(ownership.skipped ?? []).toEqual([]);
+    expect(ownership.heads).toHaveLength(localOnly ? 0 : 5);
+    expect(shelfState.revisions).toHaveLength(localOnly ? 0 : 5);
+    const packet = {
+      v: 2,
+      engine: ENGINE_VERSION,
+      season: state.season,
+      start: state.season.start!,
+      inputs: state.climb.inputs,
+      minute: state.climb.minute,
+      disclosure: newDisclosure(),
+      over: state.climb.over,
+      state: snapshot(state.climb),
+      ownership,
+    };
+    vi.stubGlobal('indexedDB', undefined);
+    history.replaceState(null, '', '/');
+    localStorage.setItem('rope.save.cast.v1', JSON.stringify(packet));
+    const root = document.createElement('main');
+    document.body.append(root);
+    const game = new Game(root);
+    games.push(game);
+    await game.boot();
+    root.querySelector<HTMLButtonElement>('[data-a="continue"]')!.click();
+    await vi.waitFor(() => expect((game as unknown as Driver).climb).toBeTruthy());
+    const active = game as unknown as Driver;
+    active.sentAt = -Infinity;
+    active.send({ t: 'lead', dir: 'up' });
+    for (let i = 0; i < 3; i++) step(active.climb);
+    const exported = (game as unknown as { runExport(): ReturnType<typeof exportClimb> }).runExport();
+    expect(snapshot(replayExport(exported))).toBe(snapshot(active.climb));
+    const restored = (game as unknown as { continuity: InstanceType<typeof Continuity> }).continuity;
+    const before = JSON.stringify(restored.ownership());
+    if (localOnly) {
+      for (const fork of [false, true])
+        await expect(restored.checkpoint('hf.cast.tamar.rope', fork)).rejects.toThrow(/local.*publish/i);
+      expect(JSON.stringify(restored.ownership())).toBe(before);
+      expect(requests).toEqual([]);
+    }
+  },
+);
+
+it.each(['deleted', 'null'])(
+  'refuses %s ownership from a current skipped native run before recording/save/activation',
+  async (missing) => {
+    const sdk = await import('@adam0white/lab-client');
+    const { Continuity } = await import('../src/ui/continuity.ts');
+    const castId = 'hf.cast.tamar.rope';
+    const head = await createPersona({
+      format: 'hf-persona/1',
+      castId,
+      castRevision: '1',
+      branchId: 'missing-owner-fixture',
+      parentRevision: null,
+      source: { game: 'rope', engine: ENGINE_VERSION, build: 'synthetic', rules: 'rope-hf4-1' },
+      transfer: { castPassport: 'hf-portable-person/99', portable: { version: 99 } },
+      limitations: [],
+    });
+    let shelfState = sdk.acceptPersona({ heads: {}, revisions: [] }, head);
+    const shelf = {
+      enabled: true,
+      ready: Promise.resolve(true),
+      setEnabled() {},
+      async request<T>(q: import('@adam0white/lab-client').PersonaRequest): Promise<T> {
+        if (q.action === 'get')
+          return (shelfState.revisions.find((p) => p.revision === shelfState.heads[q.castId ?? '']) ??
+            null) as T;
+        if (q.action === 'putBatch') {
+          shelfState = sdk.acceptPersonaBatch(shelfState, q.envelopes ?? [], q.expectedHeads);
+          return null as T;
+        }
+        throw Error(q.action);
+      },
+    };
+    const source = new Continuity(control.lab, shelf);
+    const state = await source.fresh(7);
+    expect(source.skipped).toHaveLength(1);
+    const packet = {
+      v: 2,
+      engine: ENGINE_VERSION,
+      season: state.season,
+      start: state.season.start!,
+      state: snapshot(state.climb),
+      inputs: state.climb.inputs,
+      minute: state.climb.minute,
+      disclosure: newDisclosure(),
+      over: state.climb.over,
+      ...(missing === 'null' ? { ownership: null } : {}),
+    };
+    const bytes = JSON.stringify(packet);
+    vi.stubGlobal('indexedDB', undefined);
+    history.replaceState(null, '', '/');
+    localStorage.setItem('rope.save.cast.v1', bytes);
+    const root = document.createElement('main');
+    document.body.append(root);
+    const game = new Game(root);
+    games.push(game);
+    await game.boot();
+    const recording = vi.spyOn(control.lab, 'setPersonaRecording');
+    const allow = vi.spyOn(control.lab, 'allowPersonaRecording');
+    const capture = vi.spyOn(control.lab, 'captureSave');
+    root.querySelector<HTMLButtonElement>('[data-a="continue"]')!.click();
+    await vi.waitFor(() => expect(root.textContent).toMatch(/could not resume/i));
+    const receiver = (game as unknown as { continuity: InstanceType<typeof Continuity> }).continuity;
+    expect((game as unknown as Driver).climb).toBeFalsy();
+    expect(receiver.heads).toEqual([]);
+    expect(receiver.sources).toEqual([]);
+    expect(receiver.generation).toBe(0);
+    expect(recording).not.toHaveBeenCalled();
+    expect(allow).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
+    expect(localStorage.getItem('rope.save.cast.v1')).toBe(bytes);
+  },
+);
