@@ -398,7 +398,7 @@ export class Game {
       if (saved.v !== 2 || saved.engine !== ENGINE_VERSION || typeof saved.state !== 'string') {
         this.unsupportedSave = true;
         this.startupError =
-          'This saved season uses an unsupported edition. Its history has not been replaced. Keep any old file and start a fresh season here.';
+          'This saved season is from an earlier version of Rope. It has not been deleted. Start a new game to play this version.';
         return null;
       }
       return saved;
@@ -2413,7 +2413,7 @@ export class Game {
   private filePage(): void {
     const recording = this.recordingAllowed();
     this.openPage(
-      `<div class="page-body file-controls"><h1>Choose a Rope file</h1><p>Your saved climb is not changed. This file plays in this tab only. Download it before you close the tab.</p><div data-recording></div><p data-file-recording-status>${recording ? 'Recording follows your current privacy and Recording choices.' : 'Recording is unavailable because the existing local Lab session could not be preserved. You can play in memory.'}</p><label data-file-label>${this.climb ? 'Choose another file' : 'Choose a file'}<input type="file" accept="application/json" data-file-input></label><p data-file-status role="status"></p></div><div class="page-actions">${this.climb ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-resume>Resume current file</button>' : ''}</div>`,
+      `<div class="page-body file-controls"><h1>Choose a Rope file</h1><p>Your saved climb is not changed. This file plays in this tab only. Download it before you close the tab.</p><div data-recording></div><p data-file-recording-status>${recording ? 'Recording follows your current privacy and Recording choices.' : 'Recording is unavailable because the existing local Lab session could not be preserved. You can play in memory.'}</p><label data-file-label>${this.climb ? 'Choose another file' : 'Choose a file'}<input type="file" accept="application/json" data-file-input></label><p data-file-status role="status"></p>${new URLSearchParams(location.search).get('lab') === '1' ? '<details><summary>Debug</summary><pre data-file-error></pre></details>' : ''}</div><div class="page-actions">${this.climb ? '<button class="btn" data-file-export>Download this file session</button><button class="btn go" data-file-resume>Resume current file</button>' : ''}</div>`,
       (el) => {
         el.querySelector('[data-recording]')?.append(telemetryToggle(lab!));
         el.querySelector('[data-file-resume]')?.addEventListener('click', () => this.closePage());
@@ -2431,6 +2431,8 @@ export class Game {
             }
             if (file.size > SESSION_BYTES) throw new Error('This file is too large to preserve completely.');
             status.textContent = 'Loading…';
+            const detail = el.querySelector('[data-file-error]');
+            if (detail) detail.textContent = '';
             const bytes = new Uint8Array(await file.arrayBuffer());
             if (!current()) return;
             if (bytes.byteLength > SESSION_BYTES)
@@ -2459,7 +2461,19 @@ export class Game {
             if (this.season.over) this.seasonPage();
             else if (prepared.climb.over) this.endClimb();
           } catch (error) {
-            if (this.current() && generation === this.fileGeneration) status.textContent = String(error);
+            if (current()) {
+              const message = error instanceof Error ? error.message : '';
+              status.textContent =
+                message ===
+                'This file is from a different version of Rope. Keep the file and start a fresh season.'
+                  ? message
+                  : message ===
+                      'This save cannot confirm its history permissions. Keep it and start a fresh season.'
+                    ? 'This file cannot confirm who may use its saved histories. Keep the file and start a fresh season.'
+                    : 'This file could not be opened. Keep the file and start a fresh season.';
+              const detail = el.querySelector('[data-file-error]');
+              if (detail) detail.textContent = String(error);
+            }
           }
         });
       },
@@ -2476,7 +2490,7 @@ export class Game {
     const sv = this.load();
     const cont = sv && !sv.season.over;
     this.openPage(
-      `<div class="title-scene"><h1>The Rope</h1><p class="sub">Five people will climb three mountains.</p>${this.peaksSvg(cont ? sv.season.history.length : 0)}</div><div class="page-body"><p class="title-goal">Lead them up and bring them home. They can say no.</p>${this.unsupportedSave ? '<p role="status">This saved season uses an unsupported edition. Keep any old file and start a fresh season. The saved history has not been replaced.</p>' : ''}${cont ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}<div data-new-confirm hidden><p>Starting a new game replaces your saved season.</p><button class="btn" data-yes>Start new game</button><button class="btn" data-no>No</button></div></div><div class="page-actions">${cont ? '<button class="btn go" data-a="continue">Resume</button>' : ''}<button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'New game' : 'New game'}</button>${this.footer()}</div>`,
+      `<div class="title-scene"><h1>The Rope</h1><p class="sub">Five people will climb three mountains.</p>${this.peaksSvg(cont ? sv.season.history.length : 0)}</div><div class="page-body"><p class="title-goal">Lead them up and bring them home. They can say no.</p>${this.unsupportedSave ? '<p role="status">This saved season is from an earlier version of Rope. It has not been deleted. Start a new game to play this version.</p>' : ''}${cont ? `<p class="caption continue-summary">Climb ${sv.season.climbNo} of ${SEASON.length} · ${esc(SEASON[sv.season.climbNo - 1]?.name ?? '')} · ${clock(sv.minute)}</p>` : ''}<div data-new-confirm hidden><p>Starting a new game replaces your saved season.</p><button class="btn" data-yes>Start new game</button><button class="btn" data-no>No</button></div></div><div class="page-actions">${cont ? '<button class="btn go" data-a="continue">Resume</button>' : ''}<button class="btn ${cont ? '' : 'go'}" data-a="new">${cont ? 'New game' : 'New game'}</button>${this.footer()}</div>`,
       (el) => {
         el.querySelector('[data-a="continue"]')?.addEventListener('click', () => {
           if (sv) this.resume(sv);

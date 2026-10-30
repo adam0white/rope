@@ -69,7 +69,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 async function open() {
-  history.replaceState(null, '', '/file/');
+  history.replaceState(null, '', '/file/?lab=1');
   const root = document.createElement('main');
   document.body.append(root);
   const game = new Game(root);
@@ -137,6 +137,43 @@ function publicExport() {
 function hash(bytes: Uint8Array) {
   return createHash('sha256').update(bytes).digest('hex');
 }
+
+it('uses plain refusal text and keeps raw file errors behind lab=1', async () => {
+  for (const query of ['', '?lab=0', '?lab=1']) {
+    const { root, game } = await open();
+    history.replaceState(null, '', `/file/${query}`);
+    const driver = game as unknown as {
+      entry: string;
+      savedText: string;
+      load(): unknown;
+      titlePage(): void;
+      filePage(): void;
+      startupError: string;
+    };
+    driver.entry = 'native';
+    driver.savedText = JSON.stringify({ v: 1 });
+    expect(driver.load()).toBeNull();
+    const notice =
+      'This saved season is from an earlier version of Rope. It has not been deleted. Start a new game to play this version.';
+    expect(driver.startupError).toBe(notice);
+    driver.titlePage();
+    expect(root.querySelector('.page-body [role="status"]')?.textContent).toBe(notice);
+    expect(root.querySelector('[data-a="new"]')).not.toBeNull();
+    driver.entry = 'file';
+    driver.filePage();
+    await choose(root, readFileSync('test/fixtures/rope-hf3-native.json'));
+    expect(root.querySelector('[data-file-status]')?.textContent).toBe(
+      'This file is from a different version of Rope. Keep the file and start a fresh season.',
+    );
+    await choose(root, '{');
+    expect(root.querySelector('[data-file-status]')?.textContent).toBe(
+      'This file could not be opened. Keep the file and start a fresh season.',
+    );
+    expect(root.querySelector('[data-file-error]')?.textContent?.includes('SyntaxError:') ?? false).toBe(
+      query === '?lab=1',
+    );
+  }
+});
 
 it('refuses the preserved HF3 file without replacing the native season', async () => {
   const owner = 'original native season';
@@ -265,7 +302,7 @@ it('retains a complete source archive pool once across original and current expo
     const forged = structuredClone(packet);
     tamper(forged);
     await choose(root, JSON.stringify(forged));
-    expect(root.querySelector('[data-file-status]')?.textContent).toMatch(
+    expect(root.querySelector('[data-file-error]')?.textContent).toMatch(
       /archive|provenance|person|invalid|match|receipt|revision/i,
     );
     expect(JSON.stringify(active.runExport())).toBe(baseline);
@@ -278,12 +315,12 @@ it('rejects invalid UTF8 and a forged original digest without replacing the acce
   const before = JSON.stringify(active.runExport());
   root.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
   await choose(root, Uint8Array.from([0x7b, 0xff, 0x7d]));
-  expect(root.querySelector('[data-file-status]')?.textContent).toMatch(/UTF-?8|encoded data/i);
+  expect(root.querySelector('[data-file-error]')?.textContent).toMatch(/UTF-?8|encoded data/i);
   expect(JSON.stringify(active.runExport())).toBe(before);
   const packet = JSON.parse(before);
   packet.original.sha256 = '0'.repeat(64);
   await choose(root, JSON.stringify(packet));
-  expect(root.querySelector('[data-file-status]')?.textContent).toMatch(/digest|hash|match/i);
+  expect(root.querySelector('[data-file-error]')?.textContent).toMatch(/digest|hash|match/i);
   expect(JSON.stringify(active.runExport())).toBe(before);
 });
 
@@ -350,14 +387,14 @@ it('refuses excessive depth and oversized selected files without replacing the a
   const before = JSON.stringify(active.runExport());
   root.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
   await choose(root, '['.repeat(140) + '0' + ']'.repeat(140));
-  expect(root.querySelector('[data-file-status]')?.textContent).toMatch(/limit|large|depth/i);
+  expect(root.querySelector('[data-file-error]')?.textContent).toMatch(/limit|large|depth/i);
   expect(JSON.stringify(active.runExport())).toBe(before);
   const input = root.querySelector<HTMLInputElement>('[data-file-input]')!;
   const file = new NodeFile(['{}'], 'oversize.json');
   Object.defineProperty(file, 'size', { value: 513 * 1024 * 1024 });
   Object.defineProperty(input, 'files', { configurable: true, value: [file] });
   input.dispatchEvent(new Event('change'));
-  await vi.waitFor(() => expect(root.querySelector('[data-file-status]')?.textContent).toMatch(/large/i));
+  await vi.waitFor(() => expect(root.querySelector('[data-file-error]')?.textContent).toMatch(/large/i));
   expect(JSON.stringify(active.runExport())).toBe(before);
 });
 
@@ -410,7 +447,7 @@ it.each([{ length: 0, unexpected: true }, 0, true, null])(
     const before = JSON.stringify(active.runExport());
     root.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
     await choose(root, JSON.stringify({ ...publicExport(), castSkipped }));
-    expect(root.querySelector('[data-file-status]')?.textContent).toMatch(/skip|history|histories/i);
+    expect(root.querySelector('[data-file-error]')?.textContent).toMatch(/skip|history|histories/i);
     expect(JSON.stringify(active.runExport())).toBe(before);
     expect(localStorage.getItem('rope.save.cast.v1')).toBe(owner);
   },
@@ -453,7 +490,7 @@ it('rejects a public skipped ID overlapping a retained chapter claim before repl
   const before = JSON.stringify(active.runExport());
   root.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
   await choose(root, JSON.stringify(packet));
-  expect(root.querySelector('[data-file-status]')?.textContent).toMatch(/skip|histories/i);
+  expect(root.querySelector('[data-file-error]')?.textContent).toMatch(/skip|histories/i);
   expect(JSON.stringify(active.runExport())).toBe(before);
   expect(localStorage.getItem('rope.save.cast.v1')).toBe(owner);
 });
