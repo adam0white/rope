@@ -313,7 +313,7 @@ it('a failed real admission keeps the saved season and ownership, without silent
   tap('.menu-trigger');
   const debug = query('[data-debug]') as HTMLDetailsElement;
   expect(debug.open).toBe(false);
-  expect(debug.textContent).toContain('Shelf unavailable');
+  expect(debug.textContent).not.toContain('Shelf unavailable');
   tap('[data-menu-close]');
   expect(document.querySelector('[data-local]')).toBeNull();
   expect(document.querySelector('[data-retry]')).not.toBeNull();

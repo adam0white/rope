@@ -417,6 +417,12 @@ export class Game {
     await this.finalSaveTask;
   }
 
+  private errorDetail(error: unknown): string {
+    return new URLSearchParams(location.search).get('lab') === '1'
+      ? `<details><summary>Debug</summary><pre>${esc(String(error))}</pre></details>`
+      : '';
+  }
+
   private save(): void {
     if (!this.current() || !this.climb || !this.season || this.transitioning) return;
     if (this.entry !== 'native') {
@@ -453,7 +459,7 @@ export class Game {
     })()
       .catch((error) => {
         if (current())
-          this.saveNotice.textContent = `This progress was not saved. Download before closing. ${String(error)}`;
+          this.saveNotice.innerHTML = `This progress was not saved. Download before closing. ${this.errorDetail(error)}`;
       })
       .finally(() => {
         this.saving = false;
@@ -530,7 +536,7 @@ export class Game {
       console.error('Season start failed', error);
       this.startupError = String(error);
       this.openPage(
-        `<div class="page-body"><h1>The season has not begun</h1><p>The game could not start this season. Your saved season has not been replaced.</p><p>${esc(String(error))}</p><p>Try again, or send Feedback if this keeps happening.</p></div><div class="page-actions"><button class="btn" data-retry>Try again</button><button class="btn" data-back>Back</button><button class="btn" data-word>Feedback</button></div>`,
+        `<div class="page-body"><h1>The season has not begun</h1><p>The game could not start this season. Your saved season has not been replaced.</p>${this.errorDetail(error)}<p>Try again, or send Feedback if this keeps happening.</p></div><div class="page-actions"><button class="btn" data-retry>Try again</button><button class="btn" data-back>Back</button><button class="btn" data-word>Feedback</button></div>`,
         (el) => {
           el.querySelector('[data-retry]')?.addEventListener('click', () => void this.newGame());
           el.querySelector('[data-back]')?.addEventListener('click', () => this.titlePage());
@@ -2095,7 +2101,7 @@ export class Game {
     const menu = h(
       'div',
       'menu-backdrop',
-      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><p role="status" data-continuity-status>${esc(this.continuity.skipped.map((s) => s.reason).join(' '))}</p><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div><a class="menu-link" data-cast-shelf href="https://human.adamwhite.work/lab/people/">People across games</a><fieldset class="menu-pacing"><legend>Pace: Automatic</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset><button class="btn" data-menu-export ${this.climb ? '' : 'disabled'}>Download this run</button><a class="menu-link" href="/file/">Open a run file</a><button class="btn" data-menu-title>Title page</button><div class="privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a><details data-debug><summary>Debug</summary><p>Human Framework ${FRAMEWORK_VERSION}</p>${this.startupError ? `<pre>${esc(this.startupError)}</pre>` : ''}</details></div></div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
+      `<section class="game-menu" role="dialog" aria-modal="true" aria-label="Game menu"><div class="menu-header"><h2>Game menu</h2><button class="close" data-menu-close aria-label="Close menu">×</button></div><p class="caption">Time stops while the menu is open.</p><div class="menu-body"><button class="btn" data-menu-send>Feedback</button><button class="btn" data-menu-fullscreen>Full screen</button><a class="menu-link" href="https://human.adamwhite.work/games/">All games</a><div data-recording></div><p role="status" data-continuity-status>${esc(this.continuity.skipped.map((s) => s.reason).join(' '))}</p><button class="btn" data-menu-new>New game</button><div data-menu-confirm hidden><p>Starting a new season replaces your saved season.</p><button class="btn" data-new-yes>Start new game</button><button class="btn" data-new-no>Keep this game</button></div><a class="menu-link" data-cast-shelf href="https://human.adamwhite.work/lab/people/">People across games</a><fieldset class="menu-pacing"><legend>Pace: Automatic</legend>${(['auto', 'slow', 'normal', 'fast'] as const).map((speed) => `<button class="btn" data-pace="${speed}" aria-pressed="${this.speed === speed}">${speed}</button>`).join('')}</fieldset><button class="btn" data-menu-export ${this.climb ? '' : 'disabled'}>Download this run</button><a class="menu-link" href="/file/">Open a run file</a><button class="btn" data-menu-title>Title page</button><div class="privacy-debug"><a href="https://human.adamwhite.work/lab/privacy/">Lab privacy</a><details data-debug><summary>Debug</summary><p>Human Framework ${FRAMEWORK_VERSION}</p>${this.startupError && new URLSearchParams(location.search).get('lab') === '1' ? `<pre>${esc(this.startupError)}</pre>` : ''}</details></div></div><button class="btn go menu-resume" data-menu-close>Resume</button></section>`,
     );
     const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => {
@@ -2873,7 +2879,8 @@ export class Game {
       }
       this.begin(next, this.season.start ?? snapshot(next));
     } catch (error) {
-      if (current() && status) status.textContent = `The next climb was not installed. ${String(error)}`;
+      if (current() && status)
+        status.innerHTML = `The next climb could not start. Try again, or send Feedback if this keeps happening. ${this.errorDetail(error)}`;
     } finally {
       this.transitioning = false;
       for (const button of buttons) button.disabled = false;

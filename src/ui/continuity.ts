@@ -219,10 +219,10 @@ export class Continuity {
       this.status = chapter
         ? `This season uses ${chapter.inputs.length} saved browser histories. They were all reserved together. Everyone else starts with their original history.`
         : localOnly
-          ? 'You started a new local chapter. Saved browser histories have not changed.'
+          ? 'This season is played on its own. Saved histories from other games have not changed.'
           : skipped.length
             ? 'Some people could not join from other games. They start fresh here. Their saved histories stay as they were.'
-            : 'This chapter starts with the original cast. It uses no saved browser histories.';
+            : 'This season starts with the original climbers.';
       if (skipped.length) this.status += ` ${skipped.map((s) => s.reason).join(' ')}`;
       // Caller installs the prepared state before opening any recording hook.
       return state;
