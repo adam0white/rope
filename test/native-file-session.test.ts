@@ -520,7 +520,9 @@ it.each([false, true])(
     const before = JSON.stringify(restored.ownership());
     if (localOnly) {
       for (const fork of [false, true])
-        await expect(restored.checkpoint('hf.cast.tamar.rope', fork)).rejects.toThrow(/local.*publish/i);
+        await expect(restored.checkpoint('hf.cast.tamar.rope', fork)).rejects.toThrow(
+          /does not change.*saved history/i,
+        );
       expect(JSON.stringify(restored.ownership())).toBe(before);
       expect(requests).toEqual([]);
     }
@@ -597,5 +599,65 @@ it.each(['deleted', 'null'])(
     expect(allow).not.toHaveBeenCalled();
     expect(capture).not.toHaveBeenCalled();
     expect(localStorage.getItem('rope.save.cast.v1')).toBe(bytes);
+  },
+);
+it('keeps missing-authority save bytes and directs resume to a new game', async () => {
+  vi.stubGlobal('indexedDB', undefined);
+  history.replaceState(null, '', '/');
+  const packet = native();
+  const saved = JSON.stringify(packet);
+  localStorage.setItem('rope.save.cast.v1', saved);
+  const root = document.createElement('main');
+  document.body.append(root);
+  const game = new Game(root);
+  games.push(game);
+  await game.boot();
+  root.querySelector<HTMLButtonElement>('[data-a="continue"]')!.click();
+  await vi.waitFor(() => expect(root.textContent).toContain('Start a new game'));
+  expect(root.textContent).not.toContain('try again');
+  expect(localStorage.getItem('rope.save.cast.v1')).toBe(saved);
+});
+
+it.each(['inner HF archive', 'replay mismatch', 'transient failure'] as const)(
+  'preserves native bytes and distinguishes %s during Resume',
+  async (failure) => {
+    vi.stubGlobal('indexedDB', undefined);
+    history.replaceState(null, '', '/');
+    const packet = native();
+    const state = JSON.parse(packet.state);
+    if (failure === 'inner HF archive') state.hf.engine.package = '@adam0white/human-framework@99.0.0';
+    if (failure === 'replay mismatch') state.minute++;
+    packet.state = JSON.stringify(state);
+    const saved = JSON.stringify(packet);
+    localStorage.setItem('rope.save.cast.v1', saved);
+    const root = document.createElement('main');
+    document.body.append(root);
+    const game = new Game(root);
+    games.push(game);
+    await game.boot();
+    const receiver = (game as unknown as { continuity: import('../src/ui/continuity.ts').Continuity })
+      .continuity;
+    // TEST ONLY: a transport failure must not be described as incompatible saved data.
+    if (failure === 'transient failure')
+      vi.spyOn(receiver, 'restoreOwnership').mockRejectedValue(new Error('Temporary storage failure'));
+    const recording = vi.spyOn(control.lab, 'setPersonaRecording');
+    const allow = vi.spyOn(control.lab, 'allowPersonaRecording');
+    const capture = vi.spyOn(control.lab, 'captureSave');
+    root.querySelector<HTMLButtonElement>('[data-a="continue"]')!.click();
+    await vi.waitFor(() => expect(root.textContent).toContain('The game could not resume'));
+    if (failure === 'transient failure') {
+      expect(root.textContent).toContain('try again');
+      expect(root.textContent).not.toContain('Start a new game');
+    } else {
+      expect(root.textContent).toContain('Start a new game');
+      expect(root.textContent).not.toContain('try again');
+    }
+    expect((game as unknown as Driver).climb).toBeFalsy();
+    expect(receiver.heads).toEqual([]);
+    expect(receiver.sources).toEqual([]);
+    expect(recording).not.toHaveBeenCalled();
+    expect(allow).not.toHaveBeenCalled();
+    expect(capture).not.toHaveBeenCalled();
+    expect(localStorage.getItem('rope.save.cast.v1')).toBe(saved);
   },
 );

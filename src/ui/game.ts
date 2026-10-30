@@ -548,7 +548,9 @@ export class Game {
     if (!this.current()) return;
     try {
       if (sv.v !== 2 || sv.engine !== ENGINE_VERSION || typeof sv.state !== 'string')
-        throw new Error('This save uses an unsupported edition. Keep the file and start a fresh season.');
+        throw new Error(
+          'This saved season cannot be checked or uses a different version. Keep it and start a fresh season.',
+        );
       if (sv.season.chapter) checkChapter(sv.season.chapter);
       const start = sv.start || sv.season.start || '';
       validateSeasonStart(sv.season.seed, sv.season.chapter, sv.season.past ?? [], start);
@@ -568,8 +570,10 @@ export class Game {
     } catch (error) {
       if (!this.current()) return;
       console.error('Resume failed', error);
+      // Validation boundaries explicitly request a fresh start; unknown failures keep retry guidance.
+      const startFresh = error instanceof Error && /\bstart(?:\s+a)?\s+(?:fresh|new)\b/i.test(error.message);
       this.openPage(
-        '<div class="page-body"><h1>The game could not resume</h1><p>Your saved season has not been replaced. Return and try again, or send Feedback.</p><button class="btn" data-back>Back</button><button class="btn" data-feedback>Feedback</button></div>',
+        `<div class="page-body"><h1>The game could not resume</h1><p>${startFresh ? 'This saved season cannot continue in this version. It has not been deleted. Start a new game, or send Feedback.' : 'Your saved season has not been replaced. Return and try again, or send Feedback.'}</p><button class="btn" data-back>Back</button><button class="btn" data-feedback>Feedback</button></div>`,
         (el) => {
           el.querySelector('[data-back]')?.addEventListener('click', () => this.titlePage());
           el.querySelector('[data-feedback]')?.addEventListener('click', () => this.feedbackPage());
@@ -2612,8 +2616,10 @@ export class Game {
       .then(() => {
         if (this.current() && this.climb === climb) this.save();
       })
-      .catch((error: unknown) => {
-        if (this.current() && this.climb === climb) this.continuity.status = String(error);
+      .catch(() => {
+        if (this.current() && this.climb === climb)
+          this.continuity.status =
+            "Some people's histories could not be saved this time. Your season continues.";
       });
     const checkpoint = { climb, signature, promise, settled: false };
     this.boundaryCheckpoint = checkpoint;
@@ -3095,7 +3101,7 @@ function checkPublicReplay(
 }
 function nativeFileSave(raw: Save): { save: Save; climb: ClimbState; start: string } {
   if (raw?.engine !== undefined && raw.engine !== ENGINE_VERSION)
-    throw new Error('This file uses an unsupported edition. Keep the file and start a fresh season.');
+    throw new Error('This file is from a different version of Rope. Keep the file and start a fresh season.');
   if (
     !raw ||
     raw.v !== 2 ||
@@ -3225,7 +3231,9 @@ async function decodeFile(text: string, selectedDigest?: string) {
     if (raw.format) throw new Error('Unsupported Rope file format.');
     if (raw.game === 'rope') {
       if (raw.engine !== FRAMEWORK_VERSION)
-        throw new Error('This file uses an unsupported edition. Keep the file and start a fresh season.');
+        throw new Error(
+          'This file is from a different version of Rope. Keep the file and start a fresh season.',
+        );
       const climb = checkPublicReplay(raw);
       const season = validateSeasonStart(climb.seed, raw.chapter, raw.past ?? [], raw.start);
       prepared = {

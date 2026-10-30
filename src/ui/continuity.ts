@@ -123,29 +123,30 @@ export class Continuity {
       if (!localOnly)
         for (const [castId, head] of heads) {
           if (!head) continue;
-          let reason = 'Their saved history could not be used here.';
+          let reason = 'could not join this season.';
           let admitted: ReturnType<typeof admitClimber>;
           let personId: string;
           try {
             const blockers = portableWriteBlockers(castId, 'rope');
             if (blockers.length) {
-              reason = 'Their saved history cannot be used here until the other games support it.';
+              reason = 'could not join this season. The other games cannot share them yet.';
               throw new Error(reason);
             }
-            reason = 'Their saved history uses an unsupported edition or could not be checked.';
+            reason =
+              'could not join this season. Their saved history could not be checked or uses a different version.';
             await validatePersona(head);
             if (head.terminal) {
-              reason = 'Their saved history has ended.';
+              reason = 'could not join this season. Their story has ended.';
               throw new Error(reason);
             }
             if (head.transfer.portableClaim) {
-              reason = 'They are still in another chapter.';
+              reason = 'could not join this season. They are still in another game.';
               throw new Error(reason);
             }
             if (!head.transfer.portable) throw new Error('This history uses an unsupported edition.');
             const portable = validatePortablePerson(head.transfer.portable);
             if (portable.version !== 2) throw new Error('This history uses an unsupported portable version.');
-            reason = 'Their saved history cannot continue in this season.';
+            reason = 'could not join this season.';
             portableOf(head);
             const id = CAST.find((c) => c.castId === castId)?.castId.split('.')[2];
             const opening = id && initial[id];
@@ -155,7 +156,7 @@ export class Continuity {
           } catch {
             skipped.push({
               castId,
-              reason: `${canonicalCast(castId).name}: ${reason} This season uses a separate local story. Their saved history has not been replaced.`,
+              reason: `${canonicalCast(castId).name} ${reason} They start fresh here. Their saved history stays as it was.`,
             });
             continue;
           }
@@ -220,7 +221,7 @@ export class Continuity {
         : localOnly
           ? 'You started a new local chapter. Saved browser histories have not changed.'
           : skipped.length
-            ? 'Older, occupied or ended histories remain unchanged on the shelf. This is a new local story for those people; it cannot overwrite their histories.'
+            ? 'Some people could not join from other games. They start fresh here. Their saved histories stay as they were.'
             : 'This chapter starts with the original cast. It uses no saved browser histories.';
       if (skipped.length) this.status += ` ${skipped.map((s) => s.reason).join(' ')}`;
       // Caller installs the prepared state before opening any recording hook.
@@ -248,7 +249,7 @@ export class Continuity {
       !Array.isArray(saved.sources) ||
       (Object.hasOwn(saved, 'localOnly') && typeof saved.localOnly !== 'boolean')
     )
-      throw new Error('This save lacks history permissions. Keep it and start a fresh season.');
+      throw new Error('This save cannot confirm its history permissions. Keep it and start a fresh season.');
     const generation = this.generation;
     await this.validateRunEnvelopes(state);
     const heads = saved && !file ? await Promise.all(saved.heads.map((p) => validatePersona(p))) : [];
@@ -284,7 +285,7 @@ export class Continuity {
         (c) => !heads.some((p) => p.castId === c.castId) && !skipped.some((s) => s.castId === c.castId),
       )
     )
-      throw new Error('This save lacks history permissions. Keep it and start a fresh season.');
+      throw new Error('This save cannot confirm its history permissions. Keep it and start a fresh season.');
     if (
       saved.localOnly &&
       (saved.heads.length ||
@@ -294,7 +295,7 @@ export class Continuity {
         (state.season.chapter?.claims.length ?? 0) ||
         (state.season.chapter?.inputs.length ?? 0))
     )
-      throw new Error('Local-only play cannot own shared histories.');
+      throw new Error("This season is played on its own and does not change anyone's saved history.");
     const sources = structuredClone(saved?.sources ?? []);
     const archives = structuredClone(saved?.archives ?? []);
     if (
@@ -359,14 +360,19 @@ export class Continuity {
   }
   checkpoint(castId: string, fork = false) {
     if (this.fileOrigin || !this.shelf) return Promise.reject(new Error('File play cannot publish people.'));
-    if (this.localOnly) return Promise.reject(new Error('Local-only play cannot publish people.'));
+    if (this.localOnly)
+      return Promise.reject(
+        new Error("This season is played on its own and does not change anyone's saved history."),
+      );
     const shelf = this.shelf;
     const generation = this.generation,
       state = this.state,
       runId = this.runId;
     const task = this.operation.then(async () => {
       if (this.skipped.some((s) => s.castId === castId))
-        throw new Error('This history was skipped. This local story cannot publish, fork or close it.');
+        throw new Error(
+          'This person started fresh in this season, so their saved history is left as it was.',
+        );
       const current = () => generation === this.generation && state === this.state && runId === this.runId;
       if (
         !state ||
@@ -481,8 +487,9 @@ export class Continuity {
         continue;
       this.closing.set(head.castId, current);
       void this.checkpoint(head.castId)
-        .catch((error) => {
-          if (current()) this.status = String(error);
+        .catch(() => {
+          if (current())
+            this.status = "Some people's histories could not be saved this time. Your season continues.";
         })
         .finally(() => {
           if (this.closing.get(head.castId) === current) this.closing.delete(head.castId);
@@ -490,23 +497,25 @@ export class Continuity {
     }
   }
   async checkpointAll() {
-    if (this.fileOrigin || !this.shelf) return;
+    if (this.fileOrigin || !this.shelf || this.localOnly) return;
     const generation = this.generation,
       state = this.state,
       runId = this.runId;
     const current = () => generation === this.generation && state === this.state && runId === this.runId;
-    const failures: string[] = [];
+    let failed = false;
     for (const c of CAST) {
       if (!current()) return;
+      if (this.skipped.some((s) => s.castId === c.castId)) continue;
       try {
         await this.checkpoint(c.castId);
-      } catch (error) {
+      } catch {
         if (!current()) return;
-        failures.push(String(error));
+        failed = true;
       }
     }
     if (current()) {
-      if (failures.length) this.status = failures.join(' ');
+      if (failed)
+        this.status = "Some people's histories could not be saved this time. Your season continues.";
       this.changed();
     }
   }

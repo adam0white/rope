@@ -75,7 +75,7 @@ it('retains individual unsupported and occupied histories and blocks all writes 
   expect(JSON.stringify(saved)).not.toContain('custody');
   expect(saved.skipped?.every((s) => !('envelope' in s))).toBe(true);
   expect(saved.skipped?.[0]?.reason).toMatch(/unsupported|invalid|version/i);
-  expect(saved.skipped?.[1]?.reason).toMatch(/another chapter/i);
+  expect(saved.skipped?.[1]?.reason).toMatch(/another game/i);
   const reload = new Continuity(h.lab, h.shelf);
   const count = h.requests.length;
   await reload.restoreOwnership(state, JSON.parse(JSON.stringify(saved)));
@@ -85,11 +85,11 @@ it('retains individual unsupported and occupied histories and blocks all writes 
   for (const p of h.fixtures) {
     expect(reload.pinnedHistories().some((h) => h.castId === p.castId)).toBe(false);
     for (const fork of [false, true])
-      await expect(reload.checkpoint(p.castId, fork)).rejects.toThrow(/skipped/i);
+      await expect(reload.checkpoint(p.castId, fork)).rejects.toThrow(/started fresh/i);
   }
   const before = canonicalPersona(reload.ownership());
   state.climb.people.find((p) => p.id === 'tamar')!.body.alive = false;
-  await expect(reload.checkpoint(h.fixtures[0]!.castId)).rejects.toThrow(/skipped/i);
+  await expect(reload.checkpoint(h.fixtures[0]!.castId)).rejects.toThrow(/started fresh/i);
   expect(canonicalPersona(reload.ownership())).toBe(before);
   expect(h.requests).toHaveLength(count);
   expect(h.data().revisions.filter((p) => h.fixtures.some((f) => f.revision === p.revision))).toEqual(
