@@ -61,30 +61,30 @@ export function skipStopWords(before: SkipFacts, c: ClimbState): string {
   const after = skipFacts(c);
   const words: string[] = [];
   if (after.pair && after.pair.join() !== before.pair?.join())
-    words.push(`${names(after.pair)} are close enough to rope up.`);
+    words.push(`${names(after.pair)} came close enough to rope up.`);
   if (before.pair && !after.pair) {
     // The window closed. Say why from where the two are now: still apart, one is at the hut, or one is now tied.
     const [a, b] = before.pair.map((id) => memberState(c, id)) as [MemberState, MemberState];
     const home = [a, b].find((m) => m.homeAt !== null);
     const tied = [a, b].find((m) => m.ropedTo !== null);
-    if (home) words.push(`${memberOf(home.id).name} is at the hut.`);
+    if (home) words.push(`${memberOf(home.id).name} reached the hut.`);
     else if (tied)
-      words.push(`${memberOf(tied.id).name} is now tied to ${memberOf(tied.ropedTo ?? '').name}.`);
-    else words.push(`${names(before.pair)} are no longer close enough to rope up.`);
+      words.push(`${memberOf(tied.id).name} became tied to ${memberOf(tied.ropedTo ?? '').name}.`);
+    else words.push(`${names(before.pair)} moved too far apart to rope up.`);
   }
   const kind = (facts: SkipFacts, id: string) => facts.hearing.find(([who]) => who === id)?.[1];
   const changed = (from: string, to: string) =>
     c.members.filter((m) => kind(before, m.id) === from && kind(after, m.id) === to).map((m) => m.id);
   const lost = changed('near', 'far');
-  if (lost.length) words.push(`${names(lost)} ${lost.length > 1 ? 'are' : 'is'} out of earshot.`);
+  if (lost.length) words.push(`${names(lost)} can no longer hear you.`);
   const back = changed('far', 'near');
-  if (back.length) words.push(`${names(back)} ${back.length > 1 ? 'are' : 'is'} back in earshot.`);
+  if (back.length) words.push(`${names(back)} can hear you again.`);
   const had = (facts: SkipFacts, id: string) => facts.food.find(([who]) => who === id)?.[1];
   const out = c.members
     .filter((m) => m.homeAt === null && had(before, m.id) && !had(after, m.id))
     .map((m) => m.id);
   if (out.length) words.push(`${names(out)} ${out.length > 1 ? 'have' : 'has'} run out of food.`);
-  return words.join(' ');
+  return words.length ? `Skip stopped: ${words.join(' ')}` : '';
 }
 
 /** Stops a skip for decisions and physical events, while ambient words remain in the journal. */
