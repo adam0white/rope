@@ -85,9 +85,17 @@ async function setup() {
   d.closePage();
   return d;
 }
-it('waits for reading and choices and leaves response time for calls', () => {
+it('waits for choices, slows for reading and leaves response time for calls', () => {
   expect(playbackRate(true, false, false, true)).toBe(0);
-  expect(playbackRate(false, true, false, true)).toBe(0);
+  expect(playbackRate(true, true, false, true)).toBe(0);
+  // Reading is min(attention rate, selected base): never Skip's 1200 and never the fast 2.4.
+  expect(playbackRate(false, true, false, true)).toBe(0.25);
+  expect(playbackRate(false, true, true, false)).toBe(0.25);
+  for (const speed of ['auto', 'normal', 'fast'] as const)
+    expect(playbackRate(false, true, false, false, speed)).toBe(0.25);
+  for (const attention of [false, true])
+    for (const skip of [false, true]) expect(playbackRate(false, true, attention, skip, 'slow')).toBe(0.15);
+  expect(playbackRate(false, false, false, true, 'slow')).toBe(1200);
   expect(playbackRate(false, false, true, true)).toBeLessThan(1);
   expect(playbackRate(false, false, false, false)).toBe(0.8);
   expect(playbackRate(false, false, false, false, 'slow')).toBe(0.15);

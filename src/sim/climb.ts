@@ -54,6 +54,9 @@ import {
 import { createParty, LEADER, MEMBERS, memberOf } from './party.ts';
 import { DRAW, hashUnit } from './rng.ts';
 
+/** Cast edition of a climb's start. Climbs from another edition are refused, never converted. */
+export const CAST_EDITION = 'rope-hf4-2';
+
 function memberIn(s: ClimbState, id: string) {
   const member = memberOf(id);
   return !s.castEdition && id === 'tamar' ? { ...member, name: 'Tamar' } : member;
@@ -227,7 +230,7 @@ export interface ClimbState {
     bladder: boolean;
     observations?: Partial<Record<FactId, { at: number; source: 'direct' | 'scout' }>>;
   };
-  castEdition?: 'rope-hf4-1';
+  castEdition?: typeof CAST_EDITION;
   v: 1;
   /** Host rules version. Absent (1): climbs saved before HF 2.8.0. 2: fullness on, alongside, reconsider. */
   rules?: 2;
@@ -299,7 +302,7 @@ export function startClimb(
   const party = people ?? createParty(seed, start);
   const s: ClimbState = {
     v: 1,
-    castEdition: 'rope-hf4-1',
+    castEdition: CAST_EDITION,
     hf: continuing as RunArchive,
     hfQueue: [],
     hfOffers: continuing
@@ -663,7 +666,7 @@ export function offersFor(s: ClimbState, id: string, asking?: string): Affordanc
     }),
   );
   // Rope and pack are the leader's ideas: offered only while the leader is asking for them.
-  const asked = asking ?? mem.pending?.s.affordanceId ?? '';
+  const asked = asking ?? (mem.pending ?? mem.deferred)?.s.affordanceId ?? '';
   if (
     mem.gather &&
     s.minute < mem.gather.until &&
@@ -2499,7 +2502,7 @@ export const restore = (json: string): ClimbState => {
   const s = JSON.parse(json) as ClimbState;
   if (
     !s.hf ||
-    s.castEdition !== 'rope-hf4-1' ||
+    s.castEdition !== CAST_EDITION ||
     s.hf.engine?.package !== `@adam0white/human-framework@${FRAMEWORK_VERSION}`
   )
     throw Error('This saved climb uses an older simulation. Keep the file and start a fresh season.');

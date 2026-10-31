@@ -17,7 +17,7 @@ it.each(['owner-2026-10-18-hollin-334144833', 'owner-2026-10-19-kestrel-33414483
 );
 it('ordinary fresh climbs use current rules and have no faculty selector', () => {
   const climb = startClimb(23, 3);
-  expect(climb.castEdition).toBe('rope-hf4-1');
+  expect(climb.castEdition).toBe('rope-hf4-2');
   expect(climb.rules).toBe(2);
   expect(climb.fieldRules?.bladder).toBe(true);
   const old = JSON.parse(snapshot(climb));

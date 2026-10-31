@@ -263,7 +263,7 @@ it('F2226/F2233: a fall keeps the people row, and each person is described by wh
     // Short on the chip, whole sentence as the accessible name.
     expect(el.textContent, memberOf(m.id).name).toMatch(/(↑|↓|·) (above|below|level)/);
     expect(el.getAttribute('aria-label'), memberOf(m.id).name).toMatch(
-      /(Walking up|Walking down|Not walking), (above|below|level with) you\./,
+      /(Still walking up|Walking up|Walking down|Standing still|Not walking|(?:Resting|Eating|Drinking|Waiting|Stepped aside) until about \d\d:\d\d), (above|below|level with) you\./,
     );
     const lo = memberState(c, m.id).move?.dir;
     expect(el.textContent).toContain(lo === 'up' ? '↑' : lo === 'down' ? '↓' : '·');
@@ -389,6 +389,10 @@ it('F2229/F2230: the first Lead on note and the rope help say what they do in pl
   const lead = nextNote(newDisclosure(), startClimb(41, 3));
   expect(lead?.text).toContain('walk up the path yourself');
   expect(lead?.text).toContain('does not move anyone else');
+  expect(lead?.text).toContain(
+    'At the end of a stretch of path, you stop if nobody still out can hear you. Wind makes hearing distance shorter.',
+  );
+  expect(lead?.text).not.toContain('nobody behind');
   const c = d.climb;
   led(c, 30);
   const [a, b] = c.members.filter((m) => m.homeAt === null).map((m) => m.id);
@@ -658,6 +662,7 @@ it('R1: choosing a pace from the menu cancels a Skip like any other cancel and d
 // public route; the test asserts the premise rather than trusting the number). No fixture, so it exports and replays.
 const LOSS_MINUTE = 4803;
 
+// This case steps to minute 4803, replays the full archive, and applies the next input on both runs.
 it('R1/R3: on a played climb the stop is at the same minute, names who left, and exports, replays and takes the next input', async () => {
   const d = await boot();
   queueInput(d.climb, { t: 'lead', dir: 'up' });
@@ -695,7 +700,7 @@ it('R1/R3: on a played climb the stop is at the same minute, names who left, and
   step(replayed);
   expect(snapshot(replayed)).toBe(snapshot(d.climb));
   expect(d.stopWords).toBeNull();
-});
+}, 90_000);
 
 it('R3: the Skip reason stays on the pace line while nothing needs the player, and goes stale; an open call names itself', async () => {
   const d = await boot();

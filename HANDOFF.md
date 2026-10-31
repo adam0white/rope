@@ -1,3 +1,17 @@
+# RETEST2 correction 1 — 2026-10-31
+
+Remaining: future exact-source Opus CLEAR, review, CI, deploy, phone retest and Adam feel acceptance. All edition 1 in-progress saves and exports are refused by this candidate; pin `99a4227` to replay the old round. No migration.
+
+# RETEST2 sealed packet reconciled 2026-10-31 (docs only)
+
+Remaining: ordinary same-tester second retest of the candidate and Adam's feel check on 2026-11-03 (not a booked phone appointment); 2026-11-10 items wait on it. Engineering status: uncommitted candidates on `99a4227`, focused tests and lint/typecheck only; nothing fixed, no Commit marker, no acceptance claim. All 15 ranked asks, 5 logical returns and 9 folded clauses of the sealed packet are in `docs/deferred/rope-retest1-2026-10-31.md` with verbatim quotes, source, owner, reason and date. Not covered: pack/gather/scout/escort, later-climb packet, native browser, map labels, tutorial stacking, Submit reachability. C14 only on F-2587/F-2594 (F-2588 conditional); F-2590 new content is dated 2026-11-10.
+
+# RETEST2 2026-10-31 candidate (plan summary, written before code)
+
+Remaining: Code and Opus review at the exact signed source, lane and CI, deploy, same-standing phone retest. Adam accepts feel 2026-11-03; broad pace (C14) untouched; sealed F2581–2600 packet reconciled in the deferred record. Source candidate on `99a4227`; nothing committed or deployed; no browser, network, model call or spend.
+
+Spec: `docs/plans/2026-10-31-retest2.md`. Summary: cast edition `rope-hf4-2` refuses older saves with start-new copy before the regenerated-start comparison (no opt-in, no migration, old bytes kept); deferred offers stay askable until HF resolves again; partner, activity, request-result, Stay and talk-ETA wording from public records only; reading slows time to the attention rate instead of stopping it. Real pre-bump packets are in `test/fixtures/rope-hf4-1-*`; the later-climb packet is an explicit gap. Pack/gather/scout/escort deferral cases are not claimed closed. Layout (P9) is unverified without a browser.
+
 # LIGHT 2026-10-30 candidate (F-2226–F-2234, F-2237)
 
 Remaining: independent code review, an Opus CLEAR at the exact signed SHA, normal lane and exact green CI, deploy, clean live handback, then a same-standing retest on a real phone. This is a source candidate on `30fc93b`; nothing here is committed, merged or deployed, and no browser, server, model call or spend was used. Adam accepts feel on 2026-11-03 (pace taste F-2235 on 2026-11-10).

@@ -51,7 +51,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       return {
         id: 'lead',
         lit: 'lead',
-        text: 'Tap **Lead on** to walk up the path yourself. It does not move anyone else. Each person decides whether to follow, so ask them with **Climb on**. You stop and wait when half or more of the people still climbing are far behind. You also stop at a place on the path when nobody behind can hear you.',
+        text: 'Tap **Lead on** to walk up the path yourself. It does not move anyone else. Each person decides whether to follow, so ask them with **Climb on**. You stop and wait when half or more of the people still climbing are far behind. At the end of a stretch of path, you stop if nobody still out can hear you. Wind makes hearing distance shorter.',
       };
     if (!seen('ask') && sayInputs === 0 && s.members.some((x) => x.homeAt === null && canHear(s, x.id)))
       return {
@@ -67,7 +67,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       return {
         id: 'with',
         lit: 'with',
-        text: 'Nobody can hear you from here. **Stay with them** walks you back to the middle of the party. It does not make anyone follow you. Or pick someone first and tap **walk to** them.',
+        text: 'Nobody can hear you from here. **Stay with them** moves you toward the person in the middle by height. It does not make anyone follow you. Or pick someone first and tap **walk to** them.',
       };
     if (!seen('watch') && s.lines.length > 0)
       return {

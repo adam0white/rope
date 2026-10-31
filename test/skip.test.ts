@@ -78,7 +78,7 @@ it('menu speed overrides retain attention and reading holds, and skip uses its o
   expect(playbackRate(false, false, false, false, 'slow')).toBe(0.15);
   expect(playbackRate(false, false, false, false, 'fast')).toBe(2.4);
   expect(playbackRate(false, false, true, true, 'fast')).toBe(0.25);
-  expect(playbackRate(false, true, false, true, 'fast')).toBe(0);
+  expect(playbackRate(false, true, false, true, 'fast')).toBe(0.25); // reading slows, never stops or speeds up
   expect(playbackRate(true, false, false, true, 'fast')).toBe(0);
   expect(playbackRate(false, false, false, true, 'slow')).toBe(1200);
 });
