@@ -1002,6 +1002,18 @@ export class Game {
     const W = this.sceneEl.clientWidth;
     const H = this.sceneEl.clientHeight;
     const placed: { l: number; r: number; t: number; b: number }[] = [];
+    // The visible note sits over the scene, so its measured footprint is reserved like a placed bubble.
+    const note = this.noteEl;
+    const noteBox =
+      note.offsetHeight > 0
+        ? {
+            l: note.offsetLeft,
+            r: note.offsetLeft + note.offsetWidth,
+            t: note.offsetTop,
+            b: note.offsetTop + note.offsetHeight,
+          }
+        : null;
+    if (noteBox) placed.push(noteBox);
     const hits = (l: number, r: number, t: number, bt: number) =>
       placed.find((q) => l < q.r + 4 && r > q.l - 4 && t < q.b + 3 && bt > q.t - 3);
     const live = [...this.bubbles].filter(([who, b]) => {
@@ -1010,7 +1022,9 @@ export class Game {
       if (!on) b.el.classList.remove('on');
       return on;
     });
-    live.sort((x, y) => (this.scene.at.get(x[0])?.x ?? 0) - (this.scene.at.get(y[0])?.x ?? 0));
+    // Other people's answers claim space first; the player's own request is the one that gives way.
+    const x = (who: string) => this.scene.at.get(who)?.x ?? 0;
+    live.sort(([a], [b]) => Number(a === 'leader') - Number(b === 'leader') || x(a) - x(b));
     for (const [who, b] of live) {
       const at = this.scene.at.get(who);
       if (!at) continue;
@@ -1026,11 +1040,19 @@ export class Game {
         for (let q = hits(l, r, top, top + bh); q; q = hits(l, r, top, top + bh)) top = q.b + 3;
         bottom = top + bh;
       }
-      // A crowded mountain cannot hold every speech bubble. Keep the recorded
-      // answers below the controls instead of clamping bubbles onto each other.
-      if (bottom > H - 4 || bottom - bh < 4 || hits(l, r, bottom - bh, bottom)) {
-        b.el.classList.remove('on');
-        continue;
+      // A crowded mountain cannot hold every speech bubble. Any bubble without a
+      // clear slot inside the scene is hidden; its recorded answer stays in the
+      // sheet below the controls (requestResult, answersSheet).
+      const fits = (bt: number) => bt <= H - 4 && bt - bh >= 4 && !hits(l, r, bt - bh, bt);
+      if (bw > W - 8 || !fits(bottom)) {
+        // Try the free gaps between the scene edges and every placed obstacle, nearest the speaker first.
+        const edges = [bh + 4, H - 4, ...placed.flatMap((q) => [q.t - 3, q.b + 3 + bh])];
+        const free = edges.filter(fits).sort((m, n) => Math.abs(m - (at.y - 26)) - Math.abs(n - (at.y - 26)));
+        if (bw > W - 8 || free.length === 0) {
+          b.el.classList.remove('on');
+          continue;
+        }
+        bottom = free[0] as number;
       }
       b.el.classList.add('on');
       placed.push({ l, r, t: bottom - bh, b: bottom });
