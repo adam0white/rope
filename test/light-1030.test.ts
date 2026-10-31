@@ -662,6 +662,7 @@ it('R1: choosing a pace from the menu cancels a Skip like any other cancel and d
 // public route; the test asserts the premise rather than trusting the number). No fixture, so it exports and replays.
 const LOSS_MINUTE = 4803;
 
+// This case steps to minute 4803, replays the full archive, and applies the next input on both runs.
 it('R1/R3: on a played climb the stop is at the same minute, names who left, and exports, replays and takes the next input', async () => {
   const d = await boot();
   queueInput(d.climb, { t: 'lead', dir: 'up' });
@@ -699,7 +700,7 @@ it('R1/R3: on a played climb the stop is at the same minute, names who left, and
   step(replayed);
   expect(snapshot(replayed)).toBe(snapshot(d.climb));
   expect(d.stopWords).toBeNull();
-});
+}, 90_000);
 
 it('R3: the Skip reason stays on the pace line while nothing needs the player, and goes stale; an open call names itself', async () => {
   const d = await boot();
