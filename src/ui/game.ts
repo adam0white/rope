@@ -32,6 +32,7 @@ import {
   type Force,
   forkOf,
   type Line,
+  type MemberState,
   MOUNTAINS,
   memberState,
   type NewInput,
@@ -67,7 +68,16 @@ import { climbMilestones, climbScreen } from './labnames.ts';
 import { moodWord } from './look.ts';
 import { PACE } from './pace.ts';
 import { displayText } from './plain-english.ts';
-import { attentionNeeded, eventStamp, playbackRate, skipEventStamp } from './playback.ts';
+import {
+  attentionNeeded,
+  attentionWords,
+  eventStamp,
+  playbackRate,
+  type SkipFacts,
+  skipEventStamp,
+  skipFacts,
+  skipStopWords,
+} from './playback.ts';
 import { Scene } from './scene.ts';
 import { skippedMetadata } from './skip-metadata.ts';
 import { RopeStage } from './stage.ts';
@@ -173,6 +183,9 @@ export class Game {
   private endAt = 0;
   /** Walking the rest of the day quickly: on only while nothing is left to decide (`onlyWalkingLeft`). */
   private skipping = false;
+  private minuteBefore: { skip: boolean; stamp: string; facts: SkipFacts; read: number } | null = null;
+  /** Why the last Skip stopped, from public facts, shown until the player acts or half an hour passes. */
+  private stopWords: { text: string; at: number } | null = null;
   private acc = 0;
   private fileFrame: ClimbState | null = null;
   private last = performance.now();
@@ -228,7 +241,11 @@ export class Game {
     this.top.append(this.whereEl, journal, info, menu);
     this.dayStrip.append(this.dayBar, this.paceEl);
     this.skipButton.hidden = true;
+    const skipHelp =
+      'Skip ahead until something happens: an answer, a fall, a turn, someone out of earshot, two people close enough to rope up, or food running out. At most two hours.';
     this.skipButton.setAttribute('aria-label', 'Skip to the next event');
+    this.skipButton.setAttribute('aria-description', skipHelp);
+    this.skipButton.title = skipHelp;
     this.skipButton.onclick = () => {
       if (
         !this.climb ||
@@ -238,6 +255,8 @@ export class Game {
       )
         return;
       this.skipping = true;
+      this.minuteBefore = null;
+      this.stopWords = null;
       this.skipStarted = this.climb.minute;
       this.acc = 0;
       this.renderTop();
@@ -247,6 +266,7 @@ export class Game {
     const stopSkip = () => {
       if (this.skipping) {
         this.skipping = false;
+        this.minuteBefore = null;
         this.acc = 0;
         this.renderTop();
       }
@@ -617,6 +637,8 @@ export class Game {
     this.stampEl.textContent = '';
     this.slow();
     this.skipping = false;
+    this.minuteBefore = null;
+    this.stopWords = null;
     this.ending = false;
     this.closePage();
     this.playing = true;
@@ -680,9 +702,14 @@ export class Game {
       // HF advances once per animation frame. Time slows rather than banking an
       // unbounded catch-up loop when simulation work takes longer than the chosen pace.
       if (this.acc >= 1 && !this.climb.over) {
-        const wasSkipping = this.skipping;
-        const before = wasSkipping ? skipEventStamp(this.climb) : eventStamp(this.climb);
-        const readBefore = this.slowUntil;
+        // A minute can take several frames (HF yields after a public call), and positions move before the first yield.
+        // Keep what was seen before the whole minute until it completes; any input, cancel or new session clears it.
+        this.minuteBefore ??= {
+          skip: this.skipping,
+          stamp: this.skipping ? skipEventStamp(this.climb) : eventStamp(this.climb),
+          facts: skipFacts(this.climb),
+          read: this.slowUntil,
+        };
         let complete: boolean;
         if (this.entry === 'file') {
           this.fileFrame ??= JSON.parse(snapshot(this.climb)) as ClimbState;
@@ -700,11 +727,15 @@ export class Game {
         if (complete) {
           this.acc = Math.max(0, Math.min(1, this.acc - 1));
           this.afterStep();
+          const begun = this.minuteBefore;
+          this.minuteBefore = null;
           if (
-            (wasSkipping ? skipEventStamp(this.climb) : eventStamp(this.climb)) !== before ||
-            this.slowUntil > readBefore ||
+            (begun.skip ? skipEventStamp(this.climb) : eventStamp(this.climb)) !== begun.stamp ||
+            this.slowUntil > begun.read ||
             (this.skipping && (attentionNeeded(this.climb) || this.climb.minute - this.skipStarted >= 120))
           ) {
+            const why = begun.skip ? skipStopWords(begun.facts, this.climb) : '';
+            if (why) this.stopWords = { text: why, at: this.climb.minute };
             this.skipping = false;
             this.acc = 0;
             this.slow();
@@ -824,6 +855,8 @@ export class Game {
     this.afterStep();
     this.saySelf(also ?? inp);
     this.skipping = false;
+    this.minuteBefore = null;
+    this.stopWords = null;
     this.acc = 0;
     this.slow();
     if (this.note?.lit) {
@@ -1069,16 +1102,22 @@ export class Game {
           : this.skipping
             ? 'Skipping…'
             : performance.now() < this.slowUntil
-              ? 'Time slows for reading'
+              ? (this.stopReason() ?? 'Time slows for reading')
               : attentionNeeded(c)
-                ? 'A call needs attention'
-                : '';
+                ? attentionWords(c)
+                : (this.stopReason() ?? '');
     this.skipButton.hidden =
       this.pageOpen() ||
       this.panel !== 'main' ||
       attentionNeeded(c) ||
       performance.now() < this.slowUntil ||
       this.skipping;
+  }
+
+  /** The reason the last Skip stopped, until the player acts or half an hour of game time has passed. */
+  private stopReason(): string | null {
+    const stop = this.stopWords;
+    return stop && this.climb.minute - stop.at < 30 ? stop.text : null;
   }
 
   private sheetKey = '';
@@ -1135,6 +1174,17 @@ export class Game {
       pairInput?.t === 'say' &&
         pairInput.with &&
         distance(c, memberState(c, pairInput.to).pos, memberState(c, pairInput.with).pos) < 40,
+      // The words the chips and the result panel show: seen movement and position, recorded talk, and current jobs.
+      c.members.map((x) => this.chipWords(x.id)),
+      c.journal.length,
+      c.unheard.length,
+      c.members.map((x) => {
+        const activity = personOf(c, x.id).activity;
+        return [
+          c.hfRequests[x.id]?.input ?? null,
+          activity ? [activity.endsAt, activity.affordance.label] : null,
+        ];
+      }),
     ]);
     if (ifChanged && key === this.sheetKey) return;
     this.sheetKey = key;
@@ -1148,13 +1198,13 @@ export class Game {
     sh.innerHTML = '';
     // Who you speak to.
     const chips = h('div', 'row targets');
-    const mk = (id: string, label: string, ic: string, far: boolean, sub = '') => {
+    const mk = (id: string, label: string, ic: string, far: boolean, sub = '', spoken = sub) => {
       if (this.panel === 'partner' && (id === this.target || id === 'all')) return;
       if (this.panel === 'force' && this.verb === 'rope' && (id === this.partner || id === 'all')) return;
       const b = h('button', `chip${far ? ' far' : ''}`, `${icon(ic)}${esc(label)}<small>${esc(sub)}</small>`);
       const pressed = this.panel === 'partner' ? this.partner === id : this.target === id;
       b.setAttribute('aria-pressed', String(pressed));
-      b.setAttribute('aria-label', sub ? `${label}: ${sub}` : label);
+      b.setAttribute('aria-label', spoken ? `${label}: ${spoken}` : label);
       b.onclick = () => this.pickTarget(id);
       chips.append(b);
     };
@@ -1162,22 +1212,9 @@ export class Game {
     mk('all', 'all', 'all', !anyNear);
     chips.querySelector('button')?.setAttribute('aria-label', 'everyone');
     for (const x of MEMBERS) {
-      const mem = memberState(c, x.id);
-      const far = mem.homeAt === null && !canHear(c, x.id);
-      const mood = moodWord(personOf(c, x.id), coldAt(c.seed, c.weather, c.minute, posXY(c, mem.pos).alt));
-      mk(
-        x.id,
-        x.name,
-        'person',
-        far,
-        mem.homeAt !== null
-          ? `${x.they === 'she' ? 'She' : 'He'} is at the hut.`
-          : far
-            ? `${x.they === 'she' ? 'She' : 'He'} cannot hear you.`
-            : mood
-              ? `${x.they === 'she' ? 'She' : 'He'} looks ${mood}.`
-              : '',
-      );
+      // Short on the chip; the full sentence is the accessible name.
+      const words = this.chipWords(x.id);
+      mk(x.id, x.name, 'person', words.far, words.short, words.spoken);
     }
     const label = h('div', 'label');
     const tgt = this.target === 'all' ? 'everyone' : memberOf(this.target).name;
@@ -1202,11 +1239,11 @@ export class Game {
     if (this.panel === 'main' || this.panel === 'more' || this.panel === 'partner')
       targetControls.append(chips);
     sh.append(label, targetControls);
+    // The warning folds out below the controls: opening it never pushes the request buttons out of reach.
     const notice = fieldNotice(c);
-    if (notice)
-      sh.append(
-        h('details', 'field-notice', `<summary>Route and weather warning</summary><p>${esc(notice)}</p>`),
-      );
+    const noticeEl = notice
+      ? h('details', 'field-notice', `<summary>Route and weather warning</summary><p>${esc(notice)}</p>`)
+      : null;
     chips.scrollLeft = targetScroll;
     const calls = h('div', 'pending-calls');
     // Someone asks who will go down with them: the player's answer, as words to people.
@@ -1221,8 +1258,9 @@ export class Game {
         `ask-bar hurt${hurt.near ? '' : ' faint'}`,
         `<span><b>${esc(nm)}</b> fell on ${esc(hurt.where)} and is hurt.${hurt.near ? '' : ` ${memberOf(hurt.who).they === 'she' ? 'She' : 'He'} is too far away to hear you.`}</span>`,
       );
-      const go = h('button', 'force', `go to ${obj}`);
-      go.onclick = () => this.send({ t: 'lead', dir: 'with', who: hurt.who });
+      // The explicit approach walks the leader alone until they are beside the person; "stay with" stops far short.
+      const go = h('button', 'force', `walk to ${esc(nm)}`);
+      go.onclick = () => this.send({ t: 'lead', dir: 'near', who: hurt.who });
       bar.append(go);
       if (hurt.near) {
         const back = h('button', 'force', `turn ${obj} back`);
@@ -1298,10 +1336,14 @@ export class Game {
       };
       label.replaceWith(banner);
     }
-    if ((hurt || due) && this.panel === 'main') {
-      sh.innerHTML = '';
+    // A fall keeps the people row: pick someone and their requests sit under the call. The promised hour replaces it.
+    const pickedOne = this.target !== 'all';
+    if ((due || (hurt && !pickedOne)) && this.panel === 'main') {
+      if (due) sh.innerHTML = '';
       calls.classList.add('call-takeover');
       sh.append(calls);
+    } else if (hurt && this.panel === 'main') {
+      sh.append(calls, this.peopleVerbs(), this.requestResult());
     } else if (this.panel === 'main') {
       sh.append(this.peopleVerbs(), this.requestResult());
     } else if (this.panel === 'calls') {
@@ -1341,6 +1383,7 @@ export class Game {
     else if (this.panel === 'promise') sh.append(this.promiseRow());
     else if (this.panel === 'route') sh.append(this.routeRow());
     else if (this.panel === 'scout') sh.append(this.routeRow(true));
+    if (noticeEl && !(due && this.panel === 'main')) sh.append(noticeEl);
     this.leaderBar.replaceChildren(this.leaderRow());
     this.renderTop();
     const currentResult = sh.querySelector<HTMLElement>('.request-result');
@@ -1475,7 +1518,8 @@ export class Game {
       );
     }
     for (const el of [...g.children].slice(5)) el.classList.add('secondary-action');
-    const more = h('button', 'verb more-actions', 'more ▾');
+    const more = h('button', 'verb more-actions', 'more requests ▾');
+    more.setAttribute('aria-label', 'More requests to people');
     more.onclick = () => {
       this.panel = this.panel === 'more' ? 'main' : 'more';
       this.renderSheet();
@@ -1612,7 +1656,8 @@ export class Game {
     for (const el of [...g.children].slice(4)) el.classList.add('secondary-action');
     const lab = h('div', 'label', '<span>you</span>');
     lab.classList.add('you-label');
-    const more = h('button', 'verb more-actions', 'more ▾');
+    const more = h('button', 'verb more-actions', 'more moves ▾');
+    more.setAttribute('aria-label', 'More moves for you');
     more.onclick = () => {
       this.panel = 'leader-more';
       this.renderSheet();
@@ -1620,6 +1665,39 @@ export class Game {
     g.insertBefore(more, g.children[4] ?? null);
     wrap.append(lab, g);
     return wrap;
+  }
+
+  /** The words on one person's chip: what can be seen and heard now. Also part of the sheet's refresh key. */
+  private chipWords(id: string): { far: boolean; short: string; spoken: string } {
+    const c = this.climb;
+    const x = memberOf(id);
+    const mem = memberState(c, id);
+    const far = mem.homeAt === null && !canHear(c, id);
+    const mood = moodWord(personOf(c, id), coldAt(c.seed, c.weather, c.minute, posXY(c, mem.pos).alt));
+    const who = x.they === 'she' ? 'She' : 'He';
+    const hearing =
+      mem.homeAt !== null
+        ? `${who} is at the hut.`
+        : far
+          ? `${who} cannot hear you.`
+          : mood
+            ? `${who} looks ${mood}.`
+            : '';
+    return {
+      far,
+      short: mem.homeAt !== null ? hearing : `${hearing} ${this.seenMoving(mem, true)}`.trim(),
+      spoken: mem.homeAt !== null ? hearing : `${hearing} ${this.seenMoving(mem)}`.trim(),
+    };
+  }
+
+  /** What anyone watching the slope can see: walking or not, which way, and above or below the leader. */
+  private seenMoving(mem: MemberState, short = false): string {
+    const c = this.climb;
+    const alt = posXY(c, mem.pos).alt - posXY(c, c.leader.pos).alt;
+    const side = alt > 20 ? 'above you' : alt < -20 ? 'below you' : 'level with you';
+    const dir = mem.move?.dir;
+    if (short) return `${dir === 'up' ? '↑' : dir === 'down' ? '↓' : '·'} ${side.replace(' with you', '')}`;
+    return `${dir === 'up' ? 'Walking up' : dir === 'down' ? 'Walking down' : 'Not walking'}, ${side}.`;
   }
 
   /** Approximate physical distance and travel time, never a readout of inner state. */
@@ -1632,8 +1710,16 @@ export class Game {
     if (mem.homeAt !== null) return `${name} is back at the hut.`;
     const { metres, minutes } = approachEstimate(c, id);
     if (metres < 40) return `You are close enough to help ${name}.`;
-    if (!c.leader.near && !c.leader.move)
-      return `You can hear ${name}, but you are too far away to help. Tap walk to ${name} to get closer.`;
+    if (!c.leader.near && !c.leader.move) {
+      const heard = canHear(c, id)
+        ? `You can hear ${name}, but you are too far away to help.`
+        : `${name} is too far away to hear you.`;
+      const tap =
+        hurtCall(c)?.who === id || this.target === id
+          ? `Tap walk to ${name} to get closer.`
+          : `Pick ${name}, then tap walk to ${name} to get closer.`;
+      return `${heard} ${tap}`;
+    }
     const gap =
       metres < 70
         ? 'a few dozen metres'
@@ -1738,14 +1824,20 @@ export class Game {
   private requestResult(): HTMLElement {
     const slot = h('div', 'request-feedback');
     const c = this.climb;
-    const index = c.inputs.findLastIndex((input) => input.t === 'say' || input.t === 'promise');
+    const index = c.inputs.findLastIndex(
+      (input) => input.t === 'say' || input.t === 'promise' || input.t === 'ask-life',
+    );
     const input = c.inputs[index];
-    if (input?.t !== 'say' && input?.t !== 'promise') return slot;
+    if (input?.t !== 'say' && input?.t !== 'promise' && input?.t !== 'ask-life') return slot;
     const latest = new Map<string, Line>();
     for (const line of c.lines) if (line.input === index) latest.set(line.who, line);
     const answers = [...latest.values()];
     const box = h('div', 'request-replies request-result');
     box.dataset.input = String(index);
+    if (input.t === 'ask-life') {
+      slot.append(this.talkResult(box, input, index, answers));
+      return slot;
+    }
     if (input.t === 'promise') {
       box.append(h('p', 'request-acknowledgement', `You promised to turn back at ${input.hour}:00.`));
       const more = this.answersButton(answers.length, index);
@@ -1838,6 +1930,8 @@ export class Game {
         'request-objection',
         `<b>${esc(memberOf(no.who).name)} ${esc(response(no))}.</b> “${esc(displayText(no.says))}”`,
       );
+      const job = this.pendingJob(no) || this.missingWhy(no, input);
+      if (job) objection.append(h('small', 'request-pending', ` ${esc(job)}`));
       if (collectiveTurn) box.append(objection);
       else box.prepend(objection);
       if (input.act === 'rope') box.querySelector('.request-acknowledgement')?.remove();
@@ -1894,6 +1988,13 @@ export class Game {
         }
       }
       if (!close && a.homeAt === null && b.homeAt === null && input.act === 'rope') {
+        box.append(
+          h(
+            'p',
+            'rope-help',
+            'Rope up ties two people together. They must stand close together and neither can already be tied to someone. Close up asks them to walk toward each other first.',
+          ),
+        );
         const gather = h(
           'button',
           'force gather-pair',
@@ -1912,6 +2013,102 @@ export class Game {
     }
     slot.append(box);
     return slot;
+  }
+
+  /**
+   * A deferral quotes the job the person is in. Say what that job is and when it ends, from the person's recorded
+   * activity, and when the same words were already given for a different request.
+   */
+  private pendingJob(line: Line): string {
+    if (line.verdict !== 'deferred') return '';
+    const c = this.climb;
+    const name = memberOf(line.who).name;
+    const activity = personOf(c, line.who).activity;
+    const parts: string[] = [];
+    if (activity && activity.endsAt > c.minute)
+      parts.push(
+        `${name} is busy with “${displayText(activity.affordance.label)}” until about ${clock(activity.endsAt)}.`,
+      );
+    const earlier = c.lines.find(
+      (l) =>
+        l !== line && l.who === line.who && l.input !== line.input && l.says === line.says && l.at < line.at,
+    );
+    if (earlier) parts.push(`These are the same words as at ${clock(earlier.at)}, for another request.`);
+    return parts.join(' ');
+  }
+
+  /** In plain words, what "something I need for that is missing" means for the request, from where people stand now. */
+  private missingWhy(line: Line, input: Extract<ClimbState['inputs'][number], { t: 'say' }>): string {
+    if (line.reason !== 'unavailable') return '';
+    const c = this.climb;
+    const name = memberOf(line.who).name;
+    const mem = memberState(c, line.who);
+    if (input.act === 'descend' && mem.pos.place === MOUNTAINS[c.mountain]?.hut)
+      return `${name} is at the hut. There is no path down from here.`;
+    return '';
+  }
+
+  /** The answer to a private question about the person's own life, then the talk itself once it is recorded. */
+  private talkResult(
+    box: HTMLElement,
+    input: Extract<ClimbState['inputs'][number], { t: 'ask-life' }>,
+    index: number,
+    answers: Line[],
+  ): HTMLElement {
+    const c = this.climb;
+    const name = memberOf(input.to).name;
+    const clue = DISCOVERIES[input.to];
+    const topic = clue?.displayTopic ?? clue?.topic ?? 'their life';
+    box.append(h('p', 'request-acknowledgement', `You asked ${esc(name)} about ${esc(topic)}.`));
+    const reply = answers.find((line) => line.who === input.to);
+    if (!reply) {
+      box.append(
+        h(
+          'p',
+          '',
+          c.unheard.includes(index)
+            ? `${esc(name)} is too far away to hear you.`
+            : `You are waiting for ${esc(name)} to answer.`,
+        ),
+      );
+      return box;
+    }
+    const spoken = (
+      {
+        assented: `agreed to talk about ${topic}`,
+        complied: `agreed under pressure to talk about ${topic}`,
+        deferred: `wants to wait before talking about ${topic}`,
+        refused: `refused to talk about ${topic}`,
+        modified: `offered another action instead of talking about ${topic}`,
+      } as Record<string, string>
+    )[reply.verdict];
+    box.append(
+      h(
+        'p',
+        ['assented', 'complied'].includes(reply.verdict) ? 'request-acknowledgement' : 'request-objection',
+        `<b>${esc(name)} ${esc(spoken ?? `heard your question about ${topic}`)}.</b> “${esc(displayText(reply.says))}”`,
+      ),
+    );
+    const job = this.pendingJob(reply);
+    if (job) box.append(h('small', 'request-pending', esc(job)));
+    if (['assented', 'complied'].includes(reply.verdict)) {
+      const said = `${personOf(c, input.to).name} said, “`;
+      const told = c.journal.find(
+        (e) => e.story && e.who === input.to && e.at >= reply.at && e.text.startsWith(said),
+      );
+      box.append(
+        h(
+          'p',
+          'talk-status',
+          told
+            ? `${esc(name)} then said: “${esc(displayText(told.text.slice(said.length, -1)))}”`
+            : c.hfRequests[input.to]?.input === index
+              ? `The talk with ${esc(name)} is not finished yet. What ${memberOf(input.to).they === 'she' ? 'she' : 'he'} says is added to the journal.`
+              : `No words from the talk with ${esc(name)} were recorded.`,
+        ),
+      );
+    }
+    return box;
   }
 
   /** Last recorded HF answer for each addressed person and this request. Never predicts a new verdict. */
@@ -2154,6 +2351,8 @@ export class Game {
       button.addEventListener('click', () => {
         this.speed = button.dataset.pace as typeof this.speed;
         this.skipping = false;
+        // Same as any other cancel of a Skip: the minute in progress is not compared with a Skip that is over.
+        this.minuteBefore = null;
         this.acc = 0;
         menu.querySelectorAll<HTMLElement>('[data-pace]').forEach((item) => {
           item.setAttribute('aria-pressed', String(item === button));
@@ -2172,7 +2371,9 @@ export class Game {
         ? this.requestName(input.act)
         : input?.t === 'promise'
           ? `turn at ${input.hour}:00`
-          : 'the request';
+          : input?.t === 'ask-life'
+            ? `talk about ${DISCOVERIES[input.to]?.displayTopic ?? DISCOVERIES[input.to]?.topic ?? 'their life'}`
+            : 'the request';
     const verdicts: Record<string, string> = {
       assented: `agreed to ${action}`,
       complied: `agreed under pressure to ${action}`,

@@ -1,3 +1,13 @@
+# LIGHT 2026-10-30 candidate (F-2226–F-2234, F-2237)
+
+Remaining: independent code review, an Opus CLEAR at the exact signed SHA, normal lane and exact green CI, deploy, clean live handback, then a same-standing retest on a real phone. This is a source candidate on `30fc93b`; nothing here is committed, merged or deployed, and no browser, server, model call or spend was used. Adam accepts feel on 2026-11-03 (pace taste F-2235 on 2026-11-10).
+
+Correction 1 (after the independent review): Skip now keeps its stamp from before the whole native minute, the sheet's conditional refresh covers chip words, recorded talk and current jobs, and each added Skip stop is named from public facts. Still open: phone geometry and chip height (no browser), and how often Skip stops near the wind-scaled earshot edge (not tuned).
+
+Correction 2 (after the second review): a rope-up window closing now stops Skip with words too (apart, at the hut, or tied), choosing a pace in the menu drops the minute in progress like any other Skip cancel, and the test comment on the synthetic Move fixture is accurate. Reasons are tested for earshot, food, and both pair directions only; other stops are not claimed named.
+
+Changes are in `src/ui` only (see `docs/design.md`, "LIGHT 2026-10-30 candidate"). HF stays 4.15.0, client 0.5.15, kit 0.5.32. Replay stays the same computation for a fixed start, input log and engine, but identical clicks no longer always send identical inputs (the fall button sends `lead near`) and Skip changes when the next input is stamped, so no hash-equality claim is made. Focused tests: `test/light-1030.test.ts` (RED against `30fc93b` for the walk button and the topic answer, then GREEN). Not reproduced or not changed: F-2235 pace (taste), F-2236 (lab C14), phone clipping cause (no browser).
+
 # Refusal text follow-up — 2026-10-30 candidate
 
 Remaining: coordinator CLEAR at the signed source, exact source and merge CI, deployment and live clean release verification. This bounded follow-up changes only displayed text. Unopenable saved seasons are described as unable to open in this version, with New game offered. The same existing refusal path also covers malformed current saves and unknown future versions, so it does not establish an earlier version. The file chooser displays known readable refusal messages or a fixed recovery sentence. Raw file errors appear only in collapsed Debug under exact `?lab=1`. History permission failures do not claim the file is older, because that is not established by that failure. All validators, ownership checks, simulation, replay and difficulty stay unchanged. Adam retains feel acceptance.

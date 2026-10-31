@@ -1720,3 +1720,12 @@ body {
     min-width: 76px;
   }
 }
+
+/* The warning folds out under the controls and scrolls inside itself; the last line of the sheet clears the dock. */
+.field-notice[open] p {
+  max-height: 7em;
+  overflow: auto;
+}
+.sheet > :last-child {
+  margin-bottom: 12px;
+}

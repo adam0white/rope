@@ -189,7 +189,8 @@ const tap = (text: string) => {
     (b) =>
       b.textContent === text ||
       b.querySelector('span')?.textContent === text ||
-      b.getAttribute('aria-label') === text,
+      b.getAttribute('aria-label') === text ||
+      (b.classList.contains('chip') && b.textContent?.startsWith(text)),
   );
   if (!button) throw new Error(`Missing button: ${text}`);
   button.click();
