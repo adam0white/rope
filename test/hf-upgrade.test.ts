@@ -30,10 +30,12 @@ it.each(['4.8.1', '4.13.0'])('tells players to start fresh when a %s save is res
   old.hf.engine.package = `@adam0white/human-framework@${version}`;
   expect(() => restore(JSON.stringify(old))).toThrow(/start a fresh season/i);
 });
+// Reviewed new-edition baseline (rope-hf4-2). For this seed-7 three-minute control the state differs from the
+// rope-hf4-1 baseline d50b262d… only in castEdition; no cross-edition equality is claimed.
 it('retains current full-state replay hashes', () => {
   const { climb } = newSeason(7);
   for (let i = 0; i < 3; i++) step(climb);
   expect(proofHash(JSON.parse(snapshot(climb)))).toBe(
-    'd50b262d6b2552a687153fc611c7ebcb68e5cc6c23abd7a7778635689caacd82',
+    'da842098f93c119f5d8cccf3407eddc574224b6eac99ccf9e02c2b656b1c7310',
   );
 });

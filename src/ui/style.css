@@ -1387,7 +1387,9 @@ body {
 .more-actions {
   height: auto;
   min-height: 52px;
-  overflow-wrap: anywhere;
+  /* Break between words first; split a word only when it cannot fit. Phone geometry is unverified. */
+  overflow-wrap: break-word;
+  hyphens: manual;
 }
 .targets {
   height: auto;
@@ -1435,6 +1437,10 @@ body {
 }
 .page-feedback .page-actions {
   margin-top: auto;
+  /* Candidate: keep Submit reachable while the form scrolls. Phone geometry is unverified. */
+  position: sticky;
+  bottom: 0;
+  background: var(--paper, inherit);
 }
 .feedback-body pre {
   white-space: pre-wrap;

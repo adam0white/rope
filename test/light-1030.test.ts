@@ -263,7 +263,7 @@ it('F2226/F2233: a fall keeps the people row, and each person is described by wh
     // Short on the chip, whole sentence as the accessible name.
     expect(el.textContent, memberOf(m.id).name).toMatch(/(↑|↓|·) (above|below|level)/);
     expect(el.getAttribute('aria-label'), memberOf(m.id).name).toMatch(
-      /(Walking up|Walking down|Not walking), (above|below|level with) you\./,
+      /(Still walking up|Walking up|Walking down|Standing still|Not walking|(?:Resting|Eating|Drinking|Waiting|Stepped aside) until about \d\d:\d\d), (above|below|level with) you\./,
     );
     const lo = memberState(c, m.id).move?.dir;
     expect(el.textContent).toContain(lo === 'up' ? '↑' : lo === 'down' ? '↓' : '·');
@@ -389,6 +389,10 @@ it('F2229/F2230: the first Lead on note and the rope help say what they do in pl
   const lead = nextNote(newDisclosure(), startClimb(41, 3));
   expect(lead?.text).toContain('walk up the path yourself');
   expect(lead?.text).toContain('does not move anyone else');
+  expect(lead?.text).toContain(
+    'At the end of a stretch of path, you stop if nobody still out can hear you. Wind makes hearing distance shorter.',
+  );
+  expect(lead?.text).not.toContain('nobody behind');
   const c = d.climb;
   led(c, 30);
   const [a, b] = c.members.filter((m) => m.homeAt === null).map((m) => m.id);

@@ -22,6 +22,7 @@ import { campFacts, campFallback } from '../sim/camp.ts';
 import {
   advanceFrame,
   approachEstimate,
+  CAST_EDITION,
   type ClimbState,
   canHear,
   clock,
@@ -577,8 +578,10 @@ export class Game {
         throw new Error(
           'This saved season cannot be checked or uses a different version. Keep it and start a fresh season.',
         );
-      if (sv.season.chapter) checkChapter(sv.season.chapter);
       const start = sv.start || sv.season.start || '';
+      if (otherEdition([start, ...(sv.season.past ?? []).map((p) => p?.start)]))
+        throw new Error(OTHER_EDITION_NATIVE);
+      if (sv.season.chapter) checkChapter(sv.season.chapter);
       validateSeasonStart(sv.season.seed, sv.season.chapter, sv.season.past ?? [], start);
       const retained = validatedCurrent(sv.state);
       const c = replay(start, sv.inputs, sv.minute, undefined, retained.hfPhase);
@@ -1124,7 +1127,10 @@ export class Game {
           : this.skipping
             ? 'Skipping…'
             : performance.now() < this.slowUntil
-              ? (this.stopReason() ?? 'Time slows for reading')
+              ? (this.stopReason() ??
+                (attentionNeeded(c)
+                  ? `${attentionWords(c)} Time moves slowly while you read.`
+                  : 'Time moves slowly while you read. Skip returns after this reading time if nothing else needs your attention.'))
               : attentionNeeded(c)
                 ? attentionWords(c)
                 : (this.stopReason() ?? '');
@@ -1186,6 +1192,7 @@ export class Game {
         x.pack,
         x.rations > 0 || x.pos.place === MOUNTAINS[c.mountain]?.hut,
         distance(c, x.pos, L.pos) < 40,
+        this.panel === 'partner' ? this.partnerWords(x.id) : null,
       ]),
       Math.floor((c.minute % 1440) / 60),
       c.members.map((x) => (x.asks ? x.id : '')),
@@ -1236,7 +1243,16 @@ export class Game {
     for (const x of MEMBERS) {
       // Short on the chip; the full sentence is the accessible name.
       const words = this.chipWords(x.id);
-      mk(x.id, x.name, 'person', words.far, words.short, words.spoken);
+      const pair = this.panel === 'partner' ? this.partnerWords(x.id) : '';
+      const hearing = words.far ? `${x.they === 'she' ? 'She' : 'He'} cannot hear you. ` : '';
+      mk(
+        x.id,
+        x.name,
+        'person',
+        words.far,
+        pair ? hearing + pair : words.short,
+        pair ? hearing + pair : words.spoken,
+      );
     }
     const label = h('div', 'label');
     const tgt = this.target === 'all' ? 'everyone' : memberOf(this.target).name;
@@ -1689,6 +1705,21 @@ export class Game {
     return wrap;
   }
 
+  /** For the partner picker: where this person stands against the selected target, and whether either is tied. Words only. */
+  private partnerWords(id: string): string {
+    const c = this.climb;
+    if (this.target === 'all' || id === this.target) return '';
+    const a = memberState(c, id);
+    const b = memberState(c, this.target);
+    if (a.homeAt !== null) return 'At the hut.';
+    if (b.homeAt !== null) return `${memberOf(this.target).name} is at the hut.`;
+    if (a.ropedTo) return 'Already tied to someone.';
+    if (b.ropedTo) return `${memberOf(this.target).name} is already tied.`;
+    return distance(c, a.pos, b.pos) < 40
+      ? `Close to ${memberOf(this.target).name}.`
+      : `Far from ${memberOf(this.target).name}.`;
+  }
+
   /** The words on one person's chip: what can be seen and heard now. Also part of the sheet's refresh key. */
   private chipWords(id: string): { far: boolean; short: string; spoken: string } {
     const c = this.climb;
@@ -1705,10 +1736,19 @@ export class Game {
           : mood
             ? `${who} looks ${mood}.`
             : '';
+    // A call to go down is the person's own recorded ask; it says nothing about who agreed to what.
+    const company =
+      mem.asks && mem.homeAt === null
+        ? `${who} wants to go down and asked who will come with ${x.they === 'she' ? 'her' : 'him'}.`
+        : '';
+    const said = [hearing, company].filter(Boolean).join(' ');
     return {
       far,
-      short: mem.homeAt !== null ? hearing : `${hearing} ${this.seenMoving(mem, true)}`.trim(),
-      spoken: mem.homeAt !== null ? hearing : `${hearing} ${this.seenMoving(mem)}`.trim(),
+      short:
+        mem.homeAt !== null
+          ? hearing
+          : `${hearing} ${company ? 'asks who will go down' : ''} ${this.seenMoving(mem, true)}`.trim(),
+      spoken: mem.homeAt !== null ? hearing : `${said} ${this.seenMoving(mem)}`.trim(),
     };
   }
 
@@ -1718,13 +1758,36 @@ export class Game {
     const alt = posXY(c, mem.pos).alt - posXY(c, c.leader.pos).alt;
     const side = alt > 20 ? 'above you' : alt < -20 ? 'below you' : 'level with you';
     const dir = mem.move?.dir;
-    if (short) return `${dir === 'up' ? '↑' : dir === 'down' ? '↓' : '·'} ${side.replace(' with you', '')}`;
-    return `${dir === 'up' ? 'Walking up' : dir === 'down' ? 'Walking down' : 'Not walking'}, ${side}.`;
+    const doing = this.activityWords(mem);
+    if (short)
+      return `${dir === 'up' ? '↑' : dir === 'down' ? '↓' : '·'} ${side.replace(' with you', '')}${doing ? `, ${doing.word}` : ''}`;
+    const company = !!mem.asks && mem.homeAt === null;
+    const still = doing ? doing.long : company ? 'Standing still' : 'Not walking';
+    return `${dir === 'up' ? (company ? 'Still walking up' : 'Walking up') : dir === 'down' ? 'Walking down' : still}, ${side}.`;
+  }
+
+  /** A recorded, accepted activity that can be seen from here: only the plain action, never why. */
+  private activityWords(mem: MemberState): { word: string; long: string } | null {
+    const c = this.climb;
+    const activity = personOf(c, mem.id).activity;
+    const word = activity ? ACTIVITY_WORDS[activity.action] : undefined;
+    if (!activity || !word || mem.homeAt !== null || mem.move || !canHear(c, mem.id)) return null;
+    if (activity.endsAt <= c.minute) return null;
+    return {
+      word,
+      long: `${word[0]?.toUpperCase()}${word.slice(1)} until about ${clock(activity.endsAt)}`,
+    };
   }
 
   /** Approximate physical distance and travel time, never a readout of inner state. */
   private movementWords(): string {
     const c = this.climb;
+    if (c.leader.follow === 'party' && !c.leader.near) {
+      const deaf = c.members
+        .filter((x) => x.homeAt === null && !canHear(c, x.id))
+        .map((x) => memberOf(x.id).name);
+      return `Stay with them moves you toward the person in the middle by height, and stops you when you are close or level. Each person chooses what to do.${deaf.length ? ` Cannot hear you: ${deaf.join(', ')}.` : ''}`;
+    }
     const id = c.leader.near ?? (c.leader.follow !== 'party' ? c.leader.follow : null);
     if (!id) return '';
     const mem = memberState(c, id);
@@ -1905,7 +1968,8 @@ export class Game {
     const response = (line: Line): string => {
       if (line.verdict === 'assented') return `agreed to ${label}`;
       if (line.verdict === 'complied') return `agreed under pressure to ${label}`;
-      if (line.verdict === 'deferred') return `wants to wait before ${action}`;
+      if (line.verdict === 'deferred')
+        return input.act === 'wait' ? 'has not agreed to wait yet' : `wants to wait before ${action}`;
       if (line.verdict === 'refused') return `refused ${action}`;
       if (line.verdict === 'modified') return `offered another action instead of ${action}`;
       return `heard ${label}`;
@@ -2125,12 +2189,29 @@ export class Game {
           told
             ? `${esc(name)} then said: “${esc(displayText(told.text.slice(said.length, -1)))}”`
             : c.hfRequests[input.to]?.input === index
-              ? `The talk with ${esc(name)} is not finished yet. What ${memberOf(input.to).they === 'she' ? 'she' : 'he'} says is added to the journal.`
+              ? `The talk with ${esc(name)} is not finished yet. What ${memberOf(input.to).they === 'she' ? 'she' : 'he'} says is added to the journal.${this.talkEta(input.to, index)}`
               : `No words from the talk with ${esc(name)} were recorded.`,
         ),
       );
     }
     return box;
+  }
+
+  /** Tied to this request's own talk activity; never a promise that words will arrive. */
+  private talkEta(to: string, index: number): string {
+    const c = this.climb;
+    const request = c.hfRequests[to];
+    const activity = personOf(c, to).activity;
+    if (
+      request?.input !== index ||
+      request.kind !== 'life' ||
+      request.offer.id !== 'private-talk' ||
+      activity?.affordanceId !== 'private-talk' ||
+      activity.action !== 'talk' ||
+      activity.endsAt <= c.minute
+    )
+      return '';
+    return ` If the talk is not interrupted, it may be added to the journal at about ${clock(activity.endsAt)}.`;
   }
 
   /** Last recorded HF answer for each addressed person and this request. Never predicts a new verdict. */
@@ -2400,7 +2481,10 @@ export class Game {
       assented: `agreed to ${action}`,
       complied: `agreed under pressure to ${action}`,
       refused: `refused to ${action}`,
-      deferred: `wants to wait before agreeing to ${action}`,
+      deferred:
+        input?.t === 'say' && input.act === 'wait'
+          ? 'has not agreed to wait yet'
+          : `wants to wait before agreeing to ${action}`,
       modified: `offered another action when asked to ${action}`,
       heard: `${input?.t === 'promise' ? 'heard your promise to' : 'heard your request to'} ${action}`,
     };
@@ -2693,8 +2777,7 @@ export class Game {
             if (current()) {
               const message = error instanceof Error ? error.message : '';
               status.textContent =
-                message ===
-                'This file is from a different version of Rope. Keep the file and start a fresh season.'
+                message === OTHER_EDITION_FILE
                   ? message
                   : message ===
                       'This save cannot confirm its history permissions. Keep it and start a fresh season.'
@@ -3290,6 +3373,30 @@ function validatedHF(value: unknown) {
     );
   return value as RunArchive;
 }
+/** Plain words for accepted activities that can be seen from the slope. */
+const ACTIVITY_WORDS: Record<string, string> = {
+  rest: 'resting',
+  eat: 'eating',
+  drink: 'drinking',
+  wait: 'waiting',
+  relieve: 'stepped aside',
+};
+const OTHER_EDITION_FILE =
+  'This file is from a different version of Rope. Keep the file and start a fresh season.';
+const OTHER_EDITION_NATIVE =
+  'This saved season cannot continue in this version. Keep it and start a new game.';
+/** True when any start text names a different cast edition. Absent or non-string editions fall through to the old errors. */
+function otherEdition(starts: unknown[]): boolean {
+  return starts.some((text) => {
+    if (typeof text !== 'string') return false;
+    try {
+      const edition = JSON.parse(text)?.castEdition;
+      return typeof edition === 'string' && edition !== CAST_EDITION;
+    } catch {
+      return false;
+    }
+  });
+}
 function validatedCurrent(text: string): ClimbState {
   const state = finiteJSON(text) as ClimbState;
   validatedHF(state.hf);
@@ -3328,6 +3435,8 @@ function checkPublicReplay(
 ): ClimbState {
   if (!raw || raw.game !== 'rope' || raw.v !== 2 || raw.engine !== FRAMEWORK_VERSION)
     throw new Error('Unsupported public Rope export.');
+  if (otherEdition([raw.start, ...(raw.past ?? []).map((p) => p?.start)]))
+    throw new Error(OTHER_EDITION_FILE);
   const state = validatedCurrent(raw.state);
   checkReplayBudget(raw.start, raw.inputs, state.minute);
   for (const prior of raw.past ?? [])
@@ -3344,8 +3453,7 @@ function checkPublicReplay(
   return climb;
 }
 function nativeFileSave(raw: Save): { save: Save; climb: ClimbState; start: string } {
-  if (raw?.engine !== undefined && raw.engine !== ENGINE_VERSION)
-    throw new Error('This file is from a different version of Rope. Keep the file and start a fresh season.');
+  if (raw?.engine !== undefined && raw.engine !== ENGINE_VERSION) throw new Error(OTHER_EDITION_FILE);
   if (
     !raw ||
     raw.v !== 2 ||
@@ -3368,6 +3476,8 @@ function nativeFileSave(raw: Save): { save: Save; climb: ClimbState; start: stri
   const save = structuredClone(raw);
   const start = save.start || save.season.start || '';
   const initial = finiteJSON(start);
+  if (otherEdition([start, ...(save.season.past ?? []).map((p) => p?.start)]))
+    throw new Error(OTHER_EDITION_FILE);
   checkReplayBudget(start, save.inputs, save.minute);
   if (
     save.minute < initial.minute ||
@@ -3474,10 +3584,7 @@ async function decodeFile(text: string, selectedDigest?: string) {
     finiteJSON(interpretation);
     if (raw.format) throw new Error('Unsupported Rope file format.');
     if (raw.game === 'rope') {
-      if (raw.engine !== FRAMEWORK_VERSION)
-        throw new Error(
-          'This file is from a different version of Rope. Keep the file and start a fresh season.',
-        );
+      if (raw.engine !== FRAMEWORK_VERSION) throw new Error(OTHER_EDITION_FILE);
       const climb = checkPublicReplay(raw);
       const season = validateSeasonStart(climb.seed, raw.chapter, raw.past ?? [], raw.start);
       prepared = {

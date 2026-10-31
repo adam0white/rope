@@ -135,7 +135,7 @@ export function attentionWords(c: ClimbState): string {
   return haltReason(c) ?? '';
 }
 
-/** UI time only. Choosing and reading wait; an unanswered call leaves time to respond. */
+/** UI time only. Choosing waits; reading slows to at most the attention rate; an unanswered call leaves time to respond. */
 export function playbackRate(
   choosing: boolean,
   reading: boolean,
@@ -143,7 +143,8 @@ export function playbackRate(
   untilEvent: boolean,
   speed: 'auto' | 'slow' | 'normal' | 'fast' = 'auto',
 ): number {
-  if (choosing || reading) return 0;
-  if (attention) return PACE.attention;
-  return untilEvent ? PACE.untilEvent : { auto: 0.8, slow: 0.15, normal: 0.8, fast: 2.4 }[speed];
+  if (choosing) return 0;
+  const base = { auto: 0.8, slow: 0.15, normal: 0.8, fast: 2.4 }[speed];
+  if (reading) return Math.min(PACE.attention, base);
+  return attention ? PACE.attention : untilEvent ? PACE.untilEvent : base;
 }
