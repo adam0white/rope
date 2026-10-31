@@ -51,7 +51,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       return {
         id: 'lead',
         lit: 'lead',
-        text: 'Tap **Lead on** to start walking. You keep to their pace. They choose whether to come. Ask them to join you.',
+        text: 'Tap **Lead on** to walk up the path yourself. It does not move anyone else. Each person decides whether to follow, so ask them with **Climb on**. You stop and wait when half or more of the people still climbing are far behind, or at a junction when nobody can hear you.',
       };
     if (!seen('ask') && sayInputs === 0 && s.members.some((x) => x.homeAt === null && canHear(s, x.id)))
       return {
@@ -67,7 +67,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       return {
         id: 'with',
         lit: 'with',
-        text: 'Nobody can hear you from here. Tap **Stay with them** to walk back to the party, or pick someone first and walk to them.',
+        text: 'Nobody can hear you from here. **Stay with them** walks you back to the middle of the party. It does not make anyone follow you. Or pick someone first and tap **walk to** them.',
       };
     if (!seen('watch') && s.lines.length > 0)
       return {

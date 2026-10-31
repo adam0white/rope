@@ -351,7 +351,7 @@ it('keeps an unsupported HF3 local save and explains it cannot resume', async ()
 it('keeps extra abilities behind More actions and returns to the same person', async () => {
   await boot(true);
   button('Oskar').click();
-  button('more ▾').click();
+  button('More requests to people').click();
   expect(document.querySelector('.sheet')?.classList.contains('sheet-more')).toBe(true);
   expect(button('rope up').closest('.secondary-action')).not.toBeNull();
   expect(button('scout').closest('.secondary-action')).not.toBeNull();
