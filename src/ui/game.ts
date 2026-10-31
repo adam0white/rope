@@ -242,7 +242,7 @@ export class Game {
     this.dayStrip.append(this.dayBar, this.paceEl);
     this.skipButton.hidden = true;
     const skipHelp =
-      'Skip ahead until something happens: an answer, a fall, a turn, someone out of earshot, two people close enough to rope up, or food running out. At most two hours.';
+      'Skip ahead until something happens. It stops for an answer, a fall or someone turning back. It stops when someone can no longer hear you, or can hear you again. It stops when the two people you asked to rope up come close enough, or move apart. It stops when food runs out. It stops after two hours at most.';
     this.skipButton.setAttribute('aria-label', 'Skip to the next event');
     this.skipButton.setAttribute('aria-description', skipHelp);
     this.skipButton.title = skipHelp;

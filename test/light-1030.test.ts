@@ -287,9 +287,9 @@ it('F2232/F2237: the pace line names what is holding time, not a generic call', 
   const pace = document.querySelector('.clock-rate')?.textContent ?? '';
   expect(pace).toBe(`${memberOf(asker.id).name} wants to go down.`);
   const skip = document.querySelector<HTMLButtonElement>('.skip-button')!;
-  expect(skip.title).toContain('someone out of earshot');
-  expect(skip.title).toContain('food running out');
-  expect(skip.title).toContain('At most two hours');
+  expect(skip.title).toContain('can no longer hear you');
+  expect(skip.title).toContain('food runs out');
+  expect(skip.title).toContain('two hours at most');
 });
 
 it('F2231: the two more controls have different words', async () => {
@@ -331,14 +331,20 @@ it('F2234: Skip stops when someone leaves earshot, food runs out or a rope-up wi
   expect(canHear(out, hearer.id)).toBe(false);
   expect(skipEventStamp(out)).not.toBe(base);
   // Each stop is named from the facts before and after: who, and what changed.
-  expect(skipStopWords(skipFacts(c), out)).toBe(`${memberOf(hearer.id).name} is out of earshot.`);
-  expect(skipStopWords(skipFacts(out), c)).toBe(`${memberOf(hearer.id).name} is back in earshot.`);
+  expect(skipStopWords(skipFacts(c), out)).toBe(
+    `Skip stopped: ${memberOf(hearer.id).name} can no longer hear you.`,
+  );
+  expect(skipStopWords(skipFacts(out), c)).toBe(
+    `Skip stopped: ${memberOf(hearer.id).name} can hear you again.`,
+  );
 
   const hungry = copy();
   const fed = hungry.members.find((m) => m.homeAt === null && m.rations > 0)!;
   fed.rations = 0;
   expect(skipEventStamp(hungry)).not.toBe(base);
-  expect(skipStopWords(skipFacts(c), hungry)).toBe(`${memberOf(fed.id).name} has run out of food.`);
+  expect(skipStopWords(skipFacts(c), hungry)).toBe(
+    `Skip stopped: ${memberOf(fed.id).name} has run out of food.`,
+  );
 
   // A rope-up request names two people; the stamp changes when they come within forty metres, not before.
   const pair = copy();
@@ -360,19 +366,21 @@ it('F2234: Skip stops when someone leaves earshot, food runs out or a rope-up wi
     t: 0,
   };
   expect(skipStopWords(skipFacts(wasApart), pair)).toBe(
-    `${memberOf(a.id).name} and ${memberOf(b.id).name} are close enough to rope up.`,
+    `Skip stopped: ${memberOf(a.id).name} and ${memberOf(b.id).name} came close enough to rope up.`,
   );
   // And the other way: the window closes. Why is read from where the two are now.
   const names = `${memberOf(a.id).name} and ${memberOf(b.id).name}`;
-  expect(skipStopWords(skipFacts(pair), wasApart)).toBe(`${names} are no longer close enough to rope up.`);
+  expect(skipStopWords(skipFacts(pair), wasApart)).toBe(
+    `Skip stopped: ${names} moved too far apart to rope up.`,
+  );
   expect(skipEventStamp(wasApart)).not.toBe(skipEventStamp(pair));
   const gone = structuredClone(wasApart);
   gone.members.find((m) => m.id === a.id)!.homeAt = gone.minute;
-  expect(skipStopWords(skipFacts(pair), gone)).toBe(`${memberOf(a.id).name} is at the hut.`);
+  expect(skipStopWords(skipFacts(pair), gone)).toBe(`Skip stopped: ${memberOf(a.id).name} reached the hut.`);
   const tied = structuredClone(wasApart);
   tied.members.find((m) => m.id === b.id)!.ropedTo = a.id;
   expect(skipStopWords(skipFacts(pair), tied)).toBe(
-    `${memberOf(b.id).name} is now tied to ${memberOf(a.id).name}.`,
+    `Skip stopped: ${memberOf(b.id).name} became tied to ${memberOf(a.id).name}.`,
   );
 });
 
@@ -525,8 +533,8 @@ async function skipOneMinute(d: Driver, before: string[], lost: string[]): Promi
   const names = lost.map((id) => memberOf(id).name);
   const said =
     names.length > 1
-      ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)} are out of earshot.`
-      : `${names[0]} is out of earshot.`;
+      ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)} can no longer hear you.`
+      : `${names[0]} can no longer hear you.`;
   expect(d.stopWords?.text).toContain(said);
   await vi.advanceTimersByTimeAsync(400);
   await d.flushSave();
@@ -610,11 +618,11 @@ async function pairWindowStop(mode: 'apart' | 'together'): Promise<string> {
 const pairNames = `${memberOf('nell').name} and ${memberOf('wren').name}`;
 
 it('R3: a rope-up window opening stops a native Skip and the pace line says which pair', async () => {
-  expect(await pairWindowStop('together')).toBe(`${pairNames} are close enough to rope up.`);
+  expect(await pairWindowStop('together')).toBe(`Skip stopped: ${pairNames} came close enough to rope up.`);
 });
 
 it('R3: a rope-up window closing stops a native Skip and the pace line says the pair moved apart', async () => {
-  expect(await pairWindowStop('apart')).toBe(`${pairNames} are no longer close enough to rope up.`);
+  expect(await pairWindowStop('apart')).toBe(`Skip stopped: ${pairNames} moved too far apart to rope up.`);
 });
 
 it('R1: choosing a pace from the menu cancels a Skip like any other cancel and drops the minute in progress', async () => {
@@ -694,9 +702,11 @@ it('R3: the Skip reason stays on the pace line while nothing needs the player, a
   const c = d.climb;
   led(c, 5);
   d.slowUntil = 0;
-  d.stopWords = { text: 'Nell is out of earshot.', at: c.minute };
+  d.stopWords = { text: 'Skip stopped: Nell can no longer hear you.', at: c.minute };
   d.renderSheet();
-  expect(document.querySelector('.clock-rate')?.textContent).toBe('Nell is out of earshot.');
+  expect(document.querySelector('.clock-rate')?.textContent).toBe(
+    'Skip stopped: Nell can no longer hear you.',
+  );
   c.minute += 30;
   d.renderSheet();
   expect(document.querySelector('.clock-rate')?.textContent).toBe('');

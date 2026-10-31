@@ -2,6 +2,8 @@
 
 Remaining: independent code review, an Opus CLEAR at the exact signed SHA, normal lane and exact green CI, deploy, clean live handback, then a same-standing retest on a real phone. This is a source candidate on `30fc93b`; nothing here is committed, merged or deployed, and no browser, server, model call or spend was used. Adam accepts feel on 2026-11-03 (pace taste F-2235 on 2026-11-10).
 
+FIX3 (player-copy, on `b266cde`, uncommitted): the Skip stop reason now carries one "Skip stopped:" prefix with past-tense or "can (no longer) hear you" wording; the Skip help names only the two people asked to rope up and someone turning back; the Lead on note says it also waits at a place on the path. Copy only. Remaining: Code review and independent Opus review at the exact SHA, CI, deploy; geometry check still pending at root; no browser claim.
+
 Correction 1 (after the independent review): Skip now keeps its stamp from before the whole native minute, the sheet's conditional refresh covers chip words, recorded talk and current jobs, and each added Skip stop is named from public facts. Still open: phone geometry and chip height (no browser), and how often Skip stops near the wind-scaled earshot edge (not tuned).
 
 Correction 2 (after the second review): a rope-up window closing now stops Skip with words too (apart, at the hut, or tied), choosing a pace in the menu drops the minute in progress like any other Skip cancel, and the test comment on the synthetic Move fixture is accurate. Reasons are tested for earshot, food, and both pair directions only; other stops are not claimed named.

@@ -51,7 +51,7 @@ export function nextNote(d: Disclosure, s: ClimbState): Note | null {
       return {
         id: 'lead',
         lit: 'lead',
-        text: 'Tap **Lead on** to walk up the path yourself. It does not move anyone else. Each person decides whether to follow, so ask them with **Climb on**. You stop and wait when half or more of the people still climbing are far behind, or at a junction when nobody can hear you.',
+        text: 'Tap **Lead on** to walk up the path yourself. It does not move anyone else. Each person decides whether to follow, so ask them with **Climb on**. You stop and wait when half or more of the people still climbing are far behind. You also stop at a place on the path when nobody behind can hear you.',
       };
     if (!seen('ask') && sayInputs === 0 && s.members.some((x) => x.homeAt === null && canHear(s, x.id)))
       return {
